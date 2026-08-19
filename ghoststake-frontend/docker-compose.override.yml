@@ -1,0 +1,7 @@
+# Local-only. Compose auto-loads this file for a bare `docker compose up`, but
+# NOT when files are passed explicitly with -f (which is how RDK deploys to the
+# VPS) — so the host port binding here never reaches the server.
+services:
+  web:
+    ports:
+      - "3000:3000"
