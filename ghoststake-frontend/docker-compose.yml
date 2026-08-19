@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+    image: ghoststake-frontend
+    # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
+    # container directly over the shared `coolify` network using the port below.
+    # Publishing to the host would collide with whatever else owns that port.
+    # Local access comes from docker-compose.override.yml instead.
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped

@@ -1,0 +1,47 @@
+services:
+  api:
+    build:
+      context: .
+    image: ghoststake-api
+    # No host port here. On the VPS, Traefik reaches this container over the
+    # shared proxy network using the port below — publishing to the host would
+    # collide with whatever already owns it. Local access comes from
+    # docker-compose.override.yml.
+    expose:
+      - "8080"
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      HTTP_PORT: "8080"
+      DATABASE_URL: ${DATABASE_URL:-postgres://ghoststake:ghoststake@db:5432/ghoststake?sslmode=disable}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      JWT_TTL: ${JWT_TTL:-24h}
+      NONCE_TTL: ${NONCE_TTL:-5m}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost:3000}
+      APP_URI: ${APP_URI:-http://localhost:3000}
+      CHAIN_ID: ${CHAIN_ID:-421614}
+      ARBITRUM_RPC_URL: ${ARBITRUM_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ghoststake}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghoststake}
+      POSTGRES_DB: ${POSTGRES_DB:-ghoststake}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # The API runs migrations on boot, so it must not start until Postgres is
+    # actually accepting connections — not merely "container started".
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghoststake} -d ${POSTGRES_DB:-ghoststake}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
