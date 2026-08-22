@@ -255,8 +255,11 @@ contract BorrowLiquidityPoolTest is Test {
         vm.prank(borrower);
         pool.repay(owed, borrower);
 
-        uint256 rawBalance = token.balanceOf(address(pool));
-        assertEq(pool.availableLiquidity(), rawBalance - pool.totalReserves(), "reserves excluded from lendable");
+        // Reserves are no longer carved out of lendable cash — they are a
+        // bookkeeping figure until genuinely surplus (see withdrawReserves),
+        // so suppliers keep full access to the cash on hand.
+        assertEq(pool.availableLiquidity(), token.balanceOf(address(pool)), "suppliers see all cash on hand");
+        assertGt(pool.totalReserves(), 0, "reserves still tracked");
     }
 
     function test_onlyOwnerWithdrawsReserves() public {
@@ -457,5 +460,70 @@ contract BorrowLiquidityPoolTest is Test {
         vm.prank(alice);
         pool.withdraw(supplyBalance);
         assertEq(pool.balanceOfSupply(alice), 0);
+    }
+
+    // ---------------------------------------------------------------
+    // Audit regressions
+    // ---------------------------------------------------------------
+
+    /// @dev `borrowModule` is the only thing between this pool and an
+    /// uncollateralised draw, so a re-pointable setter means one compromised
+    /// owner key drains every un-borrowed deposit in a single transaction.
+    function test_borrowModuleCannotBeRepointed() public {
+        address attacker = makeAddr("attacker");
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(BorrowLiquidityPool.BorrowModuleAlreadySet.selector, module));
+        pool.setBorrowModule(attacker);
+
+        assertEq(pool.borrowModule(), module, "module stays put even for the owner");
+    }
+
+    function test_borrowModuleCannotBeZero() public {
+        BorrowLiquidityPool fresh =
+            new BorrowLiquidityPool(IERC20(address(token)), BASE, SLOPE1, SLOPE2, KINK, RESERVE_FACTOR, owner);
+        vm.prank(owner);
+        vm.expectRevert(BorrowLiquidityPool.ZeroAddress.selector);
+        fresh.setBorrowModule(address(0));
+    }
+
+    /// @dev Reserves are credited when interest accrues into the index, not
+    /// when a borrower actually pays. Without subordination the treasury
+    /// could withdraw real tokens that are still supplier principal, leaving
+    /// suppliers unable to exit and absorbing the whole loss on a default.
+    function test_reservesCannotBeDrawnFromSupplierPrincipal() public {
+        vm.prank(alice);
+        pool.supply(500_000 ether);
+        _borrow(450_000 ether, borrower); // ~90% utilization, steep rate
+
+        vm.warp(block.timestamp + 2 * 365 days);
+        pool.accrue();
+
+        uint256 reserves = pool.totalReserves();
+        assertGt(reserves, 0, "reserves accrued on unpaid interest");
+
+        // Almost all cash is lent out; nothing is genuinely surplus.
+        vm.prank(owner);
+        vm.expectRevert();
+        pool.withdrawReserves(owner, reserves);
+    }
+
+    function test_reservesAreWithdrawableOnceGenuinelySurplus() public {
+        vm.prank(alice);
+        pool.supply(500_000 ether);
+        _borrow(100_000 ether, borrower);
+
+        vm.warp(block.timestamp + 365 days);
+        pool.accrue();
+
+        uint256 owed = pool.balanceOfDebt(borrower);
+        token.mint(borrower, owed);
+        vm.prank(borrower);
+        pool.repay(owed, borrower); // interest actually paid in
+
+        uint256 reserves = pool.totalReserves();
+        assertGt(reserves, 0);
+        vm.prank(owner);
+        pool.withdrawReserves(owner, reserves);
+        assertEq(pool.totalReserves(), 0, "surplus reserves are drawable");
     }
 }
