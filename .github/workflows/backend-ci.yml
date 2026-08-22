@@ -1,0 +1,36 @@
+name: backend-ci
+
+on:
+  push:
+    paths:
+      - "ghoststake-backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "ghoststake-backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+defaults:
+  run:
+    working-directory: ghoststake-backend
+
+jobs:
+  build:
+    name: lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ghoststake-backend/go.mod
+          cache-dependency-path: ghoststake-backend/go.sum
+
+      - name: Lint (vet + gofmt)
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      - name: Build
+        run: make build

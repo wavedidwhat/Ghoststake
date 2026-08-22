@@ -7,8 +7,9 @@ setup, and deploys independently.
 
 | Package | Stack | Notes |
 |---|---|---|
-| [`ghoststake-frontend/`](ghoststake-frontend) | Next.js 16, App Router, Tailwind v4 | `shadcn/typeset` for rendered markdown |
-| [`ghoststake-backend/`](ghoststake-backend) | Go 1.25, chi, Postgres | SIWE wallet auth, Arbitrum RPC |
+| [`ghoststake-frontend/`](ghoststake-frontend) | Next.js 16, App Router, Tailwind v4 | `shadcn/typeset` for rendered markdown; lint/typecheck/build enforced in CI |
+| [`ghoststake-backend/`](ghoststake-backend) | Go 1.25, chi, Postgres | SIWE wallet auth, Arbitrum RPC; `make lint`/`test`/`build` enforced in CI |
+| [`ghoststake-contracts/`](ghoststake-contracts) | Solidity, Foundry | Arbitrum, `forge fmt`/`forge test` enforced in CI |
 
 ## Getting started
 
@@ -19,6 +20,10 @@ cd ghoststake-frontend && pnpm install && pnpm dev     # :3000
 # backend
 cd ghoststake-backend && cp .env.example .env          # set JWT_SECRET
 make up                                                 # :8080
+
+# contracts
+cd ghoststake-contracts && cp .env.example .env        # only needed for deploy scripts
+forge test
 ```
 
 Each package has its own README with details.
@@ -32,6 +37,12 @@ Each package has its own README with details.
   explicitly with `-f` (how deploys work).
 - **Secrets never land in git.** Commit `.env.example`; keep real values in
   `.env`, which is ignored.
+- **New work happens on a branch per issue, merged via PR.** CI must pass
+  before merge; `main` is protected. Branch names follow the Linear branch
+  name (e.g. `gho-11-nextjs-scaffold-and-wallet-connect`).
+- **Commits don't carry AI co-author trailers.** Run
+  `git config core.hooksPath .githooks` once per clone — it strips them via
+  a `prepare-commit-msg` hook.
 
 ## Chain
 

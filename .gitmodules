@@ -1,0 +1,3 @@
+[submodule "ghoststake-contracts/lib/forge-std"]
+	path = ghoststake-contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
