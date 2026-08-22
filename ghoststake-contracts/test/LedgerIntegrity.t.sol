@@ -16,6 +16,9 @@ import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 /// otherwise the ledger can be forked from reality and (once GHO-8 reads it
 /// as collateral value) borrowed against.
 contract LedgerIntegrityTest is Test {
+    uint256 internal constant MAX_LTV = 5e17; // 50%
+    uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+
     // 5% APR as a per-second WAD rate. Nonzero on purpose: the pre-existing
     // CollateralVault.t.sol runs at rate 0, which structurally cannot
     // surface any of the bugs below.
@@ -29,7 +32,9 @@ contract LedgerIntegrityTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)));
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD
+        );
 
         token.mint(alice, 1_000_000 ether);
         token.mint(bob, 1_000_000 ether);
