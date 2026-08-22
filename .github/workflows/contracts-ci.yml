@@ -2,6 +2,7 @@ name: contracts-ci
 
 on:
   push:
+    branches: ["main"]
     paths:
       - "ghoststake-contracts/**"
       - ".github/workflows/contracts-ci.yml"
@@ -25,6 +26,12 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pinned so `forge fmt` agrees with local dev machines — different
+          # forge versions format borderline lines differently, which turns
+          # `forge fmt --check` into a moving target. Bump deliberately and
+          # tell contributors to `foundryup --version <sha>` in sync.
+          version: a813a2cee7dd4926e7c56fd8a785b54f32e0d10f
 
       - name: Show forge version
         run: forge --version
@@ -49,6 +56,12 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pinned so `forge fmt` agrees with local dev machines — different
+          # forge versions format borderline lines differently, which turns
+          # `forge fmt --check` into a moving target. Bump deliberately and
+          # tell contributors to `foundryup --version <sha>` in sync.
+          version: a813a2cee7dd4926e7c56fd8a785b54f32e0d10f
 
       - name: Run Slither
         uses: crytic/slither-action@v0.4.0
