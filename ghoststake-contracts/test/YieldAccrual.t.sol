@@ -6,10 +6,11 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { CollateralVault } from "../src/CollateralVault.sol";
 
-/// @notice Covers GHO-7's three required cases (accrual across a state
-/// change, zero elapsed time, precision at small amounts) plus the
-/// no-cron/no-loop invariant: nothing but a call that touches a specific
-/// user's position ever changes that position's storage.
+/// @notice Covers GHO-7's three required cases: accrual across a state
+/// change, accrual with zero elapsed time, and precision at small amounts.
+///
+/// Ledger-integrity properties (share/ledger proportionality, path
+/// independence, exit cleanup) live in LedgerIntegrity.t.sol.
 contract YieldAccrualTest is Test {
     // 5% APR expressed as a per-second WAD rate: 5e16 (0.05e18) / 365 days.
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / 365 days;
@@ -25,6 +26,16 @@ contract YieldAccrualTest is Test {
         token.mint(alice, 1_000_000 ether);
         vm.prank(alice);
         token.approve(address(vault), type(uint256).max);
+    }
+
+    function _settledYield(address user) internal view returns (uint256) {
+        (,,, uint256 settledYield) = vault.positions(user);
+        return settledYield;
+    }
+
+    function _principal(address user) internal view returns (uint256) {
+        (uint256 principal,,,) = vault.positions(user);
+        return principal;
     }
 
     function test_accruedYieldIsZeroWithNoElapsedTime() public {
@@ -46,14 +57,14 @@ contract YieldAccrualTest is Test {
         assertEq(vault.accruedYield(alice), expected, "matches the exact on-chain formula");
 
         // Purely a read — position storage is untouched.
-        (uint256 principalBefore, uint256 startTimeBefore,) = vault.positions(alice);
+        (uint256 principalBefore, uint256 startTimeBefore,,) = vault.positions(alice);
         vault.accruedYield(alice);
-        (uint256 principalAfter, uint256 startTimeAfter,) = vault.positions(alice);
+        (uint256 principalAfter, uint256 startTimeAfter,,) = vault.positions(alice);
         assertEq(principalBefore, principalAfter);
         assertEq(startTimeBefore, startTimeAfter);
     }
 
-    function test_accrualIsFoldedIntoPrincipalOnStateChangeDeposit() public {
+    function test_accrualIsBankedOnStateChangeDeposit() public {
         vm.startPrank(alice);
         vault.deposit(1_000 ether, alice);
         vm.warp(block.timestamp + 365 days);
@@ -62,30 +73,38 @@ contract YieldAccrualTest is Test {
         assertGt(pendingYield, 0);
 
         vm.expectEmit(true, false, false, true, address(vault));
-        emit CollateralVault.YieldSettled(alice, pendingYield, 1_000 ether + pendingYield);
+        emit CollateralVault.YieldSettled(alice, pendingYield, pendingYield);
         vault.deposit(1 ether, alice);
         vm.stopPrank();
 
-        (uint256 principal, uint256 startTime,) = vault.positions(alice);
-        assertEq(principal, 1_000 ether + pendingYield + 1 ether, "old principal + settled yield + new deposit");
+        assertEq(_principal(alice), 1_001 ether, "principal is deposit basis only; yield never folds in");
+        assertEq(_settledYield(alice), pendingYield, "yield banked separately");
+        assertEq(vault.totalLedgerValue(alice), 1_001 ether + pendingYield, "total is basis + banked yield");
+
+        (, uint256 startTime,,) = vault.positions(alice);
         assertEq(startTime, block.timestamp, "checkpoint reset to now");
-        assertEq(vault.accruedYield(alice), 0, "nothing left unsettled right after settling");
+        assertEq(vault.accruedYield(alice), 0, "nothing left pending right after settling");
     }
 
-    function test_accrualIsFoldedIntoPrincipalOnStateChangeWithdraw() public {
+    function test_accrualIsBankedOnStateChangeWithdraw() public {
         vm.startPrank(alice);
         vault.deposit(1_000 ether, alice);
         vm.warp(block.timestamp + 365 days);
         uint256 pendingYield = vault.accruedYield(alice);
+        uint256 totalBefore = vault.totalLedgerValue(alice);
 
-        vault.withdraw(100 ether, alice, alice);
+        // Withdraw 10% of the position's asset value.
+        uint256 shares = vault.balanceOf(alice);
+        vault.redeem(shares / 10, alice, alice);
         vm.stopPrank();
 
-        (uint256 principal,,) = vault.positions(alice);
-        assertEq(principal, 1_000 ether + pendingYield - 100 ether);
+        assertGt(pendingYield, 0);
+        assertApproxEqRel(
+            vault.totalLedgerValue(alice), (totalBefore * 9) / 10, 0.001e18, "90% of ledger value survives a 10% exit"
+        );
     }
 
-    function test_explicitSettleFoldsYieldWithoutMovingFunds() public {
+    function test_explicitSettleBanksYieldWithoutMovingFunds() public {
         vm.prank(alice);
         vault.deposit(1_000 ether, alice);
         vm.warp(block.timestamp + 30 days);
@@ -95,8 +114,8 @@ contract YieldAccrualTest is Test {
         uint256 vaultTokenBalanceBefore = token.balanceOf(address(vault));
         vault.settle(alice);
 
-        (uint256 principal,,) = vault.positions(alice);
-        assertEq(principal, 1_000 ether + pendingYield);
+        assertEq(_settledYield(alice), pendingYield);
+        assertEq(_principal(alice), 1_000 ether, "settling never changes the earning base");
         assertEq(token.balanceOf(address(vault)), vaultTokenBalanceBefore, "settle never moves tokens");
     }
 
@@ -106,12 +125,12 @@ contract YieldAccrualTest is Test {
         vm.warp(block.timestamp + 30 days);
 
         vault.settle(alice);
-        (uint256 principalAfterFirst,,) = vault.positions(alice);
+        uint256 afterFirst = vault.totalLedgerValue(alice);
 
         vault.settle(alice);
-        (uint256 principalAfterSecond,,) = vault.positions(alice);
+        uint256 afterSecond = vault.totalLedgerValue(alice);
 
-        assertEq(principalAfterFirst, principalAfterSecond, "no elapsed time since the first settle => no yield added");
+        assertEq(afterFirst, afterSecond, "no elapsed time since the first settle => no yield added");
     }
 
     /// @dev Precision at small amounts: a small enough principal over a
@@ -168,10 +187,10 @@ contract YieldAccrualTest is Test {
 
         vm.warp(block.timestamp + 90 days);
 
-        (uint256 bobPrincipalBefore,,) = vault.positions(bob);
+        uint256 bobBefore = vault.totalLedgerValue(bob);
         vault.settle(alice);
-        (uint256 bobPrincipalAfter,,) = vault.positions(bob);
+        uint256 bobAfter = vault.totalLedgerValue(bob);
 
-        assertEq(bobPrincipalBefore, bobPrincipalAfter, "settling alice must not touch bob's storage");
+        assertEq(bobBefore, bobAfter, "settling alice must not touch bob's position");
     }
 }
