@@ -14,6 +14,9 @@ import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 /// lien carries genuine accrued interest from the borrow index. The vault
 /// reads the lien through `lienOf` — there is no second debt ledger to drift.
 contract LienSettlementTest is Test {
+    uint256 internal constant MAX_LTV = 5e17; // 50%
+    uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / YEAR;
 
@@ -39,7 +42,9 @@ contract LienSettlementTest is Test {
             owner
         );
 
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)));
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), MAX_LTV, LIQ_THRESHOLD
+        );
 
         // This test contract stands in for GHO-8's borrow module.
         vm.prank(owner);

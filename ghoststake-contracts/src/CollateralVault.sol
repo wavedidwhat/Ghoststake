@@ -13,6 +13,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 /// vault stays decoupled from any particular lending implementation.
 interface ILienSource {
     function balanceOfDebt(address user) external view returns (uint256);
+    function borrow(uint256 amount, address onBehalfOf) external;
     function repay(uint256 amount, address onBehalfOf) external;
     function accrue() external;
 }
@@ -76,9 +77,21 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         uint256 settledYield;
     }
 
-    /// @dev WAD scale for `rate`: 1e18 = 100% per second. Real rates are
-    /// tiny — 5% APR is `5e16 / 365 days ≈ 1_585_489`.
-    uint256 public constant RATE_PRECISION = 1e18;
+    /// @dev Shared fixed-point scale. 1e18 = 100%, for rates and ratios alike.
+    uint256 public constant WAD = 1e18;
+
+    /// @dev Alias kept for the accrual maths, where "rate precision" reads
+    /// more clearly than a bare WAD.
+    uint256 public constant RATE_PRECISION = WAD;
+
+    /// @dev Most you may borrow against a position, as a fraction of its
+    /// collateral value. Deliberately well below `liquidationThreshold`;
+    /// the gap is the buffer a borrower has before they are liquidatable.
+    uint256 public immutable maxLTV;
+
+    /// @dev Debt-to-collateral ratio at which a position becomes
+    /// liquidatable. Health factor is 1 exactly at this line.
+    uint256 public immutable liquidationThreshold;
 
     /// @dev Protocol-wide yield rate, fixed at deployment. Copied onto each
     /// position on settle so a future version could vary it per position
@@ -97,17 +110,31 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     event YieldSettled(address indexed user, uint256 yieldAccrued, uint256 totalSettledYield);
     event PositionTransferred(address indexed from, address indexed to, uint256 principal, uint256 settledYield);
     event LienSettledAtExit(address indexed user, uint256 lienAmount, uint256 collateralReturned);
+    event Borrowed(address indexed user, uint256 amount, uint256 lienAfter);
+    event Repaid(address indexed payer, address indexed user, uint256 amount, uint256 lienAfter);
 
     error LienOutstanding(address user, uint256 lien);
     error PartialExitWithLienOpen(uint256 sharesRequested, uint256 sharesHeld);
     error CollateralBelowLien(address user, uint256 collateral, uint256 lien);
+    error NoLienSource();
+    error ExceedsMaxLTV(address user, uint256 requestedDebt, uint256 maxDebt);
+    error NothingToRepay(address user);
+    error InvalidRiskParameters();
+    error ZeroAmount();
 
-    constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_, ILienSource lienSource_)
-        ERC20("GhostStake Collateral Shares", "gsCOL")
-        ERC4626(collateralAsset)
-    {
+    constructor(
+        IERC20 collateralAsset,
+        uint256 yieldRatePerSecond_,
+        ILienSource lienSource_,
+        uint256 maxLTV_,
+        uint256 liquidationThreshold_
+    ) ERC20("GhostStake Collateral Shares", "gsCOL") ERC4626(collateralAsset) {
+        if (maxLTV_ >= liquidationThreshold_ || liquidationThreshold_ >= WAD) revert InvalidRiskParameters();
+
         yieldRatePerSecond = yieldRatePerSecond_;
         lienSource = lienSource_;
+        maxLTV = maxLTV_;
+        liquidationThreshold = liquidationThreshold_;
     }
 
     /// @notice What this position owes: principal plus accrued interest, as
@@ -150,6 +177,82 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// GHO-8's health factor must read THIS, not `positions().principal`.
     function collateralValue(address user) public view returns (uint256) {
         return Math.min(totalLedgerValue(user), convertToAssets(balanceOf(user)));
+    }
+
+    // ------------------------------------------------------------------
+    // Borrowing
+    // ------------------------------------------------------------------
+
+    /// @notice How healthy a position is, WAD-scaled: 1e18 is exactly at the
+    /// liquidation line, above is safe, below is liquidatable.
+    ///
+    ///   healthFactor = collateralValue x liquidationThreshold / lien
+    ///
+    /// A position with no lien cannot be liquidated, so it reads as maximally
+    /// healthy rather than dividing by zero.
+    function healthFactor(address user) public view returns (uint256) {
+        uint256 lien = lienOf(user);
+        if (lien == 0) return type(uint256).max;
+        return Math.mulDiv(collateralValue(user), liquidationThreshold, lien);
+    }
+
+    /// @notice Additional amount this position may still draw. Zero once the
+    /// existing lien has reached the LTV ceiling.
+    function maxBorrowable(address user) public view returns (uint256) {
+        uint256 ceiling = Math.mulDiv(collateralValue(user), maxLTV, WAD);
+        uint256 lien = lienOf(user);
+        return ceiling > lien ? ceiling - lien : 0;
+    }
+
+    /// @notice Draw against your collateral. The collateral stays deposited
+    /// and keeps earning; the funds come from the shared pool.
+    ///
+    /// @dev The ceiling checked here is `maxLTV`, which is strictly tighter
+    /// than the liquidation line — so a freshly-opened borrow always lands
+    /// with a health factor comfortably above 1, never right on it. That gap
+    /// is the whole point: originating at the liquidation threshold would
+    /// mean one block of interest makes you liquidatable.
+    function borrow(uint256 amount) external nonReentrant {
+        if (address(lienSource) == address(0)) revert NoLienSource();
+        if (amount == 0) revert ZeroAmount();
+
+        // Bank yield first: it feeds collateralValue, so borrowing capacity
+        // should reflect everything earned up to this instant.
+        _settle(msg.sender);
+        lienSource.accrue();
+
+        uint256 newDebt = lienOf(msg.sender) + amount;
+        uint256 maxDebt = Math.mulDiv(collateralValue(msg.sender), maxLTV, WAD);
+        if (newDebt > maxDebt) revert ExceedsMaxLTV(msg.sender, newDebt, maxDebt);
+
+        // The pool pays the module, which is this contract; forward it on.
+        lienSource.borrow(amount, msg.sender);
+        SafeERC20.safeTransfer(IERC20(asset()), msg.sender, amount);
+
+        emit Borrowed(msg.sender, amount, newDebt);
+    }
+
+    /// @notice Repay someone's lien. Open to any payer — clearing another
+    /// account's debt can only ever help them, and it is what a liquidator
+    /// will need in GHO-9.
+    function repay(uint256 amount, address onBehalfOf) external nonReentrant {
+        if (address(lienSource) == address(0)) revert NoLienSource();
+        if (amount == 0) revert ZeroAmount();
+
+        lienSource.accrue();
+        uint256 lien = lienOf(onBehalfOf);
+        if (lien == 0) revert NothingToRepay(onBehalfOf);
+
+        // Overpaying is a courtesy, not an error: cap at what is owed so a
+        // repayer racing an accrual cannot lose the excess.
+        if (amount > lien) amount = lien;
+
+        IERC20 collateral = IERC20(asset());
+        SafeERC20.safeTransferFrom(collateral, msg.sender, address(this), amount);
+        SafeERC20.forceApprove(collateral, address(lienSource), amount);
+        lienSource.repay(amount, onBehalfOf);
+
+        emit Repaid(msg.sender, onBehalfOf, amount, lien - amount);
     }
 
     // ------------------------------------------------------------------

@@ -7,6 +7,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 
 contract CollateralVaultTest is Test {
+    uint256 internal constant MAX_LTV = 5e17; // 50%
+    uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+
     CollateralVault internal vault;
     ERC20Mock internal token;
 
@@ -17,7 +20,7 @@ contract CollateralVaultTest is Test {
         token = new ERC20Mock();
         // Rate 0: this file tests deposit/withdraw/debt-gate accounting in
         // isolation. Accrual math has its own coverage in YieldAccrual.t.sol.
-        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)));
+        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD);
 
         token.mint(alice, 1_000 ether);
         token.mint(bob, 1_000 ether);

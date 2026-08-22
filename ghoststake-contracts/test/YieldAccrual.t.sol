@@ -12,6 +12,9 @@ import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 /// Ledger-integrity properties (share/ledger proportionality, path
 /// independence, exit cleanup) live in LedgerIntegrity.t.sol.
 contract YieldAccrualTest is Test {
+    uint256 internal constant MAX_LTV = 5e17; // 50%
+    uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+
     // 5% APR expressed as a per-second WAD rate: 5e16 (0.05e18) / 365 days.
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / 365 days;
 
@@ -21,7 +24,9 @@ contract YieldAccrualTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)));
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD
+        );
 
         token.mint(alice, 1_000_000 ether);
         vm.prank(alice);
@@ -156,7 +161,8 @@ contract YieldAccrualTest is Test {
         vm.assume(principal > 0);
         uint256 rate = uint256(rateSeed) % 1e12; // keep well under overflow range for the multiply below
 
-        CollateralVault v = new CollateralVault(IERC20(address(token)), rate, ILienSource(address(0)));
+        CollateralVault v =
+            new CollateralVault(IERC20(address(token)), rate, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD);
         token.mint(alice, principal);
         vm.startPrank(alice);
         token.approve(address(v), principal);
