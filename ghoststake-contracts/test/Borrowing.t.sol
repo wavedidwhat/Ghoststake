@@ -18,6 +18,9 @@ contract BorrowingTest is Test {
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant MAX_LTV = 5e17; // 50%
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+    uint256 internal constant LIQ_BONUS = 5e16; // 5%
+    uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
+    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / YEAR;
 
     BorrowLiquidityPool internal pool;
@@ -36,9 +39,7 @@ contract BorrowingTest is Test {
             IERC20(address(token)), 0, uint256(4e16) / YEAR, uint256(75e16) / YEAR, 8e17, 1e17, owner
         );
 
-        vault = new CollateralVault(
-            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), MAX_LTV, LIQ_THRESHOLD
-        );
+        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk());
 
         // The vault is the borrow module: it is the only contract that knows
         // what collateral backs a position.
@@ -333,5 +334,15 @@ contract BorrowingTest is Test {
 
         assertEq(vault.lienOf(alice), 0, "a lien can always be cleared by paying it");
         assertEq(vault.healthFactor(alice), type(uint256).max);
+    }
+
+    function _risk() internal pure returns (CollateralVault.RiskParams memory) {
+        return CollateralVault.RiskParams({
+            maxLTV: MAX_LTV,
+            liquidationThreshold: LIQ_THRESHOLD,
+            liquidationBonus: LIQ_BONUS,
+            closeFactor: CLOSE_FACTOR,
+            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+        });
     }
 }
