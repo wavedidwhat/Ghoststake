@@ -42,7 +42,7 @@ contract CollateralVaultTest is Test {
         assertEq(vault.balanceOf(alice), shares);
         assertEq(token.balanceOf(address(vault)), 100 ether);
 
-        (uint256 principal, uint256 startTime,) = vault.positions(alice);
+        (uint256 principal, uint256 startTime,,) = vault.positions(alice);
         assertEq(principal, 100 ether);
         assertEq(startTime, 1_000);
     }
@@ -56,7 +56,7 @@ contract CollateralVaultTest is Test {
         vm.prank(alice);
         vault.deposit(50 ether, alice);
 
-        (uint256 principal, uint256 startTime,) = vault.positions(alice);
+        (uint256 principal, uint256 startTime,,) = vault.positions(alice);
         assertEq(principal, 150 ether);
         assertEq(startTime, 2_000);
     }
@@ -71,7 +71,7 @@ contract CollateralVaultTest is Test {
         vm.stopPrank();
 
         assertEq(token.balanceOf(alice), 1_000 ether - 60 ether);
-        (uint256 principal,,) = vault.positions(alice);
+        (uint256 principal,,,) = vault.positions(alice);
         assertEq(principal, 60 ether);
     }
 
@@ -81,7 +81,7 @@ contract CollateralVaultTest is Test {
         vault.withdraw(100 ether, alice, alice);
         vm.stopPrank();
 
-        (uint256 principal,,) = vault.positions(alice);
+        (uint256 principal,,,) = vault.positions(alice);
         assertEq(principal, 0);
     }
 
@@ -91,7 +91,7 @@ contract CollateralVaultTest is Test {
         vault.redeem(shares, alice, alice);
         vm.stopPrank();
 
-        (uint256 principal,,) = vault.positions(alice);
+        (uint256 principal,,,) = vault.positions(alice);
         assertEq(principal, 0);
         assertEq(token.balanceOf(alice), 1_000 ether);
     }
@@ -126,8 +126,8 @@ contract CollateralVaultTest is Test {
         vm.prank(bob);
         vault.deposit(30 ether, bob);
 
-        (uint256 alicePrincipal,,) = vault.positions(alice);
-        (uint256 bobPrincipal,,) = vault.positions(bob);
+        (uint256 alicePrincipal,,,) = vault.positions(alice);
+        (uint256 bobPrincipal,,,) = vault.positions(bob);
         assertEq(alicePrincipal, 100 ether);
         assertEq(bobPrincipal, 30 ether);
     }
