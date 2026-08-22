@@ -18,7 +18,9 @@ contract CollateralVaultTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)));
+        // Rate 0: this file tests deposit/withdraw/debt-gate accounting in
+        // isolation. Accrual math has its own coverage in YieldAccrual.t.sol.
+        vault = new CollateralVault(IERC20(address(token)), 0);
 
         token.mint(alice, 1_000 ether);
         token.mint(bob, 1_000 ether);
@@ -40,9 +42,9 @@ contract CollateralVaultTest is Test {
         assertEq(vault.balanceOf(alice), shares);
         assertEq(token.balanceOf(address(vault)), 100 ether);
 
-        (uint256 principal, uint256 depositedAt) = vault.positions(alice);
+        (uint256 principal, uint256 startTime,) = vault.positions(alice);
         assertEq(principal, 100 ether);
-        assertEq(depositedAt, 1_000);
+        assertEq(startTime, 1_000);
     }
 
     function test_secondDepositAccumulatesPrincipalAndBumpsTimestamp() public {
@@ -54,9 +56,9 @@ contract CollateralVaultTest is Test {
         vm.prank(alice);
         vault.deposit(50 ether, alice);
 
-        (uint256 principal, uint256 depositedAt) = vault.positions(alice);
+        (uint256 principal, uint256 startTime,) = vault.positions(alice);
         assertEq(principal, 150 ether);
-        assertEq(depositedAt, 2_000);
+        assertEq(startTime, 2_000);
     }
 
     function test_withdrawReturnsAssetsAndReducesPrincipal() public {
@@ -69,7 +71,7 @@ contract CollateralVaultTest is Test {
         vm.stopPrank();
 
         assertEq(token.balanceOf(alice), 1_000 ether - 60 ether);
-        (uint256 principal,) = vault.positions(alice);
+        (uint256 principal,,) = vault.positions(alice);
         assertEq(principal, 60 ether);
     }
 
@@ -79,7 +81,7 @@ contract CollateralVaultTest is Test {
         vault.withdraw(100 ether, alice, alice);
         vm.stopPrank();
 
-        (uint256 principal,) = vault.positions(alice);
+        (uint256 principal,,) = vault.positions(alice);
         assertEq(principal, 0);
     }
 
@@ -89,7 +91,7 @@ contract CollateralVaultTest is Test {
         vault.redeem(shares, alice, alice);
         vm.stopPrank();
 
-        (uint256 principal,) = vault.positions(alice);
+        (uint256 principal,,) = vault.positions(alice);
         assertEq(principal, 0);
         assertEq(token.balanceOf(alice), 1_000 ether);
     }
@@ -124,8 +126,8 @@ contract CollateralVaultTest is Test {
         vm.prank(bob);
         vault.deposit(30 ether, bob);
 
-        (uint256 alicePrincipal,) = vault.positions(alice);
-        (uint256 bobPrincipal,) = vault.positions(bob);
+        (uint256 alicePrincipal,,) = vault.positions(alice);
+        (uint256 bobPrincipal,,) = vault.positions(bob);
         assertEq(alicePrincipal, 100 ether);
         assertEq(bobPrincipal, 30 ether);
     }
