@@ -5,11 +5,22 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/// @notice The creditor a position's lien is owed to. Kept as a narrow
+/// interface rather than importing BorrowLiquidityPool directly, so the
+/// vault stays decoupled from any particular lending implementation.
+interface ILienSource {
+    function balanceOfDebt(address user) external view returns (uint256);
+    function repay(uint256 amount, address onBehalfOf) external;
+    function accrue() external;
+}
+
 /// @notice Holds staked ERC-20 collateral, issues shares against it, and
-/// accrues yield on a side ledger lazily. Deposit and withdraw only — no
-/// borrowing yet.
+/// accrues yield on a side ledger lazily. Borrowing itself lives elsewhere;
+/// this contract knows only that a position may carry a lien, and settles
+/// that lien when the position exits.
 ///
 /// Built on OpenZeppelin's ERC4626 rather than hand-rolled share math: this
 /// *is* "ERC-20 in, share accounting out," and ERC4626 already handles the
@@ -76,22 +87,36 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
 
     mapping(address => Position) public positions;
 
-    /// @dev Stub for the future borrow ledger (GHO-8). Always zero today —
-    /// there is deliberately no production setter.
-    mapping(address => uint256) public debtOf;
+    /// @dev Where a position's lien is owed. Immutable and may be the zero
+    /// address, which means no lending is wired up yet and every lien reads
+    /// as zero — the state this contract shipped in before GHO-26.
+    ILienSource public immutable lienSource;
 
     event Deposited(address indexed user, uint256 assets, uint256 shares);
     event Withdrawn(address indexed user, uint256 assets, uint256 shares);
     event YieldSettled(address indexed user, uint256 yieldAccrued, uint256 totalSettledYield);
     event PositionTransferred(address indexed from, address indexed to, uint256 principal, uint256 settledYield);
+    event LienSettledAtExit(address indexed user, uint256 lienAmount, uint256 collateralReturned);
 
-    error DebtOutstanding(address user, uint256 debt);
+    error LienOutstanding(address user, uint256 lien);
+    error PartialExitWithLienOpen(uint256 sharesRequested, uint256 sharesHeld);
+    error CollateralBelowLien(address user, uint256 collateral, uint256 lien);
 
-    constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_)
+    constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_, ILienSource lienSource_)
         ERC20("GhostStake Collateral Shares", "gsCOL")
         ERC4626(collateralAsset)
     {
         yieldRatePerSecond = yieldRatePerSecond_;
+        lienSource = lienSource_;
+    }
+
+    /// @notice What this position owes: principal plus accrued interest, as
+    /// tracked by the creditor. Read through rather than mirrored locally —
+    /// two ledgers for one debt is the desync bug the security review found,
+    /// and there is no reason to reintroduce its shape here.
+    function lienOf(address user) public view returns (uint256) {
+        if (address(lienSource) == address(0)) return 0;
+        return lienSource.balanceOfDebt(user);
     }
 
     function _decimalsOffset() internal pure override returns (uint8) {
@@ -192,18 +217,55 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         override
         nonReentrant
     {
-        uint256 debt = debtOf[owner];
-        if (debt != 0) revert DebtOutstanding(owner, debt);
-
         // Bank yield earned on the full stake, and capture the share balance,
         // both before the burn changes either.
         _settle(owner);
         uint256 sharesBefore = balanceOf(owner);
+        uint256 lien = lienOf(owner);
 
-        super._withdraw(caller, receiver, owner, assets, shares);
+        if (lien != 0) {
+            // Bring the creditor's index up to date before fixing the amount.
+            // `repay` accrues on entry, so a figure read beforehand is already
+            // stale by the time it lands and would leave a slice of interest
+            // behind on an otherwise-closed position. Accruing first makes
+            // that internal accrual a no-op and the settlement exact.
+            lienSource.accrue();
+            lien = lienOf(owner);
+        }
 
+        if (lien == 0) {
+            super._withdraw(caller, receiver, owner, assets, shares);
+            _reducePositionProRata(owner, shares, sharesBefore);
+            emit Withdrawn(owner, assets, shares);
+            return;
+        }
+
+        // A lien is open, so this is an exit, not a withdrawal: the protocol
+        // takes what it is owed on the way out and the user keeps the rest.
+        // Blocking instead (what this contract did before GHO-26) traps a
+        // borrower in the position forever, which is strictly worse than a
+        // haircut.
+        if (shares != sharesBefore) revert PartialExitWithLienOpen(shares, sharesBefore);
+        if (assets < lien) revert CollateralBelowLien(owner, assets, lien);
+
+        // Inlined rather than delegated to `super._withdraw`, which would
+        // send the whole amount to one address. Ordering follows OZ's: burn
+        // before any transfer, so a reentrant asset token can only ever
+        // observe a fully-settled position. `nonReentrant` covers it anyway.
+        if (caller != owner) _spendAllowance(owner, caller, shares);
+        _burn(owner, shares);
         _reducePositionProRata(owner, shares, sharesBefore);
 
+        uint256 returned = assets - lien;
+        IERC20 collateral = IERC20(asset());
+        SafeERC20.forceApprove(collateral, address(lienSource), lien);
+        lienSource.repay(lien, owner);
+        if (returned != 0) SafeERC20.safeTransfer(collateral, receiver, returned);
+
+        // `assets` is what left the vault against these shares; the split
+        // between creditor and user is in LienSettledAtExit.
+        emit Withdraw(caller, receiver, owner, assets, shares);
+        emit LienSettledAtExit(owner, lien, returned);
         emit Withdrawn(owner, assets, shares);
     }
 
@@ -216,8 +278,13 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         // `from == to` is a no-op economically, but would round-trip through
         // the delete branch below and wipe the checkpoint, so skip it.
         if (from != address(0) && to != address(0) && from != to && value != 0) {
-            uint256 debt = debtOf[from];
-            if (debt != 0) revert DebtOutstanding(from, debt);
+            // Transfers stay blocked while a lien is open, deliberately
+            // asymmetric with withdrawal. Exiting settles the lien from your
+            // own collateral; handing shares to a clean address would move
+            // the collateral away from the debt and leave the lien stranded
+            // on an account with nothing behind it.
+            uint256 lien = lienOf(from);
+            if (lien != 0) revert LienOutstanding(from, lien);
 
             _settle(from);
             _settle(to);
