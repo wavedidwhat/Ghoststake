@@ -123,6 +123,9 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     error InsufficientSupplyBalance(uint256 requested, uint256 balance);
     error RepayExceedsDebt(uint256 requested, uint256 debt);
     error InvalidCurve();
+    error ZeroAddress();
+    error BorrowModuleAlreadySet(address current);
+    error ReservesSeniorToSuppliers(uint256 requested, uint256 withdrawable);
 
     modifier onlyBorrowModule() {
         if (msg.sender != borrowModule) revert NotBorrowModule(msg.sender);
@@ -149,7 +152,19 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
         lastAccrualTime = block.timestamp;
     }
 
+    /// @notice Names the one contract allowed to create debt. **Set once.**
+    ///
+    /// @dev `borrowModule` is the only thing between this pool's liquidity and
+    /// an uncollateralised draw — the pool has no concept of collateral and
+    /// trusts the module entirely. A re-pointable setter therefore means a
+    /// single compromised owner key can, in one transaction, aim it at their
+    /// own contract and drain every un-borrowed deposit. Making it immutable
+    /// after the first call removes that path completely, at the cost of
+    /// needing a redeploy to change modules — the right trade for a setter
+    /// with this much authority.
     function setBorrowModule(address module) external onlyOwner {
+        if (module == address(0)) revert ZeroAddress();
+        if (borrowModule != address(0)) revert BorrowModuleAlreadySet(borrowModule);
         borrowModule = module;
         emit BorrowModuleSet(module);
     }
@@ -158,11 +173,16 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     // Views
     // ------------------------------------------------------------------
 
-    /// @dev Liquidity actually lendable right now. Reserves sit in the
-    /// contract but belong to the protocol, so they are excluded.
+    /// @dev Cash on hand, all of which is lendable and withdrawable.
+    ///
+    /// Reserves are deliberately NOT carved out here. They are credited when
+    /// interest accrues into the index, not when a borrower pays, so carving
+    /// them out would reduce what suppliers can withdraw on the strength of
+    /// interest nobody has handed over. Reserves stay a bookkeeping figure
+    /// until there is cash in excess of every supplier claim — see
+    /// `withdrawReserves`.
     function availableLiquidity() public view returns (uint256) {
-        uint256 balance = asset.balanceOf(address(this));
-        return balance > totalReserves ? balance - totalReserves : 0;
+        return asset.balanceOf(address(this));
     }
 
     function totalSupplied() public view returns (uint256) {
@@ -300,6 +320,12 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
 
     /// @dev Gated: this contract does not know about collateral, so it
     /// trusts the borrow module to have checked a health factor first.
+    /// @dev `nonReentrant` here is load-bearing in a non-obvious way, so do
+    /// not remove it. `repay` zeroes `scaledDebt` *before* pulling tokens, so
+    /// during that transfer a hooked asset hands control back with the debt
+    /// already cleared. The vault's own guard is free at that point, so a
+    /// borrow could be attempted against a position that momentarily reads as
+    /// debt-free. This guard is what makes that inner call revert.
     function borrow(uint256 amount, address onBehalfOf) external nonReentrant onlyBorrowModule {
         if (amount == 0) revert ZeroAmount();
         accrue();
@@ -346,9 +372,35 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     // Reserves
     // ------------------------------------------------------------------
 
+    /// @notice Draw protocol reserves. Subordinated to suppliers.
+    ///
+    /// @dev Reserves are credited at *accrual* time, not at receipt — the cut
+    /// is taken the moment interest is added to `borrowIndex`, whether or not
+    /// a borrower has paid anything. Without a floor here that makes the
+    /// treasury a **senior, cash-settled claim on interest nobody has paid**:
+    /// it could withdraw real tokens that are actually supplier principal,
+    /// leaving suppliers unable to exit and absorbing the whole loss if those
+    /// borrowers later default.
+    ///
+    /// The floor keeps enough cash to cover every supplier claim that is not
+    /// currently lent out, so reserves can only ever be drawn from genuine
+    /// surplus.
     function withdrawReserves(address to, uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        if (to == address(0)) revert ZeroAddress();
         if (amount > totalReserves) revert InsufficientSupplyBalance(amount, totalReserves);
+
+        // Reserves are only real once there is cash left over after every
+        // supplier claim could be met. Anything less and the "reserve" is
+        // simply supplier principal wearing a different label: the cut was
+        // credited when interest accrued into the index, and unpaid interest
+        // is not cash. Measuring against `totalBorrowed` instead would let the
+        // treasury draw against debt nobody has repaid, which is the same
+        // error one level removed.
+        uint256 supplied = totalSupplied();
+        uint256 balance = asset.balanceOf(address(this));
+        uint256 withdrawable = balance > supplied ? balance - supplied : 0;
+        if (amount > withdrawable) revert ReservesSeniorToSuppliers(amount, withdrawable);
 
         totalReserves -= amount;
         asset.safeTransfer(to, amount);

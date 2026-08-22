@@ -20,7 +20,7 @@ contract BorrowingTest is Test {
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
     uint256 internal constant LIQ_BONUS = 5e16; // 5%
     uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
-    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
+    uint256 internal constant FULL_LIQ_THRESHOLD = 6825e14; // derived: 0.65 x 1.05
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / YEAR;
 
     BorrowLiquidityPool internal pool;
@@ -341,8 +341,7 @@ contract BorrowingTest is Test {
             maxLTV: MAX_LTV,
             liquidationThreshold: LIQ_THRESHOLD,
             liquidationBonus: LIQ_BONUS,
-            closeFactor: CLOSE_FACTOR,
-            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+            closeFactor: CLOSE_FACTOR
         });
     }
 }
