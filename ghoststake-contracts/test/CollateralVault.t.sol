@@ -2,14 +2,11 @@
 pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
-import { StdStorage, stdStorage } from "forge-std/StdStorage.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { CollateralVault } from "../src/CollateralVault.sol";
+import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 
 contract CollateralVaultTest is Test {
-    using stdStorage for StdStorage;
-
     CollateralVault internal vault;
     ERC20Mock internal token;
 
@@ -20,7 +17,7 @@ contract CollateralVaultTest is Test {
         token = new ERC20Mock();
         // Rate 0: this file tests deposit/withdraw/debt-gate accounting in
         // isolation. Accrual math has its own coverage in YieldAccrual.t.sol.
-        vault = new CollateralVault(IERC20(address(token)), 0);
+        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)));
 
         token.mint(alice, 1_000 ether);
         token.mint(bob, 1_000 ether);
@@ -96,28 +93,19 @@ contract CollateralVaultTest is Test {
         assertEq(token.balanceOf(alice), 1_000 ether);
     }
 
-    function test_withdrawRevertsWhileDebtOutstanding() public {
-        vm.prank(alice);
+    /// @dev With no lien source wired, every position reads as lien-free and
+    /// withdrawal is unconditional. Lien settlement has its own suite in
+    /// LienSettlement.t.sol, against a real creditor.
+    function test_withdrawIsUnconditionalWithNoLienSourceWired() public {
+        assertEq(address(vault.lienSource()), address(0));
+
+        vm.startPrank(alice);
         vault.deposit(100 ether, alice);
+        assertEq(vault.lienOf(alice), 0);
+        vault.withdraw(100 ether, alice, alice);
+        vm.stopPrank();
 
-        // No borrow module yet (GHO-8) — simulate outstanding debt directly
-        // against the stubbed `debtOf` mapping via its storage slot.
-        stdstore.target(address(vault)).sig("debtOf(address)").with_key(alice).checked_write(1 ether);
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CollateralVault.DebtOutstanding.selector, alice, 1 ether));
-        vault.withdraw(50 ether, alice, alice);
-    }
-
-    function test_redeemAlsoRevertsWhileDebtOutstanding() public {
-        vm.prank(alice);
-        uint256 shares = vault.deposit(100 ether, alice);
-
-        stdstore.target(address(vault)).sig("debtOf(address)").with_key(alice).checked_write(1 ether);
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CollateralVault.DebtOutstanding.selector, alice, 1 ether));
-        vault.redeem(shares, alice, alice);
+        assertEq(token.balanceOf(alice), 1_000 ether);
     }
 
     function test_depositDoesNotAffectOtherUsersPosition() public {
