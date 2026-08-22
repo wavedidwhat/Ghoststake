@@ -30,8 +30,8 @@ jobs:
           # Pinned so `forge fmt` agrees with local dev machines — different
           # forge versions format borderline lines differently, which turns
           # `forge fmt --check` into a moving target. Bump deliberately and
-          # tell contributors to `foundryup --version <sha>` in sync.
-          version: a813a2cee7dd4926e7c56fd8a785b54f32e0d10f
+          # tell contributors to `foundryup --version <tag>` in sync.
+          version: v1.2.3
 
       - name: Show forge version
         run: forge --version
@@ -60,8 +60,8 @@ jobs:
           # Pinned so `forge fmt` agrees with local dev machines — different
           # forge versions format borderline lines differently, which turns
           # `forge fmt --check` into a moving target. Bump deliberately and
-          # tell contributors to `foundryup --version <sha>` in sync.
-          version: a813a2cee7dd4926e7c56fd8a785b54f32e0d10f
+          # tell contributors to `foundryup --version <tag>` in sync.
+          version: v1.2.3
 
       - name: Run Slither
         uses: crytic/slither-action@v0.4.0
