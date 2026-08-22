@@ -13,13 +13,16 @@ Solidity contracts for GhostStake, built with [Foundry](https://getfoundry.sh).
 ## Local setup
 
 ```bash
-# Install Foundry if you don't have it
+# Install Foundry if you don't have it. CI is pinned to a specific forge
+# version (see contracts-ci.yml) so `forge fmt` agrees between local and CI —
+# match it with `foundryup --version <that tag>` if you hit spurious
+# `forge fmt --check` failures in CI that pass locally.
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
 cd ghoststake-contracts
-forge install          # pulls lib/ dependencies (forge-std, etc.)
-cp .env.example .env   # fill in RPC URLs / keys as needed for scripts
+git submodule update --init --recursive   # lib/ deps: forge-std, openzeppelin-contracts
+cp .env.example .env                      # fill in RPC URLs / keys as needed for scripts
 
 forge build
 forge test
@@ -28,7 +31,10 @@ forge test
 ## Conventions
 
 - Format with `forge fmt` before committing; CI runs `forge fmt --check` and
-  fails the build on drift.
+  fails the build on drift. Different forge versions can format borderline
+  lines differently — if CI disagrees with your local `forge fmt`, check
+  your version against the one pinned in `contracts-ci.yml` before assuming
+  the code is wrong.
 - `forge test` must stay green on a fresh clone with no `.env` present —
   tests should never depend on secrets or live RPCs.
 - [Slither](https://github.com/crytic/slither) runs in CI as a non-blocking
