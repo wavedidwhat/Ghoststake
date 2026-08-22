@@ -6,10 +6,10 @@ on:
     paths:
       - "ghoststake-frontend/**"
       - ".github/workflows/frontend-ci.yml"
+  # No path filter here on purpose: a workflow skipped by path filtering
+  # never reports its check, and a REQUIRED check that never reports leaves
+  # the PR permanently "Expected — waiting for status". Cheap to just run.
   pull_request:
-    paths:
-      - "ghoststake-frontend/**"
-      - ".github/workflows/frontend-ci.yml"
 
 defaults:
   run:
