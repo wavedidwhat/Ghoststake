@@ -16,7 +16,7 @@ defaults:
 
 jobs:
   build:
-    name: lint, typecheck, build
+    name: lint, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +37,5 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Typecheck
-        run: pnpm exec tsc --noEmit
-
       - name: Build
-        run: pnpm build
+        run: pnpm build # next build type-checks as part of the build
