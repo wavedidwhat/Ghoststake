@@ -9,6 +9,9 @@ import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 contract CollateralVaultTest is Test {
     uint256 internal constant MAX_LTV = 5e17; // 50%
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+    uint256 internal constant LIQ_BONUS = 5e16; // 5%
+    uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
+    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
 
     CollateralVault internal vault;
     ERC20Mock internal token;
@@ -20,7 +23,7 @@ contract CollateralVaultTest is Test {
         token = new ERC20Mock();
         // Rate 0: this file tests deposit/withdraw/debt-gate accounting in
         // isolation. Accrual math has its own coverage in YieldAccrual.t.sol.
-        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD);
+        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)), _risk());
 
         token.mint(alice, 1_000 ether);
         token.mint(bob, 1_000 ether);
@@ -136,5 +139,15 @@ contract CollateralVaultTest is Test {
         vm.stopPrank();
 
         assertEq(token.balanceOf(alice), balanceBefore, "full round trip returns exactly what was put in");
+    }
+
+    function _risk() internal pure returns (CollateralVault.RiskParams memory) {
+        return CollateralVault.RiskParams({
+            maxLTV: MAX_LTV,
+            liquidationThreshold: LIQ_THRESHOLD,
+            liquidationBonus: LIQ_BONUS,
+            closeFactor: CLOSE_FACTOR,
+            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+        });
     }
 }
