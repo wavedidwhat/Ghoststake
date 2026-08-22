@@ -84,14 +84,33 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// more clearly than a bare WAD.
     uint256 public constant RATE_PRECISION = WAD;
 
-    /// @dev Most you may borrow against a position, as a fraction of its
-    /// collateral value. Deliberately well below `liquidationThreshold`;
-    /// the gap is the buffer a borrower has before they are liquidatable.
-    uint256 public immutable maxLTV;
+    /// @notice Risk parameters, grouped so they cannot be transposed at
+    /// deployment. Four adjacent WAD ratios as positional arguments is a
+    /// silent-swap waiting to happen.
+    struct RiskParams {
+        /// @dev Most you may borrow against a position, as a fraction of its
+        /// collateral value. Deliberately well below `liquidationThreshold`;
+        /// the gap is the buffer a borrower has before becoming liquidatable.
+        uint256 maxLTV;
+        /// @dev Debt-to-collateral ratio at which a position becomes
+        /// liquidatable. Health factor is exactly 1 at this line.
+        uint256 liquidationThreshold;
+        /// @dev Discount a liquidator gets on seized collateral. Their whole
+        /// incentive to show up.
+        uint256 liquidationBonus;
+        /// @dev Most of a lien that one liquidation may clear. Caps the
+        /// damage a single dip does to a borrower.
+        uint256 closeFactor;
+        /// @dev Health factor below which `closeFactor` is lifted to 100%.
+        /// See `_effectiveCloseFactor` for why this is not optional.
+        uint256 fullLiquidationThreshold;
+    }
 
-    /// @dev Debt-to-collateral ratio at which a position becomes
-    /// liquidatable. Health factor is 1 exactly at this line.
+    uint256 public immutable maxLTV;
     uint256 public immutable liquidationThreshold;
+    uint256 public immutable liquidationBonus;
+    uint256 public immutable closeFactor;
+    uint256 public immutable fullLiquidationThreshold;
 
     /// @dev Protocol-wide yield rate, fixed at deployment. Copied onto each
     /// position on settle so a future version could vary it per position
@@ -112,6 +131,15 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     event LienSettledAtExit(address indexed user, uint256 lienAmount, uint256 collateralReturned);
     event Borrowed(address indexed user, uint256 amount, uint256 lienAfter);
     event Repaid(address indexed payer, address indexed user, uint256 amount, uint256 lienAfter);
+    event Liquidated(
+        address indexed liquidator,
+        address indexed user,
+        uint256 debtRepaid,
+        uint256 collateralSeized,
+        uint256 bonusPaid,
+        uint256 lienAfter,
+        uint256 healthFactorAfter
+    );
 
     error LienOutstanding(address user, uint256 lien);
     error PartialExitWithLienOpen(uint256 sharesRequested, uint256 sharesHeld);
@@ -119,22 +147,35 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     error NoLienSource();
     error ExceedsMaxLTV(address user, uint256 requestedDebt, uint256 maxDebt);
     error NothingToRepay(address user);
+    error PositionNotLiquidatable(address user, uint256 healthFactor);
+    error ExceedsCloseFactor(uint256 requested, uint256 maxRepayable);
     error InvalidRiskParameters();
     error ZeroAmount();
 
-    constructor(
-        IERC20 collateralAsset,
-        uint256 yieldRatePerSecond_,
-        ILienSource lienSource_,
-        uint256 maxLTV_,
-        uint256 liquidationThreshold_
-    ) ERC20("GhostStake Collateral Shares", "gsCOL") ERC4626(collateralAsset) {
-        if (maxLTV_ >= liquidationThreshold_ || liquidationThreshold_ >= WAD) revert InvalidRiskParameters();
+    constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_, ILienSource lienSource_, RiskParams memory risk)
+        ERC20("GhostStake Collateral Shares", "gsCOL")
+        ERC4626(collateralAsset)
+    {
+        // Ordering matters as much as the values: originating above the
+        // liquidation line would mean a borrow is liquidatable the moment it
+        // opens, and a close factor of zero would make liquidation a no-op.
+        if (risk.maxLTV >= risk.liquidationThreshold || risk.liquidationThreshold >= WAD) {
+            revert InvalidRiskParameters();
+        }
+        if (risk.closeFactor == 0 || risk.closeFactor > WAD || risk.liquidationBonus >= WAD) {
+            revert InvalidRiskParameters();
+        }
+        if (risk.fullLiquidationThreshold == 0 || risk.fullLiquidationThreshold > WAD) {
+            revert InvalidRiskParameters();
+        }
 
         yieldRatePerSecond = yieldRatePerSecond_;
         lienSource = lienSource_;
-        maxLTV = maxLTV_;
-        liquidationThreshold = liquidationThreshold_;
+        maxLTV = risk.maxLTV;
+        liquidationThreshold = risk.liquidationThreshold;
+        liquidationBonus = risk.liquidationBonus;
+        closeFactor = risk.closeFactor;
+        fullLiquidationThreshold = risk.fullLiquidationThreshold;
     }
 
     /// @notice What this position owes: principal plus accrued interest, as
@@ -253,6 +294,117 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         lienSource.repay(amount, onBehalfOf);
 
         emit Repaid(msg.sender, onBehalfOf, amount, lien - amount);
+    }
+
+    // ------------------------------------------------------------------
+    // Liquidation
+    // ------------------------------------------------------------------
+
+    /// @notice Whether this position can be liquidated right now.
+    function isLiquidatable(address user) public view returns (bool) {
+        return healthFactor(user) < WAD;
+    }
+
+    /// @notice Most of this position's lien a single liquidation may clear.
+    /// Zero when the position is healthy.
+    function maxLiquidatableDebt(address user) public view returns (uint256) {
+        uint256 hf = healthFactor(user);
+        if (hf >= WAD) return 0;
+        return Math.mulDiv(lienOf(user), _effectiveCloseFactor(hf), WAD);
+    }
+
+    /// @dev The close factor, lifted to 100% once a position is far enough
+    /// underwater.
+    ///
+    /// Seizing collateral at a bonus removes proportionally *more* collateral
+    /// than debt. That is fine while collateral still exceeds
+    /// `(1 + bonus) x debt` — the position ends up healthier. Below that line
+    /// the arithmetic inverts and each partial liquidation leaves the position
+    /// **less** healthy than it started, so capped liquidations spiral: every
+    /// one makes the next worse while never being allowed to finish the job.
+    ///
+    /// Lifting the cap lets a liquidator close the whole lien in a single
+    /// step, which ends the position instead of degrading it repeatedly. Aave
+    /// V3 does the same thing for the same reason. Where collateral cannot
+    /// cover the full bonus, the remainder is bad debt — recognised once,
+    /// rather than ground out over many transactions.
+    function _effectiveCloseFactor(uint256 hf) internal view returns (uint256) {
+        return hf < fullLiquidationThreshold ? WAD : closeFactor;
+    }
+
+    /// @notice Clear part of an underwater position's lien and take its
+    /// collateral at a discount.
+    ///
+    /// @dev Open to any caller by design. A permissioned liquidator is a
+    /// centralisation point and a single point of failure — if the whitelisted
+    /// bot is down, underwater positions sit unliquidated and the loss lands
+    /// on suppliers. Anyone being able to do it is what makes the mechanism
+    /// reliable, and the bonus is what makes it worth doing.
+    ///
+    /// @param user The position to liquidate.
+    /// @param repayAmount How much of the lien to clear. Capped at the close
+    /// factor; pass `type(uint256).max` to clear the maximum allowed.
+    function liquidate(address user, uint256 repayAmount) external nonReentrant {
+        if (address(lienSource) == address(0)) revert NoLienSource();
+
+        // Both sides must be current before anything is judged: yield feeds
+        // collateral value, interest feeds the lien, and either one can be
+        // what tipped this position over the line.
+        _settle(user);
+        lienSource.accrue();
+
+        uint256 hf = healthFactor(user);
+        if (hf >= WAD) revert PositionNotLiquidatable(user, hf);
+
+        uint256 maxRepay = Math.mulDiv(lienOf(user), _effectiveCloseFactor(hf), WAD);
+        if (repayAmount == type(uint256).max) repayAmount = maxRepay;
+        if (repayAmount == 0) revert ZeroAmount();
+        if (repayAmount > maxRepay) revert ExceedsCloseFactor(repayAmount, maxRepay);
+
+        // Collateral and debt are the same asset here, so value converts 1:1
+        // and no oracle is involved. A different collateral asset would need
+        // a price feed at exactly this line.
+        //
+        // A position deep enough underwater cannot pay the full bonus. Seize
+        // what exists rather than reverting: leaving it untouched helps
+        // nobody, and the shortfall is bad debt that must be visible.
+        uint256 seized =
+            Math.min(repayAmount + Math.mulDiv(repayAmount, liquidationBonus, WAD), convertToAssets(balanceOf(user)));
+
+        // Liquidator pays first, then is paid — nothing leaves before the
+        // debt it is buying has actually been cleared.
+        _pullAndRepay(msg.sender, user, repayAmount);
+        _seizeCollateral(user, msg.sender, seized);
+
+        emit Liquidated(
+            msg.sender,
+            user,
+            repayAmount,
+            seized,
+            seized > repayAmount ? seized - repayAmount : 0,
+            lienOf(user),
+            healthFactor(user)
+        );
+    }
+
+    /// @dev Takes `amount` from `payer` and clears that much of `user`'s lien.
+    function _pullAndRepay(address payer, address user, uint256 amount) private {
+        IERC20 collateral = IERC20(asset());
+        SafeERC20.safeTransferFrom(collateral, payer, address(this), amount);
+        SafeERC20.forceApprove(collateral, address(lienSource), amount);
+        lienSource.repay(amount, user);
+    }
+
+    /// @dev Burns the shares backing `amount` of collateral and hands the
+    /// assets to `recipient`, keeping the position ledger proportional.
+    function _seizeCollateral(address user, address recipient, uint256 amount) private {
+        uint256 sharesBefore = balanceOf(user);
+        uint256 sharesToBurn = Math.min(previewWithdraw(amount), sharesBefore);
+
+        _burn(user, sharesToBurn);
+        _reducePositionProRata(user, sharesToBurn, sharesBefore);
+
+        SafeERC20.safeTransfer(IERC20(asset()), recipient, amount);
     }
 
     // ------------------------------------------------------------------
