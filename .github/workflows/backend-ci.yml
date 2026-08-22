@@ -2,6 +2,7 @@ name: backend-ci
 
 on:
   push:
+    branches: ["main"]
     paths:
       - "ghoststake-backend/**"
       - ".github/workflows/backend-ci.yml"
