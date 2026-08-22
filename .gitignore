@@ -38,3 +38,7 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Personal working notes — decision log and agent instructions, local only
+/docs/
+/CLAUDE.md

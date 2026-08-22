@@ -1,0 +1,58 @@
+name: contracts-ci
+
+on:
+  push:
+    paths:
+      - "ghoststake-contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+  pull_request:
+    paths:
+      - "ghoststake-contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+
+defaults:
+  run:
+    working-directory: ghoststake-contracts
+
+jobs:
+  test:
+    name: forge test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show forge version
+        run: forge --version
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Run tests
+        run: forge test -vvv
+
+  slither:
+    name: slither (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: ghoststake-contracts
+          slither-args: --filter-paths "lib/"
+          fail-on: none

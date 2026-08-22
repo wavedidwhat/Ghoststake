@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Strips AI co-author trailers (e.g. "Co-Authored-By: Claude ...") from
+# commit messages before they're finalized. We write commits ourselves;
+# tool-added attribution trailers don't belong in the permanent history.
+#
+# Enable once per clone with:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+msg_file="$1"
+
+# Drop any Co-Authored-By trailer crediting an AI assistant/tool.
+awk '
+  /^Co-Authored-By:.*(Claude|Anthropic|Copilot|ChatGPT|GPT-|OpenAI)/ { next }
+  { print }
+' "$msg_file" > "$msg_file.tmp" && mv "$msg_file.tmp" "$msg_file"
+
+# Squeeze any now-trailing blank lines left behind.
+awk '{ buf = buf $0 "\n" } END { sub(/\n+$/, "\n", buf); printf "%s", buf }' \
+  "$msg_file" > "$msg_file.tmp" && mv "$msg_file.tmp" "$msg_file"
