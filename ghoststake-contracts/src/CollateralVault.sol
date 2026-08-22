@@ -80,6 +80,13 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// @dev Shared fixed-point scale. 1e18 = 100%, for rates and ratios alike.
     uint256 public constant WAD = 1e18;
 
+    /// @dev Ceiling on the per-second yield rate: 100% per year. Purely a
+    /// deployment guard — the constructor otherwise validated every risk
+    /// parameter and left this one unchecked, and a large enough rate
+    /// overflows the accrual multiply, which bricks a position on every path
+    /// (`_settle` runs on deposit, withdraw, transfer, borrow and liquidate).
+    uint256 public constant MAX_YIELD_RATE_PER_SECOND = WAD / 365 days;
+
     /// @dev Alias kept for the accrual maths, where "rate precision" reads
     /// more clearly than a bare WAD.
     uint256 public constant RATE_PRECISION = WAD;
@@ -101,15 +108,26 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         /// @dev Most of a lien that one liquidation may clear. Caps the
         /// damage a single dip does to a borrower.
         uint256 closeFactor;
-        /// @dev Health factor below which `closeFactor` is lifted to 100%.
-        /// See `_effectiveCloseFactor` for why this is not optional.
-        uint256 fullLiquidationThreshold;
     }
 
     uint256 public immutable maxLTV;
     uint256 public immutable liquidationThreshold;
     uint256 public immutable liquidationBonus;
     uint256 public immutable closeFactor;
+
+    /// @dev Health factor below which `closeFactor` lifts to 100%.
+    /// **Derived, not configured** — it is exactly the point where seizing at
+    /// a bonus stops improving a position: `liquidationThreshold x (1 + bonus)`.
+    /// Above it, capped liquidations converge on health geometrically and the
+    /// cap should hold; below it they move the wrong way and can never finish,
+    /// so the cap has to go.
+    ///
+    /// This was originally hard-coded to 0.95, copied from Aave. That number
+    /// is correct for Aave's parameters, not ours: at a 65% threshold and 5%
+    /// bonus our line is 0.6825, so 0.95 force-closed every position in
+    /// [0.841, 0.95) that a single capped liquidation would have rescued —
+    /// taking double the bonus from the borrower for no protocol benefit.
+    /// Deriving it means the two can never drift apart again.
     uint256 public immutable fullLiquidationThreshold;
 
     /// @dev Protocol-wide yield rate, fixed at deployment. Copied onto each
@@ -165,9 +183,10 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         if (risk.closeFactor == 0 || risk.closeFactor > WAD || risk.liquidationBonus >= WAD) {
             revert InvalidRiskParameters();
         }
-        if (risk.fullLiquidationThreshold == 0 || risk.fullLiquidationThreshold > WAD) {
-            revert InvalidRiskParameters();
-        }
+        // A yield rate is a per-second WAD; anything at or above 100%/second
+        // is a deployment error, and unbounded values overflow the accrual
+        // multiply and brick every position permanently.
+        if (yieldRatePerSecond_ > MAX_YIELD_RATE_PER_SECOND) revert InvalidRiskParameters();
 
         yieldRatePerSecond = yieldRatePerSecond_;
         lienSource = lienSource_;
@@ -175,7 +194,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         liquidationThreshold = risk.liquidationThreshold;
         liquidationBonus = risk.liquidationBonus;
         closeFactor = risk.closeFactor;
-        fullLiquidationThreshold = risk.fullLiquidationThreshold;
+        fullLiquidationThreshold = Math.mulDiv(risk.liquidationThreshold, WAD + risk.liquidationBonus, WAD);
     }
 
     /// @notice What this position owes: principal plus accrued interest, as
@@ -201,7 +220,18 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         Position storage position = positions[user];
         uint256 elapsed = block.timestamp - position.startTime;
         if (elapsed == 0 || position.principal == 0) return 0;
-        return (position.principal * position.rate * elapsed) / RATE_PRECISION;
+        // mulDiv carries the intermediate in 512 bits, so a large principal
+        // cannot overflow the multiply. That matters because `_settle` sits on
+        // every mutating path, so an overflow revert here would brick the
+        // position permanently rather than merely failing one call.
+        //
+        // The division stays LAST on purpose. Folding it in earlier —
+        // `mulDiv(principal, rate, WAD)` then scaling by elapsed — truncates
+        // the per-second yield to zero for small principals and silently
+        // destroys their accrual entirely. `rate` is bounded by
+        // MAX_YIELD_RATE_PER_SECOND, so `rate * elapsed` cannot overflow for
+        // any reachable timestamp.
+        return Math.mulDiv(position.principal, position.rate * elapsed, RATE_PRECISION);
     }
 
     /// @notice Everything the ledger says this user is owed: deposit basis
@@ -416,7 +446,16 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// changed by settling, calling this more often cannot earn anyone more.
     /// Exposed so a keeper/indexer can checkpoint without moving funds, and
     /// so GHO-8/GHO-9 can settle before mutating debt or liquidating.
-    function settle(address user) public {
+    /// @dev `nonReentrant` even though this moves no funds. During
+    /// `super._deposit`/`super._withdraw` the asset transfer happens either
+    /// side of the mint/burn, so for one instant `totalAssets()` and
+    /// `totalSupply()` disagree and every share-price view — `convertToAssets`,
+    /// `previewRedeem`, `collateralValue` — reports an inflated figure. With a
+    /// hooked asset (ERC-777/1363) a callback lands inside that window. Nothing
+    /// in this system reads those views across a call boundary today, so this
+    /// is defence for future integrators rather than a live hole; the guard
+    /// makes the contract inert for the duration and costs nothing.
+    function settle(address user) public nonReentrant {
         _settle(user);
     }
 
