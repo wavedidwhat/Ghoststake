@@ -22,7 +22,7 @@ contract LiquidationTest is Test {
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
     uint256 internal constant LIQ_BONUS = 5e16; // 5%
     uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
-    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
+    uint256 internal constant FULL_LIQ_THRESHOLD = 6825e14; // derived: 0.65 x 1.05
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / YEAR;
 
     BorrowLiquidityPool internal pool;
@@ -65,8 +65,7 @@ contract LiquidationTest is Test {
             maxLTV: MAX_LTV,
             liquidationThreshold: LIQ_THRESHOLD,
             liquidationBonus: LIQ_BONUS,
-            closeFactor: CLOSE_FACTOR,
-            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+            closeFactor: CLOSE_FACTOR
         });
     }
 
@@ -301,8 +300,8 @@ contract LiquidationTest is Test {
     // ---------------------------------------------------------------
 
     /// @dev The honest invariant. "Liquidation always improves health" is
-    /// NOT true — see test_partialLiquidationBelowTheBonusLineWorsensHealth —
-    /// but debt strictly falling is true unconditionally, and it is what
+    /// NOT true — see test_partialLiquidationBelowTheBonusLineWorsensHealth
+    /// below — but debt strictly falling is true unconditionally, and it is what
     /// stops a liquidator being paid for nothing.
     function testFuzz_liquidationAlwaysReducesDebt(uint96 repayPct, uint8 yearsUnder) public {
         _driveAliceUnderwater(bound(yearsUnder, 1, 8));
@@ -399,5 +398,59 @@ contract LiquidationTest is Test {
         _driveAliceJustUnderwater();
 
         assertApproxEqRel(vault.maxLiquidatableDebt(alice), vault.lienOf(alice) / 2, 0.001e18, "cap intact");
+    }
+
+    // ---------------------------------------------------------------
+    // The derived full-liquidation threshold (audit finding)
+    // ---------------------------------------------------------------
+
+    /// @dev The threshold is derived, not configured: it is exactly
+    /// `liquidationThreshold x (1 + bonus)`, the point below which seizing at
+    /// a bonus stops improving a position.
+    function test_fullLiquidationThresholdIsDerivedFromBonusAndThreshold() public view {
+        assertEq(
+            vault.fullLiquidationThreshold(),
+            Math.mulDiv(LIQ_THRESHOLD, WAD + LIQ_BONUS, WAD),
+            "threshold must track the parameters it depends on"
+        );
+        assertEq(vault.fullLiquidationThreshold(), FULL_LIQ_THRESHOLD);
+    }
+
+    /// @dev Regression for the audit finding. A position at HF ~0.94 is
+    /// rescuable by ONE capped liquidation, so the cap must still apply. The
+    /// old hard-coded 0.95 lifted it to 100% here and force-closed the whole
+    /// position, taking double the bonus for no protocol benefit.
+    function test_positionRescuableByOneCappedLiquidationIsNotFullyClosed() public {
+        _driveAliceJustUnderwater();
+        uint256 hf = vault.healthFactor(alice);
+        assertGt(hf, FULL_LIQ_THRESHOLD, "above the derived line");
+
+        uint256 lien = vault.lienOf(alice);
+        assertApproxEqRel(vault.maxLiquidatableDebt(alice), lien / 2, 0.001e18, "cap still applies");
+
+        uint256 repay = vault.maxLiquidatableDebt(alice);
+        vm.prank(keeper);
+        vault.liquidate(alice, repay);
+
+        assertGt(vault.lienOf(alice), 0, "borrower keeps a loan rather than being force-closed");
+        assertFalse(vault.isLiquidatable(alice), "one capped liquidation restored health");
+    }
+
+    /// @dev Documents the region the derived threshold exists for: below the
+    /// bonus line a *capped* liquidation genuinely makes things worse, which
+    /// is why the cap is lifted there and only there.
+    function test_partialLiquidationBelowTheBonusLineWorsensHealth() public {
+        _driveAliceUnderwater(4);
+        assertLt(vault.healthFactor(alice), FULL_LIQ_THRESHOLD, "below the bonus line");
+
+        uint256 hfBefore = vault.healthFactor(alice);
+        uint256 lien = vault.lienOf(alice);
+
+        // Deliberately take only a capped-size bite, which the lift permits
+        // but does not force, to show why finishing the job is the right move.
+        vm.prank(keeper);
+        vault.liquidate(alice, lien / 2);
+
+        assertLt(vault.healthFactor(alice), hfBefore, "a partial bite down here moves the wrong way");
     }
 }
