@@ -14,8 +14,8 @@ Solidity contracts for GhostStake, built with [Foundry](https://getfoundry.sh).
 
 ```bash
 # Install Foundry if you don't have it. CI is pinned to a specific forge
-# commit (see contracts-ci.yml) so `forge fmt` agrees between local and CI —
-# match it with `foundryup --version <that commit sha>` if you hit spurious
+# version (see contracts-ci.yml) so `forge fmt` agrees between local and CI —
+# match it with `foundryup --version <that tag>` if you hit spurious
 # `forge fmt --check` failures in CI that pass locally.
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
