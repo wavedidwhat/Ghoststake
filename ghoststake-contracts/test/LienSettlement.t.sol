@@ -16,6 +16,9 @@ import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 contract LienSettlementTest is Test {
     uint256 internal constant MAX_LTV = 5e17; // 50%
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+    uint256 internal constant LIQ_BONUS = 5e16; // 5%
+    uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
+    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
 
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant FIVE_PERCENT_APR = uint256(5e16) / YEAR;
@@ -42,9 +45,7 @@ contract LienSettlementTest is Test {
             owner
         );
 
-        vault = new CollateralVault(
-            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), MAX_LTV, LIQ_THRESHOLD
-        );
+        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk());
 
         // This test contract stands in for GHO-8's borrow module.
         vm.prank(owner);
@@ -283,5 +284,15 @@ contract LienSettlementTest is Test {
         assertEq(vault.lienOf(alice), 0, "lien must always be cleared by a full exit");
         assertEq(_shares(alice), 0);
         assertEq(vault.totalLedgerValue(alice), 0, "ledger must always be cleared too");
+    }
+
+    function _risk() internal pure returns (CollateralVault.RiskParams memory) {
+        return CollateralVault.RiskParams({
+            maxLTV: MAX_LTV,
+            liquidationThreshold: LIQ_THRESHOLD,
+            liquidationBonus: LIQ_BONUS,
+            closeFactor: CLOSE_FACTOR,
+            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+        });
     }
 }

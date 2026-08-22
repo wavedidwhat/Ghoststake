@@ -18,6 +18,9 @@ import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 contract LedgerIntegrityTest is Test {
     uint256 internal constant MAX_LTV = 5e17; // 50%
     uint256 internal constant LIQ_THRESHOLD = 65e16; // 65%
+    uint256 internal constant LIQ_BONUS = 5e16; // 5%
+    uint256 internal constant CLOSE_FACTOR = 5e17; // 50%
+    uint256 internal constant FULL_LIQ_THRESHOLD = 95e16; // HF 0.95
 
     // 5% APR as a per-second WAD rate. Nonzero on purpose: the pre-existing
     // CollateralVault.t.sol runs at rate 0, which structurally cannot
@@ -32,9 +35,7 @@ contract LedgerIntegrityTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(
-            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), MAX_LTV, LIQ_THRESHOLD
-        );
+        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), _risk());
 
         token.mint(alice, 1_000_000 ether);
         token.mint(bob, 1_000_000 ether);
@@ -287,5 +288,15 @@ contract LedgerIntegrityTest is Test {
 
         assertEq(vault.balanceOf(alice), 0);
         assertEq(_totalLedgerValue(alice), 0, "zero shares must always mean zero ledger value");
+    }
+
+    function _risk() internal pure returns (CollateralVault.RiskParams memory) {
+        return CollateralVault.RiskParams({
+            maxLTV: MAX_LTV,
+            liquidationThreshold: LIQ_THRESHOLD,
+            liquidationBonus: LIQ_BONUS,
+            closeFactor: CLOSE_FACTOR,
+            fullLiquidationThreshold: FULL_LIQ_THRESHOLD
+        });
     }
 }
