@@ -4,7 +4,7 @@ pragma solidity ^0.8.26;
 import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { CollateralVault } from "../src/CollateralVault.sol";
+import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 
 /// @notice Covers GHO-7's three required cases: accrual across a state
 /// change, accrual with zero elapsed time, and precision at small amounts.
@@ -21,7 +21,7 @@ contract YieldAccrualTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR);
+        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)));
 
         token.mint(alice, 1_000_000 ether);
         vm.prank(alice);
@@ -156,7 +156,7 @@ contract YieldAccrualTest is Test {
         vm.assume(principal > 0);
         uint256 rate = uint256(rateSeed) % 1e12; // keep well under overflow range for the multiply below
 
-        CollateralVault v = new CollateralVault(IERC20(address(token)), rate);
+        CollateralVault v = new CollateralVault(IERC20(address(token)), rate, ILienSource(address(0)));
         token.mint(alice, principal);
         vm.startPrank(alice);
         token.approve(address(v), principal);
