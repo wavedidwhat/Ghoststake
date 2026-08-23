@@ -490,28 +490,44 @@ contract ParimutuelRoundTest is Test {
         assertEq(market.claimableOf(roundId, alice), 60 ether);
     }
 
-    /// @dev Two prices from one feed round are the same observation. Naming
-    /// the lock's own round would settle on a difference of exactly zero
-    /// produced by the feed being slow rather than by the market moving —
-    /// and unlike the other failures this one is never a "wait", so it
-    /// reverts however late it is tried.
-    function test_resolveRejectsAFeedRoundNoLaterThanTheLockRead() public {
+    /// @dev A round published *before* the strike was captured is not the
+    /// price at `closeTime` under any reading, so naming one is reported
+    /// rather than absorbed — and it stays a revert however late it is tried.
+    function test_resolveRejectsAFeedRoundEarlierThanTheLockRead() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
         uint80 lockRoundId = round.lockOracleRoundId;
+        uint80 earlier = lockRoundId - 1;
 
-        oracle.setPriceWithoutAdvancing(START_PRICE + 5);
         vm.warp(round.closeTime);
         vm.expectRevert(
-            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, lockRoundId)
+            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
         );
-        market.resolveRound(roundId, lockRoundId);
+        market.resolveRound(roundId, earlier);
 
-        vm.warp(round.closeTime + RESOLVE_DEADLINE + 1);
+        vm.warp(round.closeTime + RESOLVE_DEADLINE * 100);
         vm.expectRevert(
-            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, lockRoundId)
+            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
         );
-        market.resolveRound(roundId, lockRoundId);
+        market.resolveRound(roundId, earlier);
+    }
+
+    /// @dev The lock's own round is allowed through. A feed that published
+    /// nothing between lock and close means the last round at or before
+    /// `closeTime` really is the lock's, the two prices are one observation,
+    /// and that is a tie — refunded automatically rather than left for the
+    /// owner to unwind by hand.
+    function test_aQuietFeedBetweenLockAndCloseVoidsAsATie() public {
+        uint256 roundId = _standardRound();
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+
+        vm.warp(round.closeTime);
+        market.resolveRound(roundId, round.lockOracleRoundId);
+
+        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
+        assertEq(market.protocolFees(), 0);
+        assertEq(market.claimableOf(roundId, carol), 300 ether);
+        assertEq(market.claimableOf(roundId, alice), 60 ether);
     }
 
     function test_exactTieVoids() public {

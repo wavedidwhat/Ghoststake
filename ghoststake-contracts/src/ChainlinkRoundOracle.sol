@@ -138,6 +138,12 @@ contract ChainlinkRoundOracle is IRoundOracle {
         // aggregator phase change, where the next round's id is not
         // `oracleRoundId + 1` at all (proxy round ids pack a phase into their
         // high bits). Rare, and it fails towards a refund.
+        //
+        // The id ceiling is checked rather than allowed to overflow: `+ 1` on
+        // `type(uint80).max` reverts under checked arithmetic, and a revert
+        // here would be the adapter breaking its own contract over an
+        // argument anyone can pass.
+        if (oracleRoundId == type(uint80).max) return (false, 0);
         (bool readNext,, uint256 updatedAtNext) = _round(oracleRoundId + 1);
         if (!readNext || updatedAtNext <= at) return (false, 0);
 
@@ -160,19 +166,37 @@ contract ChainlinkRoundOracle is IRoundOracle {
     /// about to settle on was published to a working chain), and enough time
     /// must have passed since it came back for people to have acted on what
     /// they missed.
+    ///
+    /// The read is wrapped and the arithmetic is done outside it, deliberately.
+    /// `catch` only covers a failure of the external *call* — a revert raised
+    /// inside the success block propagates like any other. This used to
+    /// subtract `startedAt` from `block.timestamp` in there, which underflows
+    /// and reverts on a feed reporting a start time in the future, taking the
+    /// whole "the adapter never reverts" contract down with it.
     function _sequencerUpAt(uint256 at) private view returns (bool) {
         if (address(sequencerUptimeFeed) == address(0)) return true;
 
-        try sequencerUptimeFeed.latestRoundData() returns (uint80, int256 answer, uint256 startedAt, uint256, uint80) {
-            // 0 = up, 1 = down. `startedAt == 0` means the feed itself is
-            // still initialising and says nothing yet.
-            if (answer != 0 || startedAt == 0) return false;
-            if (block.timestamp - startedAt <= sequencerGracePeriod) return false;
-            // The current up-period must already have been running at `at`;
-            // otherwise the sequencer was down then, whatever it is now.
-            return startedAt <= at;
+        (bool read, int256 answer, uint256 startedAt) = _sequencerStatus();
+        if (!read) return false;
+
+        // 0 = up, 1 = down. `startedAt == 0` means the feed itself is still
+        // initialising and says nothing yet.
+        if (answer != 0 || startedAt == 0) return false;
+        // A start time in the future is nonsense; treat the feed as unusable
+        // rather than trusting it or reverting on it.
+        if (startedAt > block.timestamp) return false;
+        if (block.timestamp - startedAt <= sequencerGracePeriod) return false;
+        // The current up-period must already have been running at `at`;
+        // otherwise the sequencer was down then, whatever it is now.
+        return startedAt <= at;
+    }
+
+    function _sequencerStatus() private view returns (bool ok, int256 answer, uint256 startedAt) {
+        try sequencerUptimeFeed.latestRoundData() returns (uint80, int256 answer_, uint256 startedAt_, uint256, uint80)
+        {
+            return (true, answer_, startedAt_);
         } catch {
-            return false;
+            return (false, 0, 0);
         }
     }
 
@@ -190,6 +214,12 @@ contract ChainlinkRoundOracle is IRoundOracle {
 
     function _answerUsableAt(int256 answer, uint256 updatedAt, uint256 at) private view returns (bool) {
         if (answer <= 0 || updatedAt == 0) return false;
+        // An answer large enough to overflow the decimal scaling is not a
+        // price. Rejecting it keeps the multiply below safe — it is the last
+        // arithmetic in this contract that could revert on feed data, and a
+        // reverting adapter is one the round cannot tell "wait" from "never"
+        // apart from.
+        if (uint256(answer) > type(uint256).max / scaleUp) return false;
         // A price published after the instant being asked about is not an
         // answer to the question, even though it is newer.
         if (updatedAt > at) return false;

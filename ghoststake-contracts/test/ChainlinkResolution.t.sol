@@ -192,11 +192,12 @@ contract ChainlinkResolutionTest is Test {
     function test_aSilentFeedAcrossTheCloseLeavesTheRoundForTheOwnerToUnwind() public {
         (uint256 roundId, uint64 closeTime) = _openAndLock();
 
-        // The only round that exists is the lock's own, which is refused
-        // outright — two prices from one feed round are one observation.
+        // The only round that exists is the lock's own. It is not refused for
+        // being the lock's — the adapter simply cannot show it to be the last
+        // one before `closeTime`, because nothing has been published since.
         uint80 last = feed.latestRoundId();
         vm.warp(closeTime + 1);
-        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, last, last));
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
         market.resolveRound(roundId, last);
 
         // A round id that simply does not exist gets no further.
