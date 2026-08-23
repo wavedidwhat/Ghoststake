@@ -289,6 +289,44 @@ contract ChainlinkRoundOracleTest is Test {
     }
 
     // ------------------------------------------------------------------
+    // The never-revert contract
+    // ------------------------------------------------------------------
+    //
+    // The round contract tells "wait" from "cannot settle" off a boolean. Any
+    // path in here that reverts instead of answering takes that away from it,
+    // and all three of these did.
+
+    /// @dev `catch` covers a failed external *call*, not a revert raised in
+    /// the success block. The grace-period subtraction used to live in there,
+    /// so a feed reporting a start time in the future underflowed and took
+    /// the whole call down with it.
+    function test_aSequencerFeedClaimingToStartInTheFutureDoesNotRevert() public {
+        feed.push(2000e8, BASE_TIME);
+        sequencer.set(0, BASE_TIME + 10 days);
+
+        (bool ok,,) = adapter.readLatest();
+        assertFalse(ok);
+    }
+
+    /// @dev `oracleRoundId + 1` is checked arithmetic, and the id comes
+    /// straight from the caller.
+    function test_theHighestPossibleRoundIdDoesNotRevert() public {
+        feed.push(2000e8, BASE_TIME);
+
+        (bool ok,) = adapter.readAt(type(uint80).max, BASE_TIME);
+        assertFalse(ok);
+    }
+
+    /// @dev An answer big enough to overflow the decimal scaling is not a
+    /// price, and must read as unusable rather than reverting on the multiply.
+    function test_anAbsurdlyLargeAnswerDoesNotRevert() public {
+        feed.push(type(int256).max, BASE_TIME);
+
+        (bool ok,,) = adapter.readLatest();
+        assertFalse(ok);
+    }
+
+    // ------------------------------------------------------------------
     // Deployment guards
     // ------------------------------------------------------------------
 

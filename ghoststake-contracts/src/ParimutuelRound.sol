@@ -88,6 +88,30 @@ interface ISettlementSink {
 /// See `_void` for the trigger list. Void takes no rake — the protocol does
 /// not get paid for a round it failed to run.
 ///
+/// # What the stake asset is assumed to be
+///
+/// A plain ERC-20. Pools are credited with the amount requested, not with the
+/// balance actually received, so a fee-on-transfer token would credit stakes
+/// the contract never took custody of and the last claimant of a round would
+/// find nothing left. A rebasing token breaks the same accounting from the
+/// other end. Neither is guarded against, because the deployment asset is
+/// fixed and known — but a future market on a different asset has to check
+/// this before anything else.
+///
+/// # What the owner can and cannot do
+///
+/// Schedule rounds, whitelist routers, withdraw collected rake (bounded by
+/// the fee ledger, never by the token balance), and unwind a locked round
+/// nobody could settle once `resolveDeadline` has passed. There is no pause,
+/// no upgrade path, and the oracle is immutable — the owner cannot change
+/// what a round settles against, pay anyone, or pick a winner.
+///
+/// The one real power in that list is the last: after the deadline, a round
+/// that *was* still settleable can be refunded instead of paid out. The
+/// counterweight is that resolution is permissionless for that entire window,
+/// so a winner is never dependent on the owner to be paid — only on someone
+/// calling `resolveRound` within the hour.
+///
 /// # Claims are pull, not push
 ///
 /// Resolution is O(1) and touches no per-user state; each winner pulls their
@@ -385,6 +409,19 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
     /// them — the borrow-to-position path. Proceeds route back to the router
     /// so the borrowed funds settle against the debt rather than landing in
     /// the user's wallet.
+    ///
+    /// @dev A whitelisted router is trusted, and the trust is broader than it
+    /// looks. It can open a position for someone who never asked — which
+    /// costs the router its own tokens, but claims that user's slot for the
+    /// round: their own entry is then refused as `MixedFunding`. And because
+    /// claims route through the sink, a router that reverts in
+    /// `onPositionSettled` strands every payout it funded, for everyone.
+    ///
+    /// Neither is reachable by an outside caller: `setRouter` is owner-gated
+    /// and the intended holder is GHO-15's own contract. Both are still real
+    /// power, so they are named here rather than left to be discovered — and
+    /// GHO-15 should decide whether per-source stake accounting (own and
+    /// borrowed, split pro-rata on claim) is worth the storage to remove them.
     function takePositionFor(uint256 roundId, address user, Side side, uint256 amount) external nonReentrant {
         if (!isRouter[msg.sender]) revert NotRouter(msg.sender);
         if (user == address(0)) revert ZeroAddress();
@@ -493,11 +530,20 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         if (round.status != Status.Locked) revert WrongPhase(roundId, phaseOf(roundId));
         if (block.timestamp < round.closeTime) revert TooEarly(roundId, round.closeTime);
 
-        // The feed must have moved on since the lock read. Two prices from
-        // one feed round are the same observation, and settling on it would
-        // report a difference of exactly zero produced by the feed being
-        // slow rather than by the market doing anything.
-        if (closeOracleRoundId <= round.lockOracleRoundId) {
+        // The feed cannot have gone *backwards* since the lock read. A round
+        // published before the strike was captured is not the price at
+        // `closeTime` under any reading, and naming one is a mistake worth
+        // reporting rather than absorbing.
+        //
+        // The lock's own round is allowed through, and deliberately so. If the
+        // feed published nothing between lock and close, then the last round
+        // at or before `closeTime` genuinely *is* the lock's — the adapter
+        // will only accept it if that is true — and the two prices are one
+        // observation, which lands in the tie branch below and voids. That is
+        // the same refund an owner would have to hand out otherwise, reached
+        // automatically instead. Rejecting it here would turn a quiet feed
+        // into an administrative action for no gain.
+        if (closeOracleRoundId < round.lockOracleRoundId) {
             revert OracleRoundNotAdvanced(roundId, round.lockOracleRoundId, closeOracleRoundId);
         }
 
