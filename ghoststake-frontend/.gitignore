@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the example, which documents what the app needs to run. It holds
+# no secrets by construction: everything in it is NEXT_PUBLIC_ and ships to
+# the browser anyway. Matches ghoststake-backend/.env.example.
+!.env.example
 
 # vercel
 .vercel

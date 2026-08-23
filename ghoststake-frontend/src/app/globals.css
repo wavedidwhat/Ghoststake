@@ -1,36 +1,75 @@
 @import "tailwindcss";
 @import "./typeset.css";
 
-.typeset-docs {
-  --typeset-font-body: var(--font-geist-sans);
-  --typeset-font-heading: var(--font-geist-sans);
-  --typeset-font-mono: var(--font-geist-mono);
-  --typeset-size: 15px;
-  --typeset-leading: 1.75;
-  --typeset-flow: 1.25em;
+/*
+ * GhostStake design tokens (GHO-12, folded into GHO-11).
+ *
+ * Dark ground, violet accent. Committed to deliberately rather than
+ * supporting both themes: this is an authenticated dashboard, and every
+ * surface component gets simpler when it only has to work on one ground.
+ *
+ * The palette is referenced from three dashboards the user picked out —
+ * Stakent for the layout and accent, and a light portfolio app for the
+ * numeric treatment (see docs/RUNBOOK.md Part 8).
+ */
+@theme {
+  /* Grounds, darkest to lightest. `raised` is for a card sitting on a card. */
+  --color-ground: #0a0a0b;
+  --color-surface: #131315;
+  --color-raised: #1a1a1e;
+  --color-border: #232327;
+  --color-border-strong: #34343a;
+
+  /* Violet accent. `accent` for fills, `accent-soft` for tinted backgrounds. */
+  --color-accent: #8b7cf6;
+  --color-accent-strong: #a594f9;
+  --color-accent-soft: #8b7cf61f;
+
+  /* Semantic. Green/red are for deltas and P/L, never for decoration. */
+  --color-positive: #3fcf8e;
+  --color-negative: #f0616d;
+  --color-warning: #f5a524;
+  --color-positive-soft: #3fcf8e1f;
+  --color-negative-soft: #f0616d1f;
+  --color-warning-soft: #f5a5241f;
+
+  /* Type. `faint` is for units and decimal tails, not for content. */
+  --color-ink: #ededed;
+  --color-ink-muted: #8a8a93;
+  --color-ink-faint: #5a5a63;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Type scale. Display sizes are for the one number a screen is about. */
+  --text-display: 3.5rem;
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.03em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1.1;
+  --text-figure--letter-spacing: -0.02em;
+
+  --radius-card: 0.875rem;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Tabular figures, required by GHO-11: "so numbers don't jitter on update".
+ * Proportional digits are different widths, so a live-updating balance
+ * shifts its own layout every poll. `tnum` fixes every digit to one advance
+ * width; `zero` disambiguates 0 from O at small sizes.
+ */
+.tabular {
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum", "zero";
 }

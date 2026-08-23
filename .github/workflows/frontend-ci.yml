@@ -17,6 +17,8 @@ defaults:
 
 jobs:
   build:
+    # Name is pinned: it is a required status check, so renaming it (even to
+    # add "test") would leave every PR waiting on a check that never reports.
     name: lint, build
     runs-on: ubuntu-latest
     steps:
@@ -37,6 +39,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build # next build type-checks as part of the build
