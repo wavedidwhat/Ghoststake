@@ -20,7 +20,8 @@ contract ParimutuelRoundTest is Test {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant RAKE = 2e16; // 2%
     uint64 internal constant ENTRY_CUTOFF = 15 seconds;
-    uint64 internal constant ORACLE_GRACE = 5 minutes;
+    uint64 internal constant LOCK_WINDOW = 60 seconds;
+    uint64 internal constant RESOLVE_DEADLINE = 1 hours;
     uint256 internal constant MIN_SIDE_POOL = 1 ether;
 
     uint64 internal constant ENTRY_WINDOW = 5 minutes;
@@ -47,13 +48,7 @@ contract ParimutuelRoundTest is Test {
         token = new ERC20Mock();
         oracle = new MockRoundOracle(START_PRICE);
         market = new ParimutuelRound(
-            IERC20(address(token)),
-            IRoundOracle(address(oracle)),
-            RAKE,
-            ENTRY_CUTOFF,
-            ORACLE_GRACE,
-            MIN_SIDE_POOL,
-            owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), MIN_SIDE_POOL, owner
         );
 
         address[3] memory users = [alice, bob, carol];
@@ -67,6 +62,14 @@ contract ParimutuelRoundTest is Test {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    function _timing() internal pure returns (ParimutuelRound.Timing memory) {
+        return ParimutuelRound.Timing({
+            entryCutoff: ENTRY_CUTOFF,
+            lockWindow: LOCK_WINDOW,
+            resolveDeadline: RESOLVE_DEADLINE
+        });
+    }
 
     function _openRound() internal returns (uint256 roundId) {
         vm.prank(owner);
@@ -90,11 +93,16 @@ contract ParimutuelRoundTest is Test {
         market.lockRound(roundId);
     }
 
+    /// @dev Publishes `closePrice` as a new feed round and resolves against
+    /// it by id — the caller names the round, the adapter verifies it. Here
+    /// the mock takes the id on trust; that verification is the adapter's
+    /// job and is tested in `ChainlinkRoundOracle.t.sol` and
+    /// `ChainlinkResolution.t.sol`.
     function _resolveAt(uint256 roundId, uint256 closePrice) internal {
         ParimutuelRound.Round memory round = market.rounds(roundId);
         vm.warp(round.closeTime);
         oracle.setPrice(closePrice);
-        market.resolveRound(roundId);
+        market.resolveRound(roundId, oracle.oracleRoundId());
     }
 
     /// @dev A two-sided round that locks cleanly: 100 up, 300 down.
@@ -215,8 +223,9 @@ contract ParimutuelRoundTest is Test {
 
         vm.warp(round.closeTime - 1);
         oracle.setPrice(START_PRICE + 1);
+        uint80 closeRoundId = oracle.oracleRoundId();
         vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.TooEarly.selector, roundId, round.closeTime));
-        market.resolveRound(roundId);
+        market.resolveRound(roundId, closeRoundId);
     }
 
     function test_lockAndResolveArePermissionless() public {
@@ -232,7 +241,7 @@ contract ParimutuelRoundTest is Test {
         vm.warp(round.closeTime);
         oracle.setPrice(START_PRICE + 1);
         vm.prank(carol);
-        market.resolveRound(roundId);
+        market.resolveRound(roundId, oracle.oracleRoundId());
 
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Resolved));
     }
@@ -410,19 +419,19 @@ contract ParimutuelRoundTest is Test {
         market.lockRound(roundId);
 
         // A hiccup should cost a retry, not the round.
-        vm.warp(round.lockTime + ORACLE_GRACE);
+        vm.warp(round.lockTime + LOCK_WINDOW);
         oracle.setOk(true);
         market.lockRound(roundId);
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Observation));
     }
 
-    function test_oracleFailurePastGraceVoidsAtLock() public {
+    function test_oracleFailurePastTheLockWindowVoids() public {
         uint256 roundId = _openRound();
         _take(roundId, alice, ParimutuelRound.Side.Up, 100 ether);
         _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
 
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        vm.warp(round.lockTime + ORACLE_GRACE + 1);
+        vm.warp(round.lockTime + LOCK_WINDOW + 1);
         oracle.setOk(false);
 
         market.lockRound(roundId);
@@ -431,38 +440,94 @@ contract ParimutuelRoundTest is Test {
         assertEq(market.claimableOf(roundId, carol), 100 ether);
     }
 
-    function test_oracleFailurePastGraceVoidsAtResolve() public {
+    /// @dev No usable feed round at `closeTime` is a "not yet", and it stays
+    /// one however long it lasts: `resolveRound` reverts rather than voiding,
+    /// at any age. Voiding on an unusable read would let a losing side pass a
+    /// deliberately wrong round id after the deadline and refund themselves
+    /// out of a loss.
+    function test_resolveNeverVoidsOnAnUnusableRead() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
+        oracle.setPrice(START_PRICE + 1);
+        uint80 closeRoundId = oracle.oracleRoundId();
 
-        vm.warp(round.closeTime + ORACLE_GRACE + 1);
+        vm.warp(round.closeTime);
         oracle.setOk(false);
-        market.resolveRound(roundId);
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
+        market.resolveRound(roundId, closeRoundId);
+
+        vm.warp(round.closeTime + RESOLVE_DEADLINE * 100);
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
+        market.resolveRound(roundId, closeRoundId);
+    }
+
+    /// @dev The escape hatch for that case is deliberate and owner-gated:
+    /// "no usable feed round exists" is a claim about something not existing,
+    /// which no on-chain rule can check from a round id alone.
+    function test_ownerCanUnwindARoundNobodyCouldSettle() public {
+        uint256 roundId = _standardRound();
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+        uint64 deadline = round.closeTime + RESOLVE_DEADLINE;
+
+        // Not before the deadline...
+        vm.warp(deadline);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.TooEarly.selector, roundId, deadline + 1));
+        market.voidUnsettledRound(roundId);
+
+        // ...and never by anyone else.
+        vm.warp(deadline + 1);
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, carol));
+        market.voidUnsettledRound(roundId);
+
+        vm.prank(owner);
+        market.voidUnsettledRound(roundId);
 
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
         assertEq(market.protocolFees(), 0);
         assertEq(market.claimableOf(roundId, carol), 300 ether);
+        assertEq(market.claimableOf(roundId, alice), 60 ether);
     }
 
-    /// @dev A feed that has not moved since the lock read would settle the
-    /// round on a price compared against itself.
-    function test_staleFeedRoundBlocksResolveThenVoidsPastGrace() public {
+    /// @dev A round published *before* the strike was captured is not the
+    /// price at `closeTime` under any reading, so naming one is reported
+    /// rather than absorbed — and it stays a revert however late it is tried.
+    function test_resolveRejectsAFeedRoundEarlierThanTheLockRead() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        uint80 lockRoundId = market.rounds(roundId).lockOracleRoundId;
+        uint80 lockRoundId = round.lockOracleRoundId;
+        uint80 earlier = lockRoundId - 1;
 
-        // Price moved but the feed round did not — exactly what a stale read
-        // looks like from this contract's side.
-        oracle.setPriceWithoutAdvancing(START_PRICE + 5);
         vm.warp(round.closeTime);
         vm.expectRevert(
-            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, lockRoundId)
+            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
         );
-        market.resolveRound(roundId);
+        market.resolveRound(roundId, earlier);
 
-        vm.warp(round.closeTime + ORACLE_GRACE + 1);
-        market.resolveRound(roundId);
+        vm.warp(round.closeTime + RESOLVE_DEADLINE * 100);
+        vm.expectRevert(
+            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
+        );
+        market.resolveRound(roundId, earlier);
+    }
+
+    /// @dev The lock's own round is allowed through. A feed that published
+    /// nothing between lock and close means the last round at or before
+    /// `closeTime` really is the lock's, the two prices are one observation,
+    /// and that is a tie — refunded automatically rather than left for the
+    /// owner to unwind by hand.
+    function test_aQuietFeedBetweenLockAndCloseVoidsAsATie() public {
+        uint256 roundId = _standardRound();
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+
+        vm.warp(round.closeTime);
+        market.resolveRound(roundId, round.lockOracleRoundId);
+
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
+        assertEq(market.protocolFees(), 0);
+        assertEq(market.claimableOf(roundId, carol), 300 ether);
+        assertEq(market.claimableOf(roundId, alice), 60 ether);
     }
 
     function test_exactTieVoids() public {
@@ -483,7 +548,7 @@ contract ParimutuelRoundTest is Test {
         _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
 
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        uint64 deadline = round.lockTime + ORACLE_GRACE;
+        uint64 deadline = round.lockTime + LOCK_WINDOW;
 
         vm.warp(deadline);
         vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.TooEarly.selector, roundId, deadline + 1));
@@ -495,31 +560,37 @@ contract ParimutuelRoundTest is Test {
         assertEq(market.claimableOf(roundId, alice), 100 ether);
     }
 
-    /// @dev The attack this closes: this contract reads the feed's *current*
-    /// price, so an unbounded resolve window hands the choice of closing
-    /// price to whoever calls it. Carol is losing here — she waits until the
-    /// price crosses back under the strike and calls `resolveRound` at the
-    /// moment that makes her win. Bounding the window means her late call
-    /// voids the round instead of stealing it.
-    function test_lateResolveVoidsRatherThanSettlingAtAPriceTheCallerChose() public {
+    /// @dev The attack that shaped this design: a caller who chooses when to
+    /// resolve chooses the closing price with it. Carol is losing at
+    /// `closeTime`, so she waits for the price to come back her way — and it
+    /// buys her nothing, because resolution is pinned to the feed round at
+    /// `closeTime` and produces the same answer whenever it happens.
+    ///
+    /// (The mock takes the named round on trust; that the *named round* also
+    /// cannot be chosen is the adapter's half, tested in
+    /// `ChainlinkResolution.t.sol`.)
+    function test_aLateResolveSettlesAtTheSameCloseTimePrice() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
 
         // Price is up at close: carol's Down side is losing.
         vm.warp(round.closeTime);
         oracle.setPrice(START_PRICE + 100);
+        uint80 closeRoundId = oracle.oracleRoundId();
 
-        // She sits on it until the price comes back her way.
-        vm.warp(round.closeTime + ORACLE_GRACE + 1);
+        // She sits on it until the price comes back her way, then resolves.
+        vm.warp(round.closeTime + RESOLVE_DEADLINE * 10);
         oracle.setPrice(START_PRICE - 100);
         vm.prank(carol);
-        market.resolveRound(roundId);
+        market.resolveRound(roundId, closeRoundId);
 
-        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
-        assertEq(market.protocolFees(), 0);
-        // Nobody wins a round nobody resolved on time; everyone is refunded.
-        assertEq(market.claimableOf(roundId, carol), 300 ether);
-        assertEq(market.claimableOf(roundId, alice), 60 ether);
+        // Up still wins, and the round is settled rather than voided —
+        // lateness alone costs nobody anything now.
+        ParimutuelRound.Round memory resolved = market.rounds(roundId);
+        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Resolved));
+        assertEq(uint256(resolved.winner), uint256(ParimutuelRound.Side.Up));
+        assertEq(market.claimableOf(roundId, carol), 0);
+        assertEq(market.claimableOf(roundId, alice), 2352e17);
     }
 
     /// @dev `voidUnlockedRound` is not that escape hatch, and must not become
@@ -536,15 +607,16 @@ contract ParimutuelRoundTest is Test {
         market.voidUnlockedRound(roundId);
     }
 
-    /// @dev The same discretion exists at lock, where a late caller would be
-    /// choosing the strike price rather than the closing one.
+    /// @dev The discretion the pinned read cannot remove is at *lock*: there
+    /// is no later feed round to bound the strike against yet, so a late
+    /// caller would be choosing it. The lock window is the bound instead.
     function test_lateLockVoidsEvenWithAHealthyOracle() public {
         uint256 roundId = _openRound();
         _take(roundId, alice, ParimutuelRound.Side.Up, 100 ether);
         _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
 
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        vm.warp(round.lockTime + ORACLE_GRACE + 1);
+        vm.warp(round.lockTime + LOCK_WINDOW + 1);
         oracle.setPrice(START_PRICE + 500); // feed is perfectly healthy
         market.lockRound(roundId);
 
@@ -703,26 +775,27 @@ contract ParimutuelRoundTest is Test {
 
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
         new ParimutuelRound(
-            IERC20(address(token)),
-            IRoundOracle(address(oracle)),
-            tooMuchRake,
-            ENTRY_CUTOFF,
-            ORACLE_GRACE,
-            MIN_SIDE_POOL,
-            owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), tooMuchRake, _timing(), MIN_SIDE_POOL, owner
         );
 
         // A zero cutoff reopens the lock-transaction front-run.
+        ParimutuelRound.Timing memory noCutoff = _timing();
+        noCutoff.entryCutoff = 0;
+        vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
+        new ParimutuelRound(IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noCutoff, MIN_SIDE_POOL, owner);
+
+        // A zero window on either transition means it can only ever land in
+        // the exact second it was due.
+        ParimutuelRound.Timing memory noLockWindow = _timing();
+        noLockWindow.lockWindow = 0;
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
         new ParimutuelRound(
-            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, 0, ORACLE_GRACE, MIN_SIDE_POOL, owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noLockWindow, MIN_SIDE_POOL, owner
         );
 
         // A zero floor lets a round resolve with an empty winning side.
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
-        new ParimutuelRound(
-            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, ENTRY_CUTOFF, ORACLE_GRACE, 0, owner
-        );
+        new ParimutuelRound(IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), 0, owner);
     }
 
     // ------------------------------------------------------------------

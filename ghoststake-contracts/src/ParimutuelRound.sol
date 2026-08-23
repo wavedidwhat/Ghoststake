@@ -20,8 +20,20 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 /// not a feed-level one: the resolve read must come from a strictly later
 /// feed round than the lock read, and only the round knows what the lock
 /// read was.
+///
+/// The two reads are deliberately different in kind. `readLatest` answers
+/// "what is the price now," which is what a strike needs. `readAt` answers
+/// "what was the price at this instant," pinned to a specific feed round the
+/// caller names and the adapter verifies — which is what a *settlement*
+/// needs, because a settlement whose price depends on when someone chose to
+/// send the transaction is a settlement they can choose.
 interface IRoundOracle {
-    function readPrice() external view returns (bool ok, uint256 price, uint80 oracleRoundId);
+    function readLatest() external view returns (bool ok, uint256 price, uint80 oracleRoundId);
+
+    /// @param oracleRoundId The feed round the caller claims is the last one
+    /// published at or before `at`. The adapter verifies that claim; it does
+    /// not take the caller's word for it.
+    function readAt(uint80 oracleRoundId, uint256 at) external view returns (bool ok, uint256 price);
 }
 
 /// @notice Where a position's proceeds go when it was not funded from the
@@ -76,6 +88,30 @@ interface ISettlementSink {
 /// See `_void` for the trigger list. Void takes no rake — the protocol does
 /// not get paid for a round it failed to run.
 ///
+/// # What the stake asset is assumed to be
+///
+/// A plain ERC-20. Pools are credited with the amount requested, not with the
+/// balance actually received, so a fee-on-transfer token would credit stakes
+/// the contract never took custody of and the last claimant of a round would
+/// find nothing left. A rebasing token breaks the same accounting from the
+/// other end. Neither is guarded against, because the deployment asset is
+/// fixed and known — but a future market on a different asset has to check
+/// this before anything else.
+///
+/// # What the owner can and cannot do
+///
+/// Schedule rounds, whitelist routers, withdraw collected rake (bounded by
+/// the fee ledger, never by the token balance), and unwind a locked round
+/// nobody could settle once `resolveDeadline` has passed. There is no pause,
+/// no upgrade path, and the oracle is immutable — the owner cannot change
+/// what a round settles against, pay anyone, or pick a winner.
+///
+/// The one real power in that list is the last: after the deadline, a round
+/// that *was* still settleable can be refunded instead of paid out. The
+/// counterweight is that resolution is permissionless for that entire window,
+/// so a winner is never dependent on the owner to be paid — only on someone
+/// calling `resolveRound` within the hour.
+///
 /// # Claims are pull, not push
 ///
 /// Resolution is O(1) and touches no per-user state; each winner pulls their
@@ -118,6 +154,21 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         Void
     }
 
+    /// @notice The three timing parameters, grouped so they cannot be
+    /// transposed at deployment. Three adjacent `uint64` durations as
+    /// positional arguments is the same silent-swap hazard `RiskParams`
+    /// exists to prevent in CollateralVault — and swapping a 60-second lock
+    /// window with a one-hour resolve deadline would be invisible until a
+    /// round settled on a strike someone picked.
+    struct Timing {
+        /// @dev Entry stops this long before `lockTime`.
+        uint64 entryCutoff;
+        /// @dev A lock landing later than this past `lockTime` voids.
+        uint64 lockWindow;
+        /// @dev How long to wait for a usable feed round before voiding.
+        uint64 resolveDeadline;
+    }
+
     struct Round {
         uint64 openTime;
         uint64 lockTime;
@@ -146,11 +197,25 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
     /// pending lock transaction cannot be front-run.
     uint64 public immutable entryCutoff;
 
-    /// @dev How long a phase transition may keep failing on a bad oracle
-    /// reading before the round is voided instead. Short of this the call
-    /// reverts and can simply be retried — an oracle hiccup should not cost
-    /// everyone their round.
-    uint64 public immutable oracleGracePeriod;
+    /// @dev How late a lock may land before the round voids instead.
+    ///
+    /// The strike is read as "the price now", so a caller who shows up late
+    /// is choosing it — a Down bettor would wait for a local high. Nothing
+    /// pins a strike the way `readAt` pins a settlement (there is no "next"
+    /// feed round to bound it against yet at lock time), so the discretion is
+    /// bounded by keeping this window tight instead. Seconds, not minutes.
+    uint64 public immutable lockWindow;
+
+    /// @dev How long a locked round may go unsettled before the owner may
+    /// unwind it (`voidUnsettledRound`).
+    ///
+    /// This one is about liveness, not discretion: resolution is pinned to a
+    /// feed round, so it produces the same answer whenever it happens and a
+    /// late caller gains nothing. What it cannot survive is a feed that never
+    /// publishes a usable round at all, and this is how long we wait before
+    /// calling that. Generous on purpose — voiding a round that could have
+    /// been settled correctly helps nobody.
+    uint64 public immutable resolveDeadline;
 
     /// @dev Least a side may hold at lock time for the round to be valid.
     /// A one-sided pool is not a market: the sole side would take the whole
@@ -206,8 +271,7 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         IERC20 stakeAsset_,
         IRoundOracle oracle_,
         uint256 rake_,
-        uint64 entryCutoff_,
-        uint64 oracleGracePeriod_,
+        Timing memory timing,
         uint256 minSidePool_,
         address initialOwner
     ) Ownable(initialOwner) {
@@ -215,14 +279,17 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         if (rake_ > MAX_RAKE) revert InvalidParameters();
         // A zero floor would let a round resolve with an empty winning side
         // and divide by zero paying it out; a zero cutoff reopens the
-        // lock-transaction front-run.
-        if (minSidePool_ == 0 || entryCutoff_ == 0) revert InvalidParameters();
+        // lock-transaction front-run; a zero window on either transition
+        // means it can only ever land in the exact second it was due.
+        if (minSidePool_ == 0 || timing.entryCutoff == 0) revert InvalidParameters();
+        if (timing.lockWindow == 0 || timing.resolveDeadline == 0) revert InvalidParameters();
 
         stakeAsset = stakeAsset_;
         oracle = oracle_;
         rake = rake_;
-        entryCutoff = entryCutoff_;
-        oracleGracePeriod = oracleGracePeriod_;
+        entryCutoff = timing.entryCutoff;
+        lockWindow = timing.lockWindow;
+        resolveDeadline = timing.resolveDeadline;
         minSidePool = minSidePool_;
     }
 
@@ -342,6 +409,19 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
     /// them — the borrow-to-position path. Proceeds route back to the router
     /// so the borrowed funds settle against the debt rather than landing in
     /// the user's wallet.
+    ///
+    /// @dev A whitelisted router is trusted, and the trust is broader than it
+    /// looks. It can open a position for someone who never asked — which
+    /// costs the router its own tokens, but claims that user's slot for the
+    /// round: their own entry is then refused as `MixedFunding`. And because
+    /// claims route through the sink, a router that reverts in
+    /// `onPositionSettled` strands every payout it funded, for everyone.
+    ///
+    /// Neither is reachable by an outside caller: `setRouter` is owner-gated
+    /// and the intended holder is GHO-15's own contract. Both are still real
+    /// power, so they are named here rather than left to be discovered — and
+    /// GHO-15 should decide whether per-source stake accounting (own and
+    /// borrowed, split pro-rata on claim) is worth the storage to remove them.
     function takePositionFor(uint256 roundId, address user, Side side, uint256 amount) external nonReentrant {
         if (!isRouter[msg.sender]) revert NotRouter(msg.sender);
         if (user == address(0)) revert ZeroAddress();
@@ -407,19 +487,17 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
             return;
         }
 
-        // A lock is only valid inside its window. Past the window the strike
-        // would be captured too far from the schedule everyone entered
-        // against, and — worse — *whoever* calls it would be choosing the
-        // strike: they can see the price and simply wait for one that suits
-        // their side. The grace period is exactly how much lateness is
-        // tolerated; beyond it the round is unwound rather than settled on a
-        // number someone picked.
-        if (block.timestamp > round.lockTime + oracleGracePeriod) {
+        // A lock is only valid inside its window. The strike is read as "the
+        // price now", so a caller who shows up late is choosing it — they can
+        // see the feed and wait for a level that suits their side. The window
+        // is exactly how much lateness is tolerated; beyond it the round is
+        // unwound rather than settled on a number someone picked.
+        if (block.timestamp > round.lockTime + lockWindow) {
             _void(roundId, round, "lock window missed");
             return;
         }
 
-        (bool ok, uint256 price, uint80 oracleRoundId) = oracle.readPrice();
+        (bool ok, uint256 price, uint80 oracleRoundId) = oracle.readLatest();
         // Inside the window a bad reading is a hiccup, not a verdict: revert
         // so it can be retried on the next block.
         if (!ok) revert OracleUnavailable(roundId);
@@ -431,36 +509,50 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         emit RoundLocked(roundId, price, oracleRoundId);
     }
 
-    /// @notice Capture the closing price and settle the outcome.
+    /// @notice Settle the outcome against the price at `closeTime`.
     /// Permissionless, for the same reason as `lockRound`.
-    function resolveRound(uint256 roundId) external nonReentrant {
+    ///
+    /// @param closeOracleRoundId The feed round the caller claims is the last
+    /// one published at or before this round's `closeTime`. It is not taken
+    /// on trust: the adapter checks that round's timestamp *and* its
+    /// successor's, so exactly one feed round can satisfy it.
+    ///
+    /// @dev Passing the round in — rather than reading `latestRoundData()` —
+    /// is what makes settlement independent of when the transaction lands.
+    /// Reading "now" would hand the closing price to whoever sends it: a
+    /// losing participant does nothing at `closeTime`, watches the feed, and
+    /// resolves the moment the price crosses back over `lockPrice`. Pinning
+    /// the read means calling early, on time or an hour late all produce the
+    /// same answer, so there is nothing to wait for.
+    function resolveRound(uint256 roundId, uint80 closeOracleRoundId) external nonReentrant {
         Round storage round = _rounds[roundId];
         if (round.status == Status.None) revert UnknownRound(roundId);
         if (round.status != Status.Locked) revert WrongPhase(roundId, phaseOf(roundId));
         if (block.timestamp < round.closeTime) revert TooEarly(roundId, round.closeTime);
 
-        // Same window rule as the lock, and for a sharper reason. This
-        // contract reads the feed's *current* price, so a resolution that can
-        // happen at any time is a resolution whose price the caller chooses:
-        // a losing participant would simply wait for the price to cross back
-        // over `lockPrice` and resolve then. Bounding the window bounds that
-        // discretion to the grace period, and anyone late enough to have a
-        // real choice gets a void instead of a win.
-        if (block.timestamp > round.closeTime + oracleGracePeriod) {
-            _void(roundId, round, "resolve window missed");
-            return;
+        // The feed cannot have gone *backwards* since the lock read. A round
+        // published before the strike was captured is not the price at
+        // `closeTime` under any reading, and naming one is a mistake worth
+        // reporting rather than absorbing.
+        //
+        // The lock's own round is allowed through, and deliberately so. If the
+        // feed published nothing between lock and close, then the last round
+        // at or before `closeTime` genuinely *is* the lock's — the adapter
+        // will only accept it if that is true — and the two prices are one
+        // observation, which lands in the tie branch below and voids. That is
+        // the same refund an owner would have to hand out otherwise, reached
+        // automatically instead. Rejecting it here would turn a quiet feed
+        // into an administrative action for no gain.
+        if (closeOracleRoundId < round.lockOracleRoundId) {
+            revert OracleRoundNotAdvanced(roundId, round.lockOracleRoundId, closeOracleRoundId);
         }
 
-        (bool ok, uint256 price, uint80 oracleRoundId) = oracle.readPrice();
+        // No usable feed round at `closeTime` — either none published yet, or
+        // the one named is not the last one before it. Always a revert, never
+        // a void: see `voidUnsettledRound` for why the liveness escape cannot
+        // live on this path.
+        (bool ok, uint256 price) = oracle.readAt(closeOracleRoundId, round.closeTime);
         if (!ok) revert OracleUnavailable(roundId);
-
-        // The feed must have moved on since the lock read. Without this, a
-        // resolve landing on the same feed round as the lock would compare a
-        // price against itself and settle on a difference of exactly zero —
-        // an outcome produced by the feed being slow, not by the market.
-        if (oracleRoundId <= round.lockOracleRoundId) {
-            revert OracleRoundNotAdvanced(roundId, round.lockOracleRoundId, oracleRoundId);
-        }
 
         // An exact tie is nobody's win. Paying it to one side would be a coin
         // flip decided by whoever wrote the comparison; splitting it across
@@ -483,6 +575,34 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         emit RoundResolved(roundId, price, round.winner, rakeTaken);
     }
 
+    /// @notice Unwind a locked round that could not be settled. Owner-gated,
+    /// and the only privileged action in the lifecycle.
+    ///
+    /// @dev The one place where an automatic rule cannot work. "No usable
+    /// feed round exists at `closeTime`" is a claim about something *not*
+    /// existing, and this contract can only ever be shown a round id — so a
+    /// version that voided whenever `readAt` said no would let a losing
+    /// participant wait out the deadline, pass a deliberately wrong id, and
+    /// convert their loss into a refund. `resolveRound` therefore never
+    /// voids for unavailability; it reverts, however late it is called, and
+    /// the escape hatch is a deliberate act instead.
+    ///
+    /// What this power actually is: after the deadline, the owner can refund
+    /// everyone in a round nobody managed to settle. It cannot pay anyone,
+    /// cannot pick a winner, and cannot touch a round that is still
+    /// settleable by anyone else — resolution stays open to all comers the
+    /// whole time, so the honest path is always available first.
+    function voidUnsettledRound(uint256 roundId) external onlyOwner nonReentrant {
+        Round storage round = _rounds[roundId];
+        if (round.status == Status.None) revert UnknownRound(roundId);
+        if (round.status != Status.Locked) revert WrongPhase(roundId, phaseOf(roundId));
+
+        uint64 deadline = round.closeTime + resolveDeadline;
+        if (block.timestamp <= deadline) revert TooEarly(roundId, deadline + 1);
+
+        _void(roundId, round, "unsettled past deadline");
+    }
+
     /// @notice Unwind a round that was never locked. `lockRound` voids a
     /// missed window itself, so this is not the usual path — it exists for
     /// the case that one cannot cover: an adapter that *reverts* on read
@@ -490,15 +610,17 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
     /// revert every time and strand the stakes permanently.
     ///
     /// @dev This one never touches the oracle, which is the whole point.
-    /// There is no locked-round equivalent and none is needed: `resolveRound`
-    /// reaches its own window check before reading the feed, so a locked
-    /// round always has a path out.
+    /// It stays permissionless because the condition leaves nothing to
+    /// judgement: past `lockTime + lockWindow` no lock can succeed anyway, so
+    /// this only names what is already true. The locked-round equivalent,
+    /// `voidUnsettledRound`, cannot make that claim and is owner-gated for
+    /// exactly that reason.
     function voidUnlockedRound(uint256 roundId) external nonReentrant {
         Round storage round = _rounds[roundId];
         if (round.status == Status.None) revert UnknownRound(roundId);
         if (round.status != Status.Open) revert WrongPhase(roundId, phaseOf(roundId));
 
-        uint64 deadline = round.lockTime + oracleGracePeriod;
+        uint64 deadline = round.lockTime + lockWindow;
         if (block.timestamp <= deadline) revert TooEarly(roundId, deadline + 1);
 
         _void(roundId, round, "never locked");
