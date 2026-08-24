@@ -27,28 +27,47 @@ contract Seed is Script {
 
     uint256 internal constant USDC = 1e6;
 
+    /// @dev Lead time on a round's start, to absorb the gap between
+    /// simulating a transaction and it being mined.
+    uint64 internal constant OPEN_LEAD = 2 minutes;
+
     function run() external {
         MockUSDC asset = MockUSDC(vm.envAddress("ASSET_ADDRESS"));
         BorrowLiquidityPool pool = BorrowLiquidityPool(vm.envAddress("POOL_ADDRESS"));
         CollateralVault vault = CollateralVault(vm.envAddress("VAULT_ADDRESS"));
         ParimutuelRound market = ParimutuelRound(vm.envAddress("MARKET_ADDRESS"));
 
+        // On anvil the three prefunded accounts exist and can each sign, so
+        // the seed can build a many-sided market. On any real network only
+        // the deployer has gas, and the anvil keys hold nothing — so
+        // everything is done from one account instead.
+        uint256 deployerKey = vm.envOr("PRIVATE_KEY", DEPLOYER_KEY);
+        bool local = block.chainid == 31337;
+
+        if (local) {
+            seedLocal(asset, pool, vault, market);
+        } else {
+            seedSingleAccount(deployerKey, asset, pool, vault, market);
+        }
+    }
+
+    /// @dev Three signers: a lender, a borrower, and a counterparty.
+    function seedLocal(MockUSDC asset, BorrowLiquidityPool pool, CollateralVault vault, ParimutuelRound market)
+        internal
+    {
         address deployer = vm.addr(DEPLOYER_KEY);
         address alice = vm.addr(ALICE_KEY);
         address bob = vm.addr(BOB_KEY);
 
-        // --- Lender: fills the pool so there is something to borrow --------
         vm.startBroadcast(DEPLOYER_KEY);
         asset.mint(deployer, 100_000 * USDC);
         asset.approve(address(pool), type(uint256).max);
         pool.supply(50_000 * USDC);
         vm.stopBroadcast();
 
-        // --- Borrower: a position with a health factor worth reading -------
-        //
         // Deposits 10,000 and draws 3,000 against it. maxLTV is 60%, so this
-        // sits at half the ceiling: comfortably healthy, and low enough that
-        // the number on screen is not 999+.
+        // sits at half the ceiling: healthy, and low enough that the number
+        // on screen is not the 999+ cap.
         vm.startBroadcast(ALICE_KEY);
         asset.mint(alice, 20_000 * USDC);
         asset.approve(address(vault), type(uint256).max);
@@ -56,18 +75,12 @@ contract Seed is Script {
         vault.borrow(3_000 * USDC);
         vm.stopBroadcast();
 
-        // --- A second depositor, so the vault is not one account -----------
         vm.startBroadcast(BOB_KEY);
         asset.mint(bob, 20_000 * USDC);
         asset.approve(address(vault), type(uint256).max);
         vault.deposit(4_000 * USDC, bob);
         vm.stopBroadcast();
 
-        // --- An open round with both sides taken ---------------------------
-        //
-        // Opens now, locks in 10 minutes, closes 10 minutes after that. Long
-        // enough that it is still OPEN when someone looks at it, rather than
-        // already past its entry cutoff.
         vm.startBroadcast(DEPLOYER_KEY);
         uint256 roundId = market.openRound(
             uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
@@ -84,17 +97,61 @@ contract Seed is Script {
         market.takePosition(roundId, ParimutuelRound.Side.Down, 300 * USDC);
         vm.stopBroadcast();
 
+        report(vault, alice, "alice");
+    }
+
+    /// @dev One signer, which on a real network is whoever is paying for gas.
+    ///
+    /// The position lands on that same address, so connecting the wallet that
+    /// ran this shows a funded dashboard immediately — no key to import and
+    /// nothing to transfer.
+    function seedSingleAccount(
+        uint256 key,
+        MockUSDC asset,
+        BorrowLiquidityPool pool,
+        CollateralVault vault,
+        ParimutuelRound market
+    ) internal {
+        address me = vm.addr(key);
+
+        vm.startBroadcast(key);
+        asset.mint(me, 100_000 * USDC);
+
+        asset.approve(address(pool), type(uint256).max);
+        pool.supply(50_000 * USDC);
+
+        asset.approve(address(vault), type(uint256).max);
+        vault.deposit(10_000 * USDC, me);
+        vault.borrow(3_000 * USDC);
+
+        // `openTime` is given a lead, because `openRound` rejects a start in
+        // the past and `block.timestamp` here is the *simulated* block's.
+        // On a real chain the transaction lands a block or two later, by
+        // which point "now" has moved and the schedule is already invalid.
+        // anvil hides this by mining instantly.
+        uint64 openTime = uint64(block.timestamp) + OPEN_LEAD;
+        uint256 roundId = market.openRound(openTime, openTime + 30 minutes, openTime + 60 minutes);
+
+        // No position is taken here: entry is not open until `openTime`, and
+        // every transaction in this script lands within seconds of the last.
+        // The round is left for a wallet to enter through the UI.
+        asset.approve(address(market), type(uint256).max);
+        vm.stopBroadcast();
+
         console2.log("");
         console2.log("=== seeded ===");
-        console2.log("pool supplied        50,000 mUSDC by deployer");
-        console2.log("alice  deposited     10,000 mUSDC, borrowed 3,000");
-        console2.log("bob    deposited      4,000 mUSDC");
-        console2.log("round #%s open, Up 500 / Down 300", vm.toString(roundId));
+        console2.log("everything on   %s", vm.toString(me));
+        console2.log("  50,000 supplied to the pool");
+        console2.log("  10,000 deposited, 3,000 borrowed");
+        console2.log("  round #%s opens in 2 minutes, no positions yet", vm.toString(roundId));
+        report(vault, me, "you");
+    }
+
+    function report(CollateralVault vault, address who, string memory label) internal view {
         console2.log("");
-        console2.log("alice %s", vm.toString(alice));
-        console2.log("  collateralValue %s", vm.toString(vault.collateralValue(alice)));
-        console2.log("  lien            %s", vm.toString(vault.lienOf(alice)));
-        console2.log("  healthFactor    %s", vm.toString(vault.healthFactor(alice)));
-        console2.log("bob   %s", vm.toString(bob));
+        console2.log("%s %s", label, vm.toString(who));
+        console2.log("  collateralValue %s", vm.toString(vault.collateralValue(who)));
+        console2.log("  lien            %s", vm.toString(vault.lienOf(who)));
+        console2.log("  healthFactor    %s", vm.toString(vault.healthFactor(who)));
     }
 }

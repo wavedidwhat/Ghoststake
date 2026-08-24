@@ -16,6 +16,15 @@ ANVIL_PORT="${ANVIL_PORT:-8545}"
 # run that never verifies anything, so it has to be set to something.
 export ARBISCAN_API_KEY="${ARBISCAN_API_KEY:-}"
 
+# anvil's first prefunded account, forced rather than defaulted.
+#
+# forge auto-loads ghoststake-contracts/.env, so a PRIVATE_KEY left there for
+# a testnet deploy would be picked up here too — and that key has no gas on
+# anvil, so the whole local stack fails with "insufficient funds" while
+# appearing to be misconfigured locally. Exporting it explicitly means the
+# local chain always uses the local account, whatever .env holds.
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
 log() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 
 # ---------------------------------------------------------------- anvil ----
@@ -30,14 +39,19 @@ fi
 # --------------------------------------------------------------- deploy ----
 log "deploying contracts"
 cd "$ROOT/ghoststake-contracts"
-DEPLOY_OUT="$(forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC_URL" --broadcast 2>&1)"
+if ! DEPLOY_OUT="$(forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC_URL" --broadcast 2>&1)"; then
+  # Printed, not swallowed: the output is captured to parse addresses out of
+  # it, which otherwise hides the reason for any failure behind `set -e`.
+  echo "$DEPLOY_OUT" >&2
+  exit 1
+fi
 
 # Parsed from the script's own log lines rather than the broadcast JSON: the
 # JSON keys contracts by name, and two mocks share a base contract, so the
 # labelled output is the unambiguous source.
 addr_of() { echo "$DEPLOY_OUT" | grep -E "^\s+$1\s+0x" | awk '{print $NF}'; }
 
-ASSET=$(addr_of "MockUSDC")
+ASSET=$(addr_of "Asset")
 POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault")
 MARKET=$(addr_of "ParimutuelRound")
