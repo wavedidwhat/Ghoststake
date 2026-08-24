@@ -18,7 +18,7 @@ const WANTED = {
     "asset", "decimals", "balanceOf", "convertToAssets", "convertToShares",
     "collateralValue", "totalLedgerValue", "accruedYield",
     "lienOf", "healthFactor", "maxBorrowable", "isLiquidatable",
-    "liquidationThreshold", "maxLTV",
+    "liquidationThreshold", "maxLTV", "yieldRatePerSecond", "liquidationBonus", "closeFactor",
     // writes
     "deposit", "withdraw", "redeem", "borrow", "repay",
     "approveBorrowDelegate", "borrowAllowance",

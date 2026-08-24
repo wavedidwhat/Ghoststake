@@ -4,63 +4,77 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * Primary navigation. Routes that do not exist yet are listed as disabled
- * with the issue that builds them, so the shape of the app stays visible
- * without shipping links that lead nowhere.
+ * Primary navigation, ordered as the pipeline runs.
+ *
+ * Stake → Borrow → Markets is the product in three words, and the order is
+ * load-bearing: the collateral is staked first and never leaves, borrowing is
+ * secured against it, and only the borrowed funds reach a market. A nav that
+ * lists these as unrelated destinations describes a lending app that happens
+ * to ship a prediction market.
+ *
+ * On vocabulary: "stake" means the savings deposit here and nowhere else.
+ * A side of a market is a "position". The two are opposite ends of the
+ * pipeline and the app used the same word for both, which quietly erased the
+ * half the product is named after.
  */
 const NAV = [
-  { href: "/", label: "Dashboard", ready: true },
-  { href: "/vault", label: "Vault", ready: true },
-  { href: "/borrow", label: "Borrow", ready: true },
-  { href: "/rounds", label: "Rounds", ready: true },
+  { href: "/", label: "Overview", ready: true },
+  { href: "/stake", label: "Stake", ready: true, note: "earn" },
+  { href: "/borrow", label: "Borrow", ready: true, note: "against it" },
+  { href: "/markets", label: "Markets", ready: true, note: "take a view" },
   { href: "/history", label: "History", ready: false, note: "GHO-17" },
-];
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface/40">
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="grid size-8 place-items-center rounded-lg bg-accent text-sm font-bold text-ground">
-          G
+    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface">
+      <div className="border-b border-border px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg bg-accent text-sm font-bold text-ground">
+            G
+          </span>
+          <span className="font-semibold text-ink">GhostStake</span>
         </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold">GhostStake</div>
-          <div className="text-xs text-ink-faint">Stake. Borrow. Position.</div>
-        </div>
+        <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+          Stake earns. Borrow against it. Take a view — without unwinding.
+        </p>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-3 py-2">
+      <nav className="flex flex-1 flex-col gap-0.5 p-3">
         {NAV.map((item) =>
           item.ready ? (
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm transition ${
+              className={`flex items-baseline justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                 pathname === item.href
                   ? "bg-raised font-medium text-ink"
-                  : "text-ink-muted hover:text-ink"
+                  : "text-ink-muted hover:bg-raised/60 hover:text-ink"
               }`}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {"note" in item && item.note && (
+                <span className="text-[11px] text-ink-faint">{item.note}</span>
+              )}
             </Link>
           ) : (
             <span
               key={item.href}
-              className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-sm text-ink-faint"
+              className="flex cursor-not-allowed items-baseline justify-between rounded-lg px-3 py-2 text-sm text-ink-faint"
             >
-              {item.label}
-              <span className="text-[10px] tracking-wide uppercase">{item.note}</span>
+              <span>{item.label}</span>
+              <span className="text-[11px]">{item.note}</span>
             </span>
           ),
         )}
       </nav>
 
-      <div className="mt-auto p-4">
-        <div className="rounded-card border border-border bg-surface p-3 text-xs leading-relaxed text-ink-faint">
-          Testnet. Round history and analytics land in GHO-17.
-        </div>
+      <div className="border-t border-border px-5 py-4">
+        <p className="text-xs leading-relaxed text-ink-faint">
+          Testnet. Your stake keeps earning while it backs a position.
+        </p>
       </div>
     </aside>
   );

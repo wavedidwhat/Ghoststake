@@ -142,7 +142,7 @@ export function RoundCard({
       {thin && round.status === Status.Open && (
         <p className="mt-3 text-xs text-warning">
           One side is still under the minimum. If it stays that way the round voids at lock and
-          every stake is refunded.
+          every position is refunded in full.
         </p>
       )}
 
@@ -226,12 +226,12 @@ function SideBlock({
       </div>
 
       <p className="mt-1 text-xs text-ink-muted">
-        <span className="tabular">{formatAmount(pool, decimals, 2)}</span> {symbol} staked
+        <span className="tabular">{formatAmount(pool, decimals, 2)}</span> {symbol} on this side
       </p>
 
       {yours !== undefined && yours > 0n && (
         <p className="mt-2 text-xs text-ink">
-          Yours <span className="tabular">{formatAmount(yours, decimals, 2)}</span> {symbol}
+          Your position <span className="tabular">{formatAmount(yours, decimals, 2)}</span> {symbol}
         </p>
       )}
 

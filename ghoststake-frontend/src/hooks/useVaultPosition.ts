@@ -72,6 +72,10 @@ export function useVaultPosition() {
       // computes with the same threshold the contract enforces rather than a
       // constant the UI believes.
       { ...vault, functionName: "liquidationThreshold" },
+      // The rate the stake earns. Read rather than written into copy — a rate
+      // the UI believes and the contract does not is the same bug as a
+      // hardcoded entry cutoff.
+      { ...vault, functionName: "yieldRatePerSecond" },
     ],
     query: {
       enabled,
@@ -81,7 +85,7 @@ export function useVaultPosition() {
     },
   });
 
-  const [collateral, yieldAccrued, lien, healthFactor, maxBorrowable, liquidatable, shares, threshold] =
+  const [collateral, yieldAccrued, lien, healthFactor, maxBorrowable, liquidatable, shares, threshold, yieldRate] =
     query.data ?? [];
 
   return {
@@ -102,5 +106,6 @@ export function useVaultPosition() {
     isLiquidatable: liquidatable?.result as boolean | undefined,
     shares: shares?.result as bigint | undefined,
     liquidationThreshold: threshold?.result as bigint | undefined,
+    yieldRatePerSecond: yieldRate?.result as bigint | undefined,
   };
 }
