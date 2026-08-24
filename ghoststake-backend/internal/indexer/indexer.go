@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/wavedidwhat/ghoststake/internal/abis"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 )
 
@@ -25,8 +26,9 @@ type EthClient interface {
 type Config struct {
 	ChainID int64
 
-	VaultAddress string
-	PoolAddress  string
+	VaultAddress  string
+	PoolAddress   string
+	MarketAddress string
 
 	// StartBlock is where a fresh cursor begins. Set it to the deployment
 	// block: scanning from genesis on a public RPC is slow and pointless.
@@ -40,6 +42,19 @@ type Config struct {
 	BatchSize uint64
 
 	PollInterval time.Duration
+
+	// Publisher, if set, is notified after each committed range.
+	Publisher Publisher
+}
+
+// Publisher is notified after a range is committed, so a websocket can push
+// without polling the database.
+//
+// Declared here rather than taken as a concrete type: the indexer's job ends
+// at the commit, and it should not know that anything downstream exists. A nil
+// publisher is the normal case in tests and when nobody is listening.
+type Publisher interface {
+	Publish(batch ledger.Batch, cursor ledger.Cursor)
 }
 
 type Indexer struct {
@@ -49,11 +64,12 @@ type Indexer struct {
 	contracts []contractSpec
 	addresses []common.Address
 	stream    string
+	publisher Publisher
 }
 
 func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error) {
-	if cfg.VaultAddress == "" || cfg.PoolAddress == "" {
-		return nil, fmt.Errorf("indexer: vault and pool addresses are required")
+	if cfg.VaultAddress == "" || cfg.PoolAddress == "" || cfg.MarketAddress == "" {
+		return nil, fmt.Errorf("indexer: vault, pool and market addresses are required")
 	}
 	if cfg.BatchSize == 0 {
 		cfg.BatchSize = 2000
@@ -68,18 +84,32 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 		return nil, fmt.Errorf("indexer: StartBlock must be greater than zero")
 	}
 
-	vaultABI, err := loadABI("CollateralVault.json")
-	if err != nil {
-		return nil, err
-	}
-	poolABI, err := loadABI("BorrowLiquidityPool.json")
-	if err != nil {
-		return nil, err
+	// One stream over all three contracts, not one per contract. A borrow and
+	// the position it funded land in the same transaction, and separate
+	// cursors would let the two halves of that be visible at different times
+	// — a stake with no debt behind it, or a debt with no stake.
+	specs := []struct {
+		name    string
+		address string
+		decode  func(string, *fields, types.Log) ledger.Batch
+	}{
+		{abis.CollateralVault, cfg.VaultAddress, entriesOnly(decodeVault)},
+		{abis.BorrowLiquidityPool, cfg.PoolAddress, entriesOnly(decodePool)},
+		{abis.ParimutuelRound, cfg.MarketAddress, decodeRound},
 	}
 
-	contracts := []contractSpec{
-		{name: "CollateralVault", address: common.HexToAddress(cfg.VaultAddress), abi: vaultABI, decode: decodeVault},
-		{name: "BorrowLiquidityPool", address: common.HexToAddress(cfg.PoolAddress), abi: poolABI, decode: decodePool},
+	contracts := make([]contractSpec, 0, len(specs))
+	for _, spec := range specs {
+		parsed, err := abis.Load(spec.name)
+		if err != nil {
+			return nil, err
+		}
+		contracts = append(contracts, contractSpec{
+			name:    spec.name,
+			address: common.HexToAddress(spec.address),
+			abi:     parsed,
+			decode:  spec.decode,
+		})
 	}
 	addresses := make([]common.Address, 0, len(contracts))
 	for _, c := range contracts {
@@ -92,7 +122,8 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 		cfg:       cfg,
 		contracts: contracts,
 		addresses: addresses,
-		stream:    fmt.Sprintf("lending:%d", cfg.ChainID),
+		stream:    ledger.StreamName(cfg.ChainID),
+		publisher: cfg.Publisher,
 	}, nil
 }
 
@@ -178,7 +209,7 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		return fmt.Errorf("filter logs %d-%d: %w", from, to, err)
 	}
 
-	entries, err := ix.decodeLogs(ctx, logs)
+	batch, err := ix.decodeLogs(ctx, logs)
 	if err != nil {
 		return err
 	}
@@ -196,12 +227,14 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		LastBlock: to,
 		LastHash:  tip.Hash().Hex(),
 	}
-	if err := ix.repo.AppendEntries(ctx, entries, next); err != nil {
+	if err := ix.repo.Append(ctx, batch, next); err != nil {
 		return err
 	}
 
-	if len(entries) > 0 {
-		slog.Info("indexed", "from", from, "to", to, "logs", len(logs), "entries", len(entries))
+	if batch.Len() > 0 {
+		slog.Info("indexed", "from", from, "to", to, "logs", len(logs),
+			"entries", len(batch.Entries), "round_events", len(batch.Rounds))
+		ix.publish(batch, next)
 	} else {
 		slog.Debug("indexed", "from", from, "to", to, "logs", len(logs))
 	}
@@ -246,12 +279,12 @@ func (ix *Indexer) checkReorg(ctx context.Context, cursor *ledger.Cursor) error 
 	return nil
 }
 
-func (ix *Indexer) decodeLogs(ctx context.Context, logs []types.Log) ([]ledger.Entry, error) {
+func (ix *Indexer) decodeLogs(ctx context.Context, logs []types.Log) (ledger.Batch, error) {
 	// Block timestamps are not on the log, and fetching a header per log
 	// would be one RPC call per event. Cached per block instead.
 	blockTimes := map[uint64]time.Time{}
 
-	var out []ledger.Entry
+	var out ledger.Batch
 	for _, log := range logs {
 		// A log flagged Removed is one the node has already reorged away.
 		if log.Removed {
@@ -267,19 +300,18 @@ func (ix *Indexer) decodeLogs(ctx context.Context, logs []types.Log) ([]ledger.E
 		if !cached {
 			header, err := ix.client.HeaderByNumber(ctx, new(big.Int).SetUint64(log.BlockNumber))
 			if err != nil {
-				return nil, fmt.Errorf("header %d: %w", log.BlockNumber, err)
+				return ledger.Batch{}, fmt.Errorf("header %d: %w", log.BlockNumber, err)
 			}
 			blockTime = time.Unix(int64(header.Time), 0).UTC()
 			blockTimes[log.BlockNumber] = blockTime
 		}
 
-		entries, err := spec.decodeLog(ix.cfg.ChainID, log, blockTime)
+		decoded, err := spec.decodeLog(ix.cfg.ChainID, log, blockTime)
 		if err != nil {
-			return nil, err
+			return ledger.Batch{}, err
 		}
-		for _, e := range entries {
-			out = append(out, e)
-		}
+		out.Entries = append(out.Entries, decoded.Entries...)
+		out.Rounds = append(out.Rounds, decoded.Rounds...)
 	}
 	return out, nil
 }
@@ -291,4 +323,16 @@ func (ix *Indexer) specFor(address common.Address) (contractSpec, bool) {
 		}
 	}
 	return contractSpec{}, false
+}
+
+// publish notifies the live broker, after the commit and never before.
+//
+// Order matters: a subscriber woken by this immediately re-reads the database,
+// and waking it before the transaction commits would have it read the state
+// the update is announcing has changed, then never hear about it again.
+func (ix *Indexer) publish(batch ledger.Batch, cursor ledger.Cursor) {
+	if ix.publisher == nil {
+		return
+	}
+	ix.publisher.Publish(batch, cursor)
 }

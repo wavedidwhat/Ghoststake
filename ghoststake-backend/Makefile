@@ -10,9 +10,11 @@ run-local: ## Run the API against the local anvil stack (scripts/local-stack.sh)
 	@test -f .env.local || (echo "no .env.local — run scripts/local-stack.sh first"; exit 1)
 	set -a && . ./.env && . ./.env.local && set +a && go run ./cmd/api
 
-test-live: ## Prove the indexer against the running anvil stack (needs TEST_DATABASE_URL)
+test-live: ## Prove the indexer and the finance maths against the running anvil stack
 	set -a && . ./.env.local && set +a && \
 		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/indexer/ -run TestLive -count=1 -v
+	set -a && . ./.env.local && set +a && \
+		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/protocol/ -count=1 -v
 
 build: ## Build a static linux binary into bin/
 	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/api ./cmd/api
