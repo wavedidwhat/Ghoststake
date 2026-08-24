@@ -1,36 +1,66 @@
 @import "tailwindcss";
 @import "./typeset.css";
 
-.typeset-docs {
-  --typeset-font-body: var(--font-geist-sans);
-  --typeset-font-heading: var(--font-geist-sans);
-  --typeset-font-mono: var(--font-geist-mono);
-  --typeset-size: 15px;
-  --typeset-leading: 1.75;
-  --typeset-flow: 1.25em;
+/*
+ * Design tokens. Dark ground, violet accent, single theme — components only
+ * ever have to work against one background.
+ */
+@theme {
+  /* Grounds, darkest to lightest. `raised` is for a card sitting on a card. */
+  --color-ground: #0a0a0b;
+  --color-surface: #131315;
+  --color-raised: #1a1a1e;
+  --color-border: #232327;
+  --color-border-strong: #34343a;
+
+  /* Violet accent. `accent` for fills, `accent-soft` for tinted backgrounds. */
+  --color-accent: #8b7cf6;
+  --color-accent-strong: #a594f9;
+  --color-accent-soft: #8b7cf61f;
+
+  /* Semantic. Green/red are for deltas and P/L, never for decoration. */
+  --color-positive: #3fcf8e;
+  --color-negative: #f0616d;
+  --color-warning: #f5a524;
+  --color-positive-soft: #3fcf8e1f;
+  --color-negative-soft: #f0616d1f;
+  --color-warning-soft: #f5a5241f;
+
+  /* Type. `faint` is for units and decimal tails, not for content. */
+  --color-ink: #ededed;
+  --color-ink-muted: #8a8a93;
+  --color-ink-faint: #5a5a63;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Type scale. Display sizes are for the one number a screen is about. */
+  --text-display: 3.5rem;
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.03em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1.1;
+  --text-figure--letter-spacing: -0.02em;
+
+  --radius-card: 0.875rem;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * `tnum` gives every digit one advance width, so a value that updates in
+ * place does not reflow around it. `zero` distinguishes 0 from O when small.
+ */
+.tabular {
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum", "zero";
 }
