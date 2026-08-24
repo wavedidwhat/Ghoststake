@@ -10,9 +10,9 @@ import { usePathname } from "next/navigation";
  */
 const NAV = [
   { href: "/", label: "Dashboard", ready: true },
-  { href: "/vault", label: "Vault", ready: false, note: "GHO-18" },
-  { href: "/borrow", label: "Borrow", ready: false, note: "GHO-18" },
-  { href: "/rounds", label: "Rounds", ready: false, note: "GHO-18" },
+  { href: "/vault", label: "Vault", ready: true },
+  { href: "/borrow", label: "Borrow", ready: true },
+  { href: "/rounds", label: "Rounds", ready: true },
   { href: "/history", label: "History", ready: false, note: "GHO-17" },
 ];
 
@@ -59,7 +59,7 @@ export function Sidebar() {
 
       <div className="mt-auto p-4">
         <div className="rounded-card border border-border bg-surface p-3 text-xs leading-relaxed text-ink-faint">
-          Read-only. Deposits, borrowing, and positions land in GHO-18.
+          Testnet. Round history and analytics land in GHO-17.
         </div>
       </div>
     </aside>

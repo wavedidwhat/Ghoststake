@@ -55,6 +55,7 @@ ASSET=$(addr_of "Asset")
 POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault")
 MARKET=$(addr_of "ParimutuelRound")
+ROUTER=$(addr_of "BorrowToPositionRtr")
 ORACLE=$(addr_of "ChainlinkRoundOracle")
 
 if [ -z "$VAULT" ] || [ -z "$POOL" ] || [ -z "$MARKET" ]; then
@@ -80,6 +81,8 @@ NEXT_PUBLIC_CHAIN_ID=31337
 NEXT_PUBLIC_RPC_URL=$RPC_URL
 NEXT_PUBLIC_VAULT_ADDRESS=$VAULT
 NEXT_PUBLIC_POOL_ADDRESS=$POOL
+NEXT_PUBLIC_MARKET_ADDRESS=$MARKET
+NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
 ENV
 
 log "writing ghoststake-backend/.env.local"
@@ -105,6 +108,7 @@ cat <<SUMMARY
   CollateralVault       $VAULT
   ChainlinkRoundOracle  $ORACLE
   ParimutuelRound       $MARKET
+  BorrowToPositionRtr   $ROUTER
 
   Frontend    cd ghoststake-frontend && pnpm dev      → http://localhost:3000
   Backend     cd ghoststake-backend  && make run-local

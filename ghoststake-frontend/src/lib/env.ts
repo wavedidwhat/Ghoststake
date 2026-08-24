@@ -43,6 +43,19 @@ export const env = {
    */
   vaultAddress: optionalAddress(process.env.NEXT_PUBLIC_VAULT_ADDRESS),
   poolAddress: optionalAddress(process.env.NEXT_PUBLIC_POOL_ADDRESS),
+
+  /** The parimutuel market and the borrow-to-position router. */
+  marketAddress: optionalAddress(process.env.NEXT_PUBLIC_MARKET_ADDRESS),
+  routerAddress: optionalAddress(process.env.NEXT_PUBLIC_ROUTER_ADDRESS),
 } as const;
 
 export const contractsConfigured = Boolean(env.vaultAddress && env.poolAddress);
+
+/**
+ * The market half is tracked separately from the lending half on purpose.
+ *
+ * A deployment can legitimately have one and not the other — the Sepolia
+ * deploy predates the router — and collapsing both into one flag would black
+ * out a working dashboard because rounds are missing.
+ */
+export const marketConfigured = Boolean(env.marketAddress && env.routerAddress);
