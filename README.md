@@ -8,7 +8,7 @@ setup, and deploys independently.
 | Package | Stack | Notes |
 |---|---|---|
 | [`ghoststake-frontend/`](ghoststake-frontend) | Next.js 16, App Router, Tailwind v4 | `shadcn/typeset` for rendered markdown; lint/typecheck/build enforced in CI |
-| [`ghoststake-backend/`](ghoststake-backend) | Go 1.25, chi, Postgres | SIWE wallet auth, Arbitrum RPC; `make lint`/`test`/`build` enforced in CI |
+| [`ghoststake-backend/`](ghoststake-backend) | Go 1.27, chi, Postgres | SIWE wallet auth, Arbitrum RPC; `make lint`/`test`/`build` enforced in CI |
 | [`ghoststake-contracts/`](ghoststake-contracts) | Solidity, Foundry | Arbitrum, `forge fmt`/`forge test` enforced in CI |
 
 ## Getting started

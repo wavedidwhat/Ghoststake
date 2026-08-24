@@ -1,0 +1,25 @@
+# Ephemeral test stack, run on the VPS by `rdk test` — never on a local
+# Docker daemon. See `rdk agents`.
+#
+#   rdk test -t 5434 -- make test-integration
+#
+# The port binding is 127.0.0.1-only on purpose: the bare form (5434:5432)
+# would publish a database to the public internet for the length of the run.
+services:
+  testdb:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ghoststake
+      POSTGRES_PASSWORD: ghoststake
+      POSTGRES_DB: ghoststake_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    # tmpfs, so the whole database lives in RAM and leaves nothing behind on
+    # the VPS when the stack is torn down.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghoststake -d ghoststake_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

@@ -9,7 +9,7 @@ Staking domain logic is not built yet.
 
 | Piece | Choice | Why |
 |---|---|---|
-| Language | Go 1.25 | |
+| Language | Go 1.27 | |
 | Router | `chi` | stdlib-compatible `http.Handler`, no framework lock-in |
 | Database | Postgres via `pgx/v5` | |
 | Migrations | `goose`, embedded | schema ships inside the binary |
