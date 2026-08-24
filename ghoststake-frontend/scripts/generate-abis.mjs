@@ -29,6 +29,9 @@ const WANTED = {
     // writes
     "takePosition", "claim",
   ],
+  // The testnet stand-in asset. `mint` is open by design on a disposable
+  // chain, which is what lets the UI offer test tokens without a CLI.
+  MockUSDC: ["mint", "decimals", "symbol", "balanceOf"],
   BorrowToPositionRouter: [
     "vault", "market", "asset",
     // writes

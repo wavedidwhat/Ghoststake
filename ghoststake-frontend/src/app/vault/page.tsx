@@ -6,6 +6,7 @@ import { useConnection, useReadContract } from "wagmi";
 import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
+import { Faucet } from "@/components/Faucet";
 import { Figure } from "@/components/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { useTransaction } from "@/hooks/useTransaction";
@@ -65,6 +66,19 @@ function VaultScreen({
           size="stat"
         />
       </Stat>
+
+      <div className="lg:col-span-3">
+        <Faucet
+          assetAddress={position.assetAddress}
+          decimals={decimals}
+          symbol={symbol}
+          address={address}
+          onMinted={() => {
+            position.refetch();
+            void walletBalance.refetch();
+          }}
+        />
+      </div>
 
       <div className="lg:col-span-3">
         <DepositWithdraw
