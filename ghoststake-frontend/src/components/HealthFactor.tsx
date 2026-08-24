@@ -1,6 +1,16 @@
 import { Figure } from "./Figure";
 import { formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
 
+/**
+ * Shown when the contract reports the position liquidatable, which is the
+ * authoritative answer — the bands below are only a reading of the ratio.
+ */
+const LIQUIDATABLE = {
+  label: "Liquidatable",
+  detail:
+    "This position is below the liquidation threshold now. Anyone may repay part of the debt and claim collateral at a bonus until it is healthy again.",
+};
+
 const COPY: Record<HealthBand, { label: string; detail: string }> = {
   none: {
     label: "No debt",
@@ -35,7 +45,13 @@ const STYLES: Record<HealthBand, { border: string; chip: string }> = {
  *
  * Bands come from `healthBand`, which warns above the contract's 1.0 line.
  */
-export function HealthFactorCard({ value }: { value: bigint | undefined }) {
+export function HealthFactorCard({
+  value,
+  liquidatable = false,
+}: {
+  value: bigint | undefined;
+  liquidatable?: boolean;
+}) {
   if (value === undefined) {
     return (
       <div className="rounded-card border border-border bg-surface p-6">
@@ -47,10 +63,13 @@ export function HealthFactorCard({ value }: { value: bigint | undefined }) {
     );
   }
 
-  const band = healthBand(value);
+  // A liquidatable position always renders at the loudest band, whatever the
+  // ratio reads: the contract's answer accounts for the threshold, the
+  // ratio's own banding does not.
+  const band = liquidatable ? "danger" : healthBand(value);
   const formatted = formatHealthFactor(value);
   const style = STYLES[band];
-  const copy = COPY[band];
+  const copy = liquidatable ? LIQUIDATABLE : COPY[band];
 
   return (
     <div className={`rounded-card border bg-surface p-6 ${style.border}`}>
@@ -63,7 +82,7 @@ export function HealthFactorCard({ value }: { value: bigint | undefined }) {
         </span>
       </div>
 
-      <div className="mt-4 flex items-end gap-3">
+      <div className="mt-4 flex items-end gap-3" aria-live="polite">
         {/* null means no lien, not a formatting failure. See NO_DEBT. */}
         {formatted === null ? (
           <span className="text-figure font-medium text-ink-faint">—</span>
