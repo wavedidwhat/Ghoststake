@@ -8,15 +8,31 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const contracts = path.resolve(here, "../../ghoststake-contracts");
 const target = path.resolve(here, "../src/lib/abis.ts");
 
-// Only the functions the UI reads. A full ABI carries write functions and
-// events nothing calls yet, which bloats the bundle and obscures what is
-// actually wired up.
+// Only the functions the UI actually calls — reads and writes both. A full
+// ABI carries entries nothing touches, which bloats the bundle and obscures
+// what is wired up. If a name here is missing from the artifact the script
+// throws, so a renamed function fails the build rather than silently
+// producing a UI that calls nothing.
 const WANTED = {
   CollateralVault: [
-    "asset", "decimals", "balanceOf", "convertToAssets",
+    "asset", "decimals", "balanceOf", "convertToAssets", "convertToShares",
     "collateralValue", "totalLedgerValue", "accruedYield",
     "lienOf", "healthFactor", "maxBorrowable", "isLiquidatable",
     "liquidationThreshold", "maxLTV",
+    // writes
+    "deposit", "withdraw", "redeem", "borrow", "repay",
+    "approveBorrowDelegate", "borrowAllowance",
+  ],
+  ParimutuelRound: [
+    "rounds", "roundCount", "phaseOf", "claimableOf", "stakeOf", "claimed",
+    "entryCutoff", "minSidePool", "rake", "stakeAsset",
+    // writes
+    "takePosition", "claim",
+  ],
+  BorrowToPositionRouter: [
+    "vault", "market", "asset",
+    // writes
+    "openPosition",
   ],
   BorrowLiquidityPool: [
     "balanceOfDebt", "balanceOfSupply", "utilization",
