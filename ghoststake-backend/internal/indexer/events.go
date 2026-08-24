@@ -24,7 +24,7 @@ type contractSpec struct {
 	name    string
 	address common.Address
 	abi     abi.ABI
-	decode  func(name string, args map[string]any, log types.Log) []ledger.Entry
+	decode  func(name string, f *fields, log types.Log) []ledger.Entry
 }
 
 func loadABI(file string) (abi.ABI, error) {
@@ -73,7 +73,13 @@ func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Tim
 		}
 	}
 
-	entries := c.decode(event.Name, args, log)
+	f := &fields{args: args}
+	entries := c.decode(event.Name, f, log)
+	// Checked after decoding rather than per-field, so one bad event names
+	// everything it could not read instead of only the first thing.
+	if err := f.err(event.Name); err != nil {
+		return nil, err
+	}
 	for i := range entries {
 		entries[i].ChainID = chainID
 		entries[i].BlockNumber = log.BlockNumber
@@ -88,25 +94,53 @@ func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Tim
 	return entries, nil
 }
 
-func addr(args map[string]any, key string) string {
-	v, ok := args[key].(common.Address)
-	if !ok {
-		return ""
-	}
-	return strings.ToLower(v.Hex())
+// fields reads decoded event arguments, remembering anything it could not
+// find rather than substituting a zero.
+//
+// The helpers used to return 0 and "" for a missing key. That is the worst
+// available behaviour here: rename a field in a contract and the decoder
+// keeps producing entries, with zero deltas and empty accounts, while the
+// indexer reports healthy. A ledger that records nothing is easier to notice
+// than one that records nonsense.
+type fields struct {
+	args    map[string]any
+	missing []string
 }
 
-func amount(args map[string]any, key string) *big.Int {
-	v, ok := args[key].(*big.Int)
+func (f *fields) addr(key string) string {
+	v, ok := f.args[key].(common.Address)
 	if !ok {
+		f.missing = append(f.missing, key)
+		return ""
+	}
+	// EIP-55 checksummed, matching auth.NormalizeAddress. The two must agree
+	// or nothing joins a user to their entries — see
+	// TestAccountFormatMatchesAuth.
+	return v.Hex()
+}
+
+func (f *fields) amount(key string) *big.Int {
+	v, ok := f.args[key].(*big.Int)
+	if !ok {
+		f.missing = append(f.missing, key)
 		return new(big.Int)
 	}
 	return new(big.Int).Set(v)
 }
 
+func (f *fields) err(event string) error {
+	if len(f.missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("event %s: missing or mistyped fields %v (regenerate abis with `make gen-abis`)", event, f.missing)
+}
+
 func neg(v *big.Int) *big.Int { return new(big.Int).Neg(v) }
 
-var zeroAddress = strings.ToLower(common.Address{}.Hex())
+// The mint/burn sentinel, in the same checksummed form fields.addr emits.
+// (It has no letters, so the case would not matter — but relying on that is
+// an invisible dependency on the checksum algorithm.)
+var zeroAddress = common.Address{}.Hex()
 
 // decodeVault maps CollateralVault events to entries.
 //
@@ -120,12 +154,12 @@ var zeroAddress = strings.ToLower(common.Address{}.Hex())
 //     pool to emit Borrowed/Repaid for the same movement. The pool's are the
 //     balance-bearing ones because they carry the scaled amount; the vault's
 //     are recorded as flows.
-func decodeVault(name string, args map[string]any, _ types.Log) []ledger.Entry {
+func decodeVault(name string, f *fields, _ types.Log) []ledger.Entry {
 	switch name {
 	// The shares book. Mint, burn and transfer in one event.
 	case "Transfer":
-		from, to := addr(args, "from"), addr(args, "to")
-		value := amount(args, "value")
+		from, to := f.addr("from"), f.addr("to")
+		value := f.amount("value")
 		var out []ledger.Entry
 		if from != zeroAddress {
 			out = append(out, ledger.Entry{
@@ -143,44 +177,44 @@ func decodeVault(name string, args map[string]any, _ types.Log) []ledger.Entry {
 
 	case "Deposited":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.Deposits,
-			Delta: amount(args, "assets"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.Deposits,
+			Delta: f.amount("assets"),
 		}}
 
 	case "Withdrawn":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.Withdrawals,
-			Delta: amount(args, "assets"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.Withdrawals,
+			Delta: f.amount("assets"),
 		}}
 
 	case "YieldSettled":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.YieldSettled,
-			Delta: amount(args, "yieldAccrued"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.YieldSettled,
+			Delta: f.amount("yieldAccrued"),
 		}}
 
 	case "LienSettledAtExit":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.LienSettled,
-			Delta: amount(args, "lienAmount"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.LienSettled,
+			Delta: f.amount("lienAmount"),
 		}}
 
 	case "Borrowed":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.BorrowFlow,
-			Delta: amount(args, "amount"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.BorrowFlow,
+			Delta: f.amount("amount"),
 		}}
 
 	case "Repaid":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.RepayFlow,
-			Delta: amount(args, "amount"), Counterparty: addr(args, "payer"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.RepayFlow,
+			Delta: f.amount("amount"), Counterparty: f.addr("payer"),
 		}}
 
 	case "Liquidated":
 		return []ledger.Entry{{
-			Kind: ledger.KindFlow, Account: addr(args, "user"), Ledger: ledger.Liquidations,
-			Delta: amount(args, "debtRepaid"), Counterparty: addr(args, "liquidator"),
+			Kind: ledger.KindFlow, Account: f.addr("user"), Ledger: ledger.Liquidations,
+			Delta: f.amount("debtRepaid"), Counterparty: f.addr("liquidator"),
 		}}
 	}
 	// Deposit, Withdraw, Approval, PositionTransferred: either an ERC-4626
@@ -191,30 +225,30 @@ func decodeVault(name string, args map[string]any, _ types.Log) []ledger.Entry {
 // decodePool maps BorrowLiquidityPool events to entries.
 //
 // The scaled amount is the balance-bearing figure; see ledger.DebtScaled.
-func decodePool(name string, args map[string]any, _ types.Log) []ledger.Entry {
+func decodePool(name string, f *fields, _ types.Log) []ledger.Entry {
 	switch name {
 	case "Supplied":
 		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: addr(args, "user"), Ledger: ledger.SupplyScaled,
-			Delta: amount(args, "scaledAmount"),
+			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.SupplyScaled,
+			Delta: f.amount("scaledAmount"),
 		}}
 
 	case "Withdrawn":
 		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: addr(args, "user"), Ledger: ledger.SupplyScaled,
-			Delta: neg(amount(args, "scaledAmount")),
+			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.SupplyScaled,
+			Delta: neg(f.amount("scaledAmount")),
 		}}
 
 	case "Borrowed":
 		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: addr(args, "user"), Ledger: ledger.DebtScaled,
-			Delta: amount(args, "scaledAmount"),
+			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.DebtScaled,
+			Delta: f.amount("scaledAmount"),
 		}}
 
 	case "Repaid":
 		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: addr(args, "user"), Ledger: ledger.DebtScaled,
-			Delta: neg(amount(args, "scaledAmount")), Counterparty: addr(args, "payer"),
+			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.DebtScaled,
+			Delta: neg(f.amount("scaledAmount")), Counterparty: f.addr("payer"),
 		}}
 	}
 	// Accrued, BorrowModuleSet, ReservesWithdrawn, OwnershipTransferred:

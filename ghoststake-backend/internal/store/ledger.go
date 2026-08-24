@@ -99,6 +99,12 @@ func (s *Store) LoadCursor(ctx context.Context, stream string) (ledger.Cursor, b
 // append-only in spirit: an entry is either the chain's history or it is not
 // history at all.
 func (s *Store) RollbackFrom(ctx context.Context, chainID int64, stream string, fromBlock uint64) (int64, error) {
+	// `fromBlock - 1` below is unsigned: zero would wrap the cursor to the
+	// top of uint64 rather than rewinding it to the start.
+	if fromBlock == 0 {
+		return 0, fmt.Errorf("rollback: fromBlock must be greater than zero")
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("begin: %w", err)

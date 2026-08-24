@@ -63,6 +63,8 @@ const (
 	bob   = "0x000000000000000000000000000000000000b0b0"
 )
 
+func testTime() time.Time { return time.Unix(1700000000, 0).UTC() }
+
 func decode(t *testing.T, spec contractSpec, log types.Log) []ledger.Entry {
 	t.Helper()
 	entries, err := spec.decodeLog(421614, log, time.Unix(1700000000, 0).UTC())

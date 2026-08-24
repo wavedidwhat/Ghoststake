@@ -227,6 +227,15 @@ func TestFullWidthUint256SurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+// Audit finding 3: fromBlock is unsigned, so zero would set the cursor to
+// `0 - 1` — the top of uint64 — instead of rewinding it to the start.
+func TestRollbackRejectsBlockZero(t *testing.T) {
+	st := newTestStore(t)
+	if _, err := st.RollbackFrom(context.Background(), testChainID, "test", 0); err == nil {
+		t.Fatal("rollback from block 0 was accepted")
+	}
+}
+
 func TestCursorRoundTrips(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
