@@ -27,8 +27,9 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 	rpcURL := os.Getenv("LIVE_RPC_URL")
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	vault, pool := os.Getenv("VAULT_ADDRESS"), os.Getenv("POOL_ADDRESS")
-	if rpcURL == "" || dsn == "" || vault == "" || pool == "" {
-		t.Skip("needs LIVE_RPC_URL, TEST_DATABASE_URL, VAULT_ADDRESS, POOL_ADDRESS")
+	market := os.Getenv("MARKET_ADDRESS")
+	if rpcURL == "" || dsn == "" || vault == "" || pool == "" || market == "" {
+		t.Skip("needs LIVE_RPC_URL, TEST_DATABASE_URL, VAULT_ADDRESS, POOL_ADDRESS, MARKET_ADDRESS")
 	}
 
 	ctx := context.Background()
@@ -49,10 +50,11 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 	defer client.Close()
 
 	ix, err := indexer.New(client, st, indexer.Config{
-		ChainID:      31337,
-		VaultAddress: vault,
-		PoolAddress:  pool,
-		StartBlock:   1,
+		ChainID:       31337,
+		VaultAddress:  vault,
+		PoolAddress:   pool,
+		MarketAddress: market,
+		StartBlock:    1,
 		// anvil mines on demand and does not reorg, so nothing is gained by
 		// staying behind the head.
 		Confirmations: 0,
@@ -119,5 +121,44 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 
 	if _, present := balances[ledger.Deposits]; present {
 		t.Fatal("deposits appeared in the derived balances")
+	}
+
+	// The market's events land in their own table, and the round they belong
+	// to is folded from them rather than read from the contract. A zero here
+	// would mean the ParimutuelRound ABI matched nothing a node emitted —
+	// which is the exact failure that produces a healthy-looking indexer with
+	// an empty rounds page.
+	roundEvents, err := st.CountRoundEvents(ctx, 31337)
+	if err != nil {
+		t.Fatalf("count round events: %v", err)
+	}
+	if roundEvents == 0 {
+		t.Fatal("no round events indexed — the market's event signatures matched nothing")
+	}
+	t.Logf("indexed %d round events", roundEvents)
+
+	ids, err := st.RecentRoundIDs(ctx, 31337, 10)
+	if err != nil {
+		t.Fatalf("recent rounds: %v", err)
+	}
+	events, err := st.RoundEventsByIDs(ctx, 31337, ids)
+	if err != nil {
+		t.Fatalf("round events: %v", err)
+	}
+	rounds := ledger.Project(events)
+	if len(rounds) == 0 {
+		t.Fatal("round events indexed but nothing projected")
+	}
+	for _, round := range rounds {
+		t.Logf("round %d %-8s up %s down %s (block %d)",
+			round.RoundID, round.Status, round.UpPool, round.DownPool, round.LastBlock)
+	}
+
+	// The seed opens a round with stakes on both sides, so the derived pools
+	// must be positive — a pool of zero would mean PositionTaken decoded but
+	// its amount did not.
+	if rounds[0].TotalPool().Sign() <= 0 {
+		t.Fatalf("round %d has an empty pool: up %s down %s",
+			rounds[0].RoundID, rounds[0].UpPool, rounds[0].DownPool)
 	}
 }

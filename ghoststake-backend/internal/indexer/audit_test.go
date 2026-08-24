@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/wavedidwhat/ghoststake/internal/abis"
 	"github.com/wavedidwhat/ghoststake/internal/auth"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 )
@@ -26,7 +27,7 @@ func TestAccountFormatMatchesAuth(t *testing.T) {
 		t.Fatalf("normalize: %v", err)
 	}
 
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	log := makeLog(t, spec, "Deposited",
 		[]common.Hash{common.HexToHash(mixed)}, wei(1), wei(1))
 	entries := decode(t, spec, log)
@@ -69,11 +70,11 @@ func TestMissingFieldFailsRatherThanWritingZero(t *testing.T) {
 
 // The failure must reach the caller, not be swallowed inside decodeLog.
 func TestDecodeSurfacesAFieldMismatch(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
-	spec.decode = func(_ string, f *fields, _ types.Log) []ledger.Entry {
+	spec := mustABI(t, abis.CollateralVault)
+	spec.decode = entriesOnly(func(_ string, f *fields, _ types.Log) []ledger.Entry {
 		// Stands in for a contract that renamed a field.
 		return []ledger.Entry{{Account: f.addr("renamed"), Delta: f.amount("alsoRenamed")}}
-	}
+	})
 
 	log := makeLog(t, spec, "Deposited", []common.Hash{topicAddr(alice)}, wei(1), wei(1))
 	if _, err := spec.decodeLog(421614, log, testTime()); err == nil {
@@ -86,10 +87,11 @@ func TestDecodeSurfacesAFieldMismatch(t *testing.T) {
 // range came out of an overflow rather than a decision.
 func TestStartBlockZeroIsRejected(t *testing.T) {
 	_, err := New(newFakeChain(10), newFakeRepo(), Config{
-		ChainID:      421614,
-		VaultAddress: common.HexToAddress(vaultAddr).Hex(),
-		PoolAddress:  common.HexToAddress(poolAddr).Hex(),
-		StartBlock:   0,
+		ChainID:       421614,
+		VaultAddress:  common.HexToAddress(vaultAddr).Hex(),
+		PoolAddress:   common.HexToAddress(poolAddr).Hex(),
+		MarketAddress: common.HexToAddress(marketAddr).Hex(),
+		StartBlock:    0,
 	})
 	if err == nil {
 		t.Fatal("StartBlock 0 was accepted")
@@ -104,9 +106,9 @@ func TestADecodeFailureDoesNotAdvanceTheCursor(t *testing.T) {
 	repo := newFakeRepo()
 
 	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 1, Confirmations: 0, BatchSize: 100})
-	ix.contracts[0].decode = func(_ string, f *fields, _ types.Log) []ledger.Entry {
+	ix.contracts[0].decode = entriesOnly(func(_ string, f *fields, _ types.Log) []ledger.Entry {
 		return []ledger.Entry{{Account: f.addr("nope")}}
-	}
+	})
 
 	if err := ix.Step(context.Background()); err == nil {
 		t.Fatal("want an error from the failed decode")
