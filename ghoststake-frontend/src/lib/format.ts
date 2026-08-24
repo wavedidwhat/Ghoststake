@@ -87,6 +87,18 @@ export function healthBand(wad: bigint): HealthBand {
   return "safe";
 }
 
+/**
+ * A per-second WAD rate as an annual percentage.
+ *
+ * Simple, not compounded, because that is how the pool accrues — showing a
+ * compounded APY beside a contract that charges simple interest would
+ * overstate what a borrower actually pays.
+ */
+export function formatApr(ratePerSecond: bigint, fractionDigits = 2): string {
+  const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
+  return formatPercent(ratePerSecond * SECONDS_PER_YEAR, fractionDigits);
+}
+
 /** 0x1234…abcd, for wallet addresses in tight spaces. */
 export function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
