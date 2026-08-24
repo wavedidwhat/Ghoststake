@@ -61,6 +61,12 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 	if cfg.PollInterval == 0 {
 		cfg.PollInterval = 12 * time.Second
 	}
+	// Guarded here as well as in config.Load, because this is the library
+	// boundary: `StartBlock - 1` below is unsigned, so zero wraps to the top
+	// of uint64 and the first range is decided by an overflow.
+	if cfg.StartBlock == 0 {
+		return nil, fmt.Errorf("indexer: StartBlock must be greater than zero")
+	}
 
 	vaultABI, err := loadABI("CollateralVault.json")
 	if err != nil {
