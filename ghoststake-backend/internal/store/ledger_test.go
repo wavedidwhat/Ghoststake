@@ -22,7 +22,14 @@ func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL not set")
+		// Skipping locally keeps `go test ./...` runnable without a
+		// database. Skipping in CI would mean these quietly stop running the
+		// moment the service container breaks — and a suite that reports
+		// "ok" while testing nothing is worse than no suite.
+		if os.Getenv("CI") != "" {
+			t.Fatal("TEST_DATABASE_URL is unset in CI: the Postgres service is not wired up")
+		}
+		t.Skip("TEST_DATABASE_URL not set (run `make test-remote`)")
 	}
 
 	st, err := store.New(context.Background(), dsn)
