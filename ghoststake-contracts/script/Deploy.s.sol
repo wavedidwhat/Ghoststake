@@ -39,9 +39,17 @@ contract Deploy is Script {
         }
         address deployer = vm.addr(deployerKey);
 
+        // Each of these may be supplied for a real network. Unset means
+        // "deploy a stand-in", which is only ever right on a disposable chain.
+        address existingAsset = vm.envOr("ASSET_ADDRESS", address(0));
+        address existingFeed = vm.envOr("FEED_ADDRESS", address(0));
+        address sequencerFeed = vm.envOr("SEQUENCER_FEED_ADDRESS", address(0));
+
         vm.startBroadcast(deployerKey);
 
-        MockUSDC asset = new MockUSDC();
+        // A mintable stand-in locally; a real ERC-20 anywhere else. Six
+        // decimals either way — see MockUSDC for why that matters.
+        IERC20 asset = existingAsset == address(0) ? IERC20(address(new MockUSDC())) : IERC20(existingAsset);
 
         // --- Lending ------------------------------------------------------
         //
@@ -50,7 +58,7 @@ contract Deploy is Script {
         // told which contract may borrow on users' behalf, and that setter is
         // one-shot — see BorrowModuleAlreadySet.
         BorrowLiquidityPool pool = new BorrowLiquidityPool(
-            IERC20(address(asset)),
+            asset,
             perSecond(2), // base rate, 2% APR at zero utilization
             perSecond(8), // slope 1, gentle up to the kink
             perSecond(100), // slope 2, punishing past it
@@ -60,7 +68,7 @@ contract Deploy is Script {
         );
 
         CollateralVault vault = new CollateralVault(
-            IERC20(address(asset)),
+            asset,
             perSecond(5), // 5% APR staking yield
             ILienSource(address(pool)),
             CollateralVault.RiskParams({
@@ -75,23 +83,30 @@ contract Deploy is Script {
 
         // --- Market -------------------------------------------------------
         //
-        // A mock feed standing in for Chainlink. Seeded with one round so the
-        // adapter has something to read: an empty feed reads as unavailable,
-        // which is correct but makes the first round un-lockable.
-        MockAggregatorV3 feed = new MockAggregatorV3(8);
-        feed.push(2000e8, block.timestamp);
+        // A real Chainlink feed where one is given. Otherwise a mock, seeded
+        // with a round so the adapter has something to read — an empty feed
+        // reads as unavailable, which is correct but leaves the first round
+        // un-lockable.
+        address feed = existingFeed;
+        if (feed == address(0)) {
+            MockAggregatorV3 mockFeed = new MockAggregatorV3(8);
+            mockFeed.push(2000e8, block.timestamp);
+            feed = address(mockFeed);
+        }
 
         ChainlinkRoundOracle oracle = new ChainlinkRoundOracle(
-            AggregatorV3Interface(address(feed)),
-            // No sequencer uptime feed locally. Correct here and wrong on any
-            // L2 — on Robinhood Chain or Arbitrum this must be the real one.
-            AggregatorV3Interface(address(0)),
-            1 hours, // max staleness
-            30 minutes // sequencer recovery grace
+            AggregatorV3Interface(feed),
+            // Zero disables the check. Correct on an L1 and on a local chain,
+            // and WRONG on any L2 — on Arbitrum or Robinhood Chain this must
+            // be the real uptime feed or downtime settles rounds against a
+            // market nobody could reach.
+            AggregatorV3Interface(sequencerFeed),
+            vm.envOr("MAX_STALENESS", uint256(1 hours)),
+            vm.envOr("SEQUENCER_GRACE", uint256(30 minutes))
         );
 
         ParimutuelRound market = new ParimutuelRound(
-            IERC20(address(asset)),
+            asset,
             IRoundOracle(address(oracle)),
             0.02e18, // 2% protocol rake
             ParimutuelRound.Timing({ entryCutoff: 15 seconds, lockWindow: 60 seconds, resolveDeadline: 1 hours }),
@@ -103,10 +118,10 @@ contract Deploy is Script {
 
         console2.log("");
         console2.log("=== deployed ===");
-        console2.log("MockUSDC            ", address(asset));
+        console2.log("Asset               ", address(asset));
         console2.log("BorrowLiquidityPool ", address(pool));
         console2.log("CollateralVault     ", address(vault));
-        console2.log("MockAggregatorV3    ", address(feed));
+        console2.log("PriceFeed           ", feed);
         console2.log("ChainlinkRoundOracle", address(oracle));
         console2.log("ParimutuelRound     ", address(market));
         console2.log("deployer            ", deployer);
@@ -118,7 +133,7 @@ contract Deploy is Script {
         console2.log("--- backend .env ---");
         console2.log("VAULT_ADDRESS=%s", vm.toString(address(vault)));
         console2.log("POOL_ADDRESS=%s", vm.toString(address(pool)));
-        console2.log("INDEXER_START_BLOCK=1");
+        console2.log("INDEXER_START_BLOCK=%s", vm.toString(block.number));
         console2.log("INDEXER_ENABLED=true");
     }
 
