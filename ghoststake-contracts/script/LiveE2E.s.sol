@@ -162,10 +162,18 @@ contract LiveE2E is Script {
 
         ParimutuelRound.Round memory round = market.rounds(roundId);
 
-        // A one-sided round voids at lock rather than taking a strike, which
-        // is correct and not a failure — so this reports rather than asserts.
+        // A round can void at lock for two different reasons, and saying the
+        // wrong one is worse than saying nothing: a thin side, or a lock that
+        // arrived after `lockWindow` expired. Distinguish them rather than
+        // guessing — an earlier version reported "one side was under the
+        // minimum" for a round whose sides were both well over it.
         if (round.status == ParimutuelRound.Status.Void) {
-            console2.log("voided     one side was under the minimum");
+            uint256 minSide = market.minSidePool();
+            if (round.upPool < minSide || round.downPool < minSide) {
+                console2.log("voided     a side was under the minimum, so there was nothing to price");
+            } else {
+                console2.log("voided     nobody locked it inside the lock window; every stake is refunded");
+            }
             return;
         }
         require(round.lockPrice > 0, "locked without a strike price");
