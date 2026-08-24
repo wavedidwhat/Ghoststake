@@ -1,10 +1,18 @@
-.PHONY: help run build test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
+.PHONY: help run run-local test-live build test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
 
 run: ## Run the API locally (needs a reachable Postgres)
 	go run ./cmd/api
+
+run-local: ## Run the API against the local anvil stack (scripts/local-stack.sh)
+	@test -f .env.local || (echo "no .env.local — run scripts/local-stack.sh first"; exit 1)
+	set -a && . ./.env && . ./.env.local && set +a && go run ./cmd/api
+
+test-live: ## Prove the indexer against the running anvil stack (needs TEST_DATABASE_URL)
+	set -a && . ./.env.local && set +a && \
+		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/indexer/ -run TestLive -count=1 -v
 
 build: ## Build a static linux binary into bin/
 	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/api ./cmd/api

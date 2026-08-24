@@ -35,10 +35,17 @@ export function Figure({
   }[tone];
 
   return (
-    <span className={`tabular font-medium ${sizeClass} ${toneClass}`}>
-      {lead}
-      {tail && <span className="opacity-45">{tail}</span>}
-      {unit && <span className="ml-1.5 text-base font-normal text-ink-faint">{unit}</span>}
+    // Wraps rather than clips. A figure and its unit have to stay together —
+    // a number whose unit has been cut off by the card edge is not just ugly,
+    // it is ambiguous about what it is measuring.
+    <span
+      className={`tabular flex flex-wrap items-baseline gap-x-1.5 font-medium ${sizeClass} ${toneClass}`}
+    >
+      <span className="min-w-0 break-all">
+        {lead}
+        {tail && <span className="opacity-45">{tail}</span>}
+      </span>
+      {unit && <span className="text-base font-normal text-ink-faint">{unit}</span>}
     </span>
   );
 }
