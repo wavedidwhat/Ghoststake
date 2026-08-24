@@ -1,3 +1,17 @@
+# Configuration reaches the containers through `env_file`, never through
+# `${VAR}` interpolation in this file.
+#
+# Interpolation is resolved by the compose *client*, against whichever env file
+# it was invoked with — and the RDK extension invokes it with
+# `--env-file .env.remote`, which holds RDK's own settings and none of the
+# app's. `--env-file` replaces the default `.env` rather than adding to it, so
+# every `${VAR:-default}` quietly took its default and `${JWT_SECRET:?...}`
+# failed the deploy with an interpolation error. `env_file` is read per service
+# and does not care how the client was called.
+#
+# Layering: `deploy.defaults.env` (committed, topology) then `.env`
+# (uncommitted, real config), later file wins. `environment:` below outranks
+# both, so it holds only what the compose topology itself fixes.
 services:
   api:
     build:
@@ -9,32 +23,17 @@ services:
     # docker-compose.override.yml.
     expose:
       - "8080"
+    env_file:
+      - path: deploy.defaults.env
+        required: true
+      # Optional so `docker compose config` and a fresh clone still work. A
+      # missing .env is not silently fine — it means no JWT_SECRET, and the
+      # API refuses to boot and says so.
+      - path: .env
+        required: false
     environment:
-      APP_ENV: ${APP_ENV:-production}
+      # Fixed by `expose` above, so it is not an operator's to change.
       HTTP_PORT: "8080"
-      DATABASE_URL: ${DATABASE_URL:-postgres://ghoststake:ghoststake@db:5432/ghoststake?sslmode=disable}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
-      JWT_TTL: ${JWT_TTL:-24h}
-      NONCE_TTL: ${NONCE_TTL:-5m}
-      APP_DOMAIN: ${APP_DOMAIN:-localhost:3000}
-      APP_URI: ${APP_URI:-http://localhost:3000}
-      CHAIN_ID: ${CHAIN_ID:-421614}
-      # RPC_URL is the current name; ARBITRUM_RPC_URL stays as a fallback
-      # because the chain is no longer necessarily Arbitrum.
-      RPC_URL: ${RPC_URL:-}
-      ARBITRUM_RPC_URL: ${ARBITRUM_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-
-      # Indexer. Off unless addresses are supplied — an indexer aimed at an
-      # address with no code polls forever and finds nothing.
-      INDEXER_ENABLED: ${INDEXER_ENABLED:-false}
-      VAULT_ADDRESS: ${VAULT_ADDRESS:-}
-      POOL_ADDRESS: ${POOL_ADDRESS:-}
-      MARKET_ADDRESS: ${MARKET_ADDRESS:-}
-      INDEXER_START_BLOCK: ${INDEXER_START_BLOCK:-0}
-      INDEXER_CONFIRMATIONS: ${INDEXER_CONFIRMATIONS:-5}
-      INDEXER_BATCH_SIZE: ${INDEXER_BATCH_SIZE:-2000}
-      INDEXER_POLL_INTERVAL: ${INDEXER_POLL_INTERVAL:-12s}
     depends_on:
       db:
         condition: service_healthy
@@ -42,16 +41,29 @@ services:
 
   db:
     image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ghoststake}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghoststake}
-      POSTGRES_DB: ${POSTGRES_DB:-ghoststake}
+    # Defaults only, deliberately not `.env`: this container has no business
+    # holding the API's JWT_SECRET or RPC credentials, and layering `.env` here
+    # would hand it every one of them. Postgres ignores what it does not
+    # recognise, so it would never complain — which is what makes it worth
+    # being explicit about.
+    #
+    # The consequence is that POSTGRES_* must be changed in
+    # deploy.defaults.env, alongside the DATABASE_URL that has to match.
+    # Setting them in `.env` would move the API without moving the database.
+    env_file:
+      - path: deploy.defaults.env
+        required: true
     volumes:
       - pgdata:/var/lib/postgresql/data
     # The API runs migrations on boot, so it must not start until Postgres is
     # actually accepting connections — not merely "container started".
+    #
+    # `$$` escapes compose's own interpolation, so the variables are expanded
+    # by the shell inside the container against what env_file actually set.
+    # Interpolating them here would check a different user than the one
+    # Postgres was created with the moment `.env` overrides either.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghoststake} -d ${POSTGRES_DB:-ghoststake}"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
