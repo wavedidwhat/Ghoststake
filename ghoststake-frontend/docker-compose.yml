@@ -2,6 +2,15 @@ services:
   web:
     build:
       context: .
+      # Build args, not runtime environment: Next inlines NEXT_PUBLIC_* into
+      # the client bundle during `next build`, so a value supplied at run time
+      # never reaches the browser. Change an address, rebuild the image.
+      args:
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-421614}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ghoststake.dev.wavedidwhat.com}
+        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-}
+        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.

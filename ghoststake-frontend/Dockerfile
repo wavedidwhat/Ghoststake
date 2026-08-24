@@ -30,6 +30,21 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# NEXT_PUBLIC_* are inlined into the client bundle at build time, not read at
+# runtime. Passing them as compose `environment:` does nothing — the values
+# baked in here are the ones the browser gets. That is why they are build
+# args, and why changing a contract address means rebuilding the image.
+ARG NEXT_PUBLIC_CHAIN_ID
+ARG NEXT_PUBLIC_RPC_URL
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_VAULT_ADDRESS
+ARG NEXT_PUBLIC_POOL_ADDRESS
+ENV NEXT_PUBLIC_CHAIN_ID=${NEXT_PUBLIC_CHAIN_ID}
+ENV NEXT_PUBLIC_RPC_URL=${NEXT_PUBLIC_RPC_URL}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_VAULT_ADDRESS=${NEXT_PUBLIC_VAULT_ADDRESS}
+ENV NEXT_PUBLIC_POOL_ADDRESS=${NEXT_PUBLIC_POOL_ADDRESS}
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
