@@ -7,9 +7,9 @@ import { useSession } from "@/hooks/useSession";
 /**
  * Connect, disconnect, and the optional SIWE sign-in.
  *
- * wagmi 3 note: `useAccount` no longer exists — connection state comes from
- * `useConnection`, and `useConnect().connect` / `.connectors` are deprecated
- * in favour of `mutate` and the `useConnectors` hook.
+ * wagmi 3 has no `useAccount`: connection state is `useConnection`, and
+ * `useConnect().connect` / `.connectors` are deprecated in favour of
+ * `mutate` and `useConnectors`.
  */
 export function ConnectButton() {
   const connection = useConnection();
@@ -30,9 +30,8 @@ export function ConnectButton() {
   }
 
   if (connection.status === "disconnected") {
-    // EIP-6963 discovery means this is usually every wallet the browser has.
-    // With none installed the array is empty, and a button that opens nothing
-    // is worse than an honest prompt to install one.
+    // Empty when no wallet is installed, in which case a connect button
+    // would open nothing.
     const injected = connectors[0];
     if (!injected) {
       return (

@@ -14,14 +14,11 @@ import {
 type Status = "anonymous" | "signing" | "authenticated" | "error";
 
 /**
- * The SIWE session, kept deliberately separate from the wallet connection.
+ * The SIWE session, kept separate from the wallet connection.
  *
- * Connecting a wallet and proving you own it are different things: the first
- * is the wallet handing over an address, the second is a signature.
- * Everything on-chain needs only the first, so the app stays fully usable
- * unauthenticated and signing is required only for API-side profile data.
- * Prompting for a signature the instant a wallet connects is a pattern users
- * have learned to distrust, and it would gate reads that need no permission.
+ * A connection supplies an address; a signature proves ownership of it.
+ * Contract reads need only the first, so signing stays opt-in and is required
+ * only for API-side profile data rather than prompted on connect.
  */
 export function useSession() {
   const connection = useConnection();
@@ -31,11 +28,9 @@ export function useSession() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * A session belongs to one address. If the wallet switches accounts, the
-   * stored token proves ownership of an address the user is no longer using,
-   * so it stops counting — derived here rather than cleared in an effect,
-   * because the token is still valid and still correct for its own address.
-   * Switching back should not require signing again.
+   * A session belongs to one address, so it stops applying when the wallet
+   * switches accounts. Derived rather than cleared: the token is still valid
+   * for its own address, and switching back should not require signing again.
    */
   const session =
     stored && connection.address &&
@@ -51,8 +46,7 @@ export function useSession() {
     setError(null);
     try {
       const challenge = await requestNonce(connection.address);
-      // Signed verbatim — the server rendered this text and verifies against
-      // its own copy, so composing our own would only let the two drift.
+      // Signed verbatim: the server verifies against its own stored copy.
       const signature = await signMessageAsync({ message: challenge.message });
       const verified = await verifySignature(challenge.nonce, signature);
       const next: StoredSession = {
@@ -63,8 +57,7 @@ export function useSession() {
       setStoredSession(next);
       setPending(null);
     } catch (cause) {
-      // A user dismissing the signature prompt is a normal outcome, not a
-      // failure that deserves an error banner.
+      // Dismissing the wallet prompt is a normal outcome, not an error state.
       const rejected = cause instanceof Error && /user rejected|denied/i.test(cause.message);
       if (rejected) {
         setPending(null);

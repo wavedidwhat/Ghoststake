@@ -3,28 +3,21 @@ import { arbitrum, arbitrumSepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 import { env } from "./env";
 
-/**
- * The chain the contracts are actually deployed to. Chosen by env so a
- * testnet demo and a mainnet deploy build from the same source.
- */
+/** The chain the contracts are deployed to, so one build serves both. */
 export const activeChain = env.chainId === arbitrum.id ? arbitrum : arbitrumSepolia;
 
 /**
- * Both Arbitrum networks are declared even though only `activeChain` is
- * supported. That is not hedging — `useSwitchChain` can only switch *to* a
- * chain the config knows about, so declaring the pair is what makes the
- * wrong-network prompt able to fix itself with one click instead of telling
- * the user to go find the network menu.
+ * Both Arbitrum networks are declared although only `activeChain` is
+ * supported: `useSwitchChain` can only switch *to* a chain in the config, so
+ * declaring the pair is what lets the wrong-network banner correct itself.
  *
- * `injected()` only: MetaMask, Rabby, and anything else that announces over
- * EIP-6963 are all discovered through it. WalletConnect would mean a Reown
- * project ID and a cloud dependency, which is not worth it yet.
+ * `injected()` covers MetaMask, Rabby, and anything else announcing over
+ * EIP-6963. WalletConnect would add a project ID and a cloud dependency.
  */
 export const wagmiConfig = createConfig({
   chains: [arbitrumSepolia, arbitrum],
   connectors: [injected()],
-  // Required under Next's server render: without it wagmi reads connection
-  // state during SSR and the client hydrates into a mismatch.
+  // Without this, connection state is read during SSR and hydration mismatches.
   ssr: true,
   transports: {
     [arbitrumSepolia.id]: http(env.chainId === arbitrumSepolia.id ? env.rpcUrl : undefined),

@@ -1,17 +1,11 @@
 import { clearSession, loadSession, saveSession, type StoredSession } from "./api";
 
 /**
- * The stored session, exposed as an external store for `useSyncExternalStore`.
+ * The stored session as an external store, for `useSyncExternalStore`.
  *
- * localStorage genuinely *is* an external store, so reading it in an effect
- * and mirroring it into component state was the wrong shape — it makes React
- * render once with a value it knows is stale, and React 19's
- * `set-state-in-effect` lint rule flags exactly that. Subscribing instead
- * removes the mirrored copy entirely.
- *
- * The `storage` event listener is a free bonus of doing it this way: signing
- * out in one tab now signs out in every other tab, which is the behaviour a
- * user already expects from a session.
+ * localStorage is external state, so it is subscribed to rather than
+ * mirrored into component state via an effect. The `storage` listener also
+ * means signing out in one tab signs out in the others.
  */
 
 let cache: StoredSession | null = null;
@@ -38,9 +32,8 @@ export function subscribe(onChange: () => void) {
 }
 
 /**
- * Must return a cached reference, not a fresh object: `useSyncExternalStore`
- * compares snapshots by identity, and re-parsing JSON on every call would
- * produce a new object each time and loop forever.
+ * Returns a cached reference. `useSyncExternalStore` compares snapshots by
+ * identity, so re-parsing the JSON per call would re-render without end.
  */
 export function getSnapshot(): StoredSession | null {
   if (!loaded) {

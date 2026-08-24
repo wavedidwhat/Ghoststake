@@ -12,16 +12,13 @@ import {
 } from "../format";
 
 /**
- * These functions stand between a uint256 and a number a user acts on, so
- * the cases worth testing are the ones that would still *look* fine on
- * screen while being wrong.
+ * These sit between a uint256 and a number a user acts on, so the cases
+ * covered are the ones that would render plausibly while being wrong.
  */
 
 describe("the no-debt sentinel", () => {
   it("never renders uint256 max as a health factor", () => {
-    // The contract returns type(uint256).max for a position with no lien.
-    // Rendered naively that is a 78-digit number sitting where a user
-    // expects "1.84" — the single worst thing this screen could show.
+    // The no-lien sentinel, which would otherwise print as 78 digits.
     expect(formatHealthFactor(NO_DEBT)).toBeNull();
     expect(hasDebt(NO_DEBT)).toBe(false);
     expect(healthBand(NO_DEBT)).toBe("none");
@@ -32,16 +29,14 @@ describe("the no-debt sentinel", () => {
   });
 
   it("treats one below the sentinel as real debt", () => {
-    // Guards against a sloppy `>=` comparison: this value is absurd but it
-    // is not the sentinel, so it must not be swallowed as "no debt".
+    // Catches a `>=` comparison: absurd, but not the sentinel.
     expect(hasDebt(NO_DEBT - 1n)).toBe(true);
   });
 });
 
 describe("health bands", () => {
   it("warns well before the contract's liquidation line", () => {
-    // 1.0 is where liquidation becomes possible. A user first warned at 1.0
-    // has already lost the window to act, so `danger` starts at 1.2.
+    // 1.0 is where liquidation becomes possible, so danger starts at 1.2.
     expect(healthBand(WAD)).toBe("danger");
     expect(healthBand((WAD * 119n) / 100n)).toBe("danger");
     expect(healthBand((WAD * 12n) / 10n)).toBe("caution");
@@ -70,8 +65,7 @@ describe("figures", () => {
   });
 
   it("keeps accounting parentheses intact", () => {
-    // Debt renders as "(2,400.0000)". The tail split must not lose the
-    // closing paren into the lead.
+    // Debt renders as "(2,400.0000)"; the closing paren belongs to the tail.
     const { lead, tail } = splitFigure("(2,400.0000)");
     expect(lead + tail).toBe("(2,400.0000)");
     expect(tail).toBe(".0000)");

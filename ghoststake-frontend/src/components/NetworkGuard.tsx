@@ -4,12 +4,8 @@ import { useConnection, useSwitchChain } from "wagmi";
 import { activeChain } from "@/lib/wagmi";
 
 /**
- * A banner, not a blocking modal.
- *
- * On the wrong network every contract read returns nothing, so the page
- * behind this is empty anyway — but blocking it outright would also hide the
- * one thing that explains why. The banner names the network the user is on,
- * the one they need, and switches for them.
+ * A banner rather than a blocking modal: on the wrong network the page behind
+ * it is empty anyway, and covering it would hide the explanation for why.
  */
 export function NetworkGuard() {
   const connection = useConnection();

@@ -50,9 +50,8 @@ export default function DashboardPage() {
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
   const { decimals, symbol } = position;
 
-  // Held back until the asset's decimals are known. Formatting a balance
-  // against a guessed scale renders a plausible number that is wrong by
-  // orders of magnitude, which is far worse than a skeleton for one frame.
+  // Undefined until decimals are known: formatting against a guessed scale
+  // produces a plausible number that is wrong by orders of magnitude.
   const amount = (value: bigint | undefined) =>
     value === undefined || decimals === undefined
       ? undefined
@@ -60,8 +59,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {/* Health factor leads the page and spans the row. GHO-11: "visible
-          from the first screen and never buried." */}
+      {/* Leads the page: the number a user needs before any other. */}
       <div className="lg:col-span-2">
         <HealthFactorCard value={position.healthFactor} />
       </div>
@@ -74,9 +72,8 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         <PendingFigure value={amount(position.accruedYield)} unit={symbol} tone="positive" />
       </Stat>
 
-      {/* Debt renders in accounting parentheses, as in the reference
-          dashboard's "Borrows ($2,400.00)" — it is a claim against the
-          position, not a balance it holds. */}
+      {/* Accounting parentheses: a claim against the position, not a
+          balance it holds. */}
       <Stat label="Debt" hint="principal + interest">
         {position.lien === undefined || decimals === undefined ? (
           <Skeleton />
@@ -131,9 +128,8 @@ function Disconnected() {
 }
 
 /**
- * Distinct from "connected but empty" on purpose. Before GHO-21 deploys
- * there is no contract to read, and rendering that as a row of zeroes would
- * be indistinguishable from a real position with nothing in it.
+ * Distinct from an empty position: with no contract to read, zeroes would be
+ * indistinguishable from a real position holding nothing.
  */
 function NotDeployed() {
   return (

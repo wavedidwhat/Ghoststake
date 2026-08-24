@@ -1,16 +1,11 @@
 import { splitFigure } from "@/lib/format";
 
 /**
- * A number rendered large, with the decimal tail dimmed.
+ * A figure with its decimal tail dimmed, so the value stays glanceable
+ * without rounding away digits a user may want to check.
  *
- * Both reference dashboards do this — `$107,843.82` and `31.39686` — and the
- * reason it works is that the two halves answer different questions. The
- * integer part is what you glance at; the decimals are what you check
- * against your wallet. Dimming the tail keeps the figure legible at a
- * distance without rounding away digits someone might actually need.
- *
- * Always tabular: these numbers update on a timer, and proportional digits
- * would make the layout twitch on every poll.
+ * Always tabular: these poll on a timer, and proportional digits change
+ * width as they change value, so the layout would shift on every update.
  */
 export function Figure({
   value,
