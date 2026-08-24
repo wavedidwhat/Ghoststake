@@ -33,6 +33,7 @@ function useUnderlyingAsset() {
 
   const [decimals, symbol] = token.data ?? [];
   return {
+    address: asset.data as `0x${string}` | undefined,
     decimals: decimals?.result as number | undefined,
     symbol: (symbol?.result as string | undefined) ?? "",
     isLoading: asset.isLoading || token.isLoading,
@@ -66,6 +67,11 @@ export function useVaultPosition() {
       { ...vault, functionName: "healthFactor", args },
       { ...vault, functionName: "maxBorrowable", args },
       { ...vault, functionName: "isLiquidatable", args },
+      { ...vault, functionName: "balanceOf", args },
+      // Immutable risk parameter, but read here so the health-factor preview
+      // computes with the same threshold the contract enforces rather than a
+      // constant the UI believes.
+      { ...vault, functionName: "liquidationThreshold" },
     ],
     query: {
       enabled,
@@ -75,7 +81,7 @@ export function useVaultPosition() {
     },
   });
 
-  const [collateral, yieldAccrued, lien, healthFactor, maxBorrowable, liquidatable] =
+  const [collateral, yieldAccrued, lien, healthFactor, maxBorrowable, liquidatable, shares, threshold] =
     query.data ?? [];
 
   return {
@@ -85,6 +91,7 @@ export function useVaultPosition() {
     // and an unreadable one look identical but mean opposite things.
     isError: query.isError || query.data?.some((r) => r.status === "failure"),
     refetch: query.refetch,
+    assetAddress: asset.address,
     decimals: asset.decimals,
     symbol: asset.symbol,
     collateralValue: collateral?.result as bigint | undefined,
@@ -93,5 +100,7 @@ export function useVaultPosition() {
     healthFactor: healthFactor?.result as bigint | undefined,
     maxBorrowable: maxBorrowable?.result as bigint | undefined,
     isLiquidatable: liquidatable?.result as boolean | undefined,
+    shares: shares?.result as bigint | undefined,
+    liquidationThreshold: threshold?.result as bigint | undefined,
   };
 }

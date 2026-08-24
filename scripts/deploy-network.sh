@@ -80,6 +80,7 @@ addr_of() { echo "$DEPLOY_OUT" | grep -E "^\s+$1\s+0x" | awk '{print $NF}'; }
 
 ASSET=$(addr_of "Asset"); POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault"); MARKET=$(addr_of "ParimutuelRound")
+ROUTER=$(addr_of "BorrowToPositionRtr")
 START_BLOCK=$(echo "$DEPLOY_OUT" | grep -oE "INDEXER_START_BLOCK=[0-9]+" | cut -d= -f2)
 
 if [ -z "$VAULT" ] || [ -z "$POOL" ] || [ -z "$MARKET" ]; then
@@ -100,6 +101,8 @@ NEXT_PUBLIC_CHAIN_ID=$CHAIN_ID
 NEXT_PUBLIC_RPC_URL=$RPC_URL
 NEXT_PUBLIC_VAULT_ADDRESS=$VAULT
 NEXT_PUBLIC_POOL_ADDRESS=$POOL
+NEXT_PUBLIC_MARKET_ADDRESS=$MARKET
+NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
 ENV
 
 cat >"$ROOT/ghoststake-backend/.env.local" <<ENV
@@ -121,6 +124,7 @@ cat <<SUMMARY
   BorrowLiquidityPool   $POOL
   CollateralVault       $VAULT
   ParimutuelRound       $MARKET
+  BorrowToPositionRtr   $ROUTER
 
   $EXPLORER/address/$VAULT
 
