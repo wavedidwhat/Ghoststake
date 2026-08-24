@@ -7,13 +7,11 @@ import { contractsConfigured, env } from "@/lib/env";
 import { activeChain } from "@/lib/wagmi";
 
 /**
- * The underlying asset's decimals and symbol, read from the chain.
+ * Decimals and symbol of the vault's underlying asset, read rather than
+ * assumed — USDC is 6, and formatting it as 18 is wrong by 10^12.
  *
- * Never assumed. USDC is 6 decimals, not 18, so a hardcoded 18 renders every
- * balance wrong by a factor of 10^12 — and wrong in the flattering
- * direction, which is how it survives a glance. The vault's own `decimals()`
- * is no help either: it is an ERC-4626, so that returns *share* decimals
- * (asset + a 6-place offset), not the asset's.
+ * Note this cannot use the vault's own `decimals()`: it is an ERC-4626, so
+ * that returns share decimals (the asset's plus a 6-place offset).
  */
 function useUnderlyingAsset() {
   const asset = useReadContract({
@@ -29,8 +27,7 @@ function useUnderlyingAsset() {
       { address: asset.data, abi: erc20Abi, functionName: "decimals", chainId: activeChain.id },
       { address: asset.data, abi: erc20Abi, functionName: "symbol", chainId: activeChain.id },
     ],
-    // The asset address and its metadata are immutable for a deployment, so
-    // this is fetched once and never revalidated.
+    // Immutable for a deployment, so fetched once and never revalidated.
     query: { enabled: Boolean(asset.data), staleTime: Infinity },
   });
 
@@ -43,14 +40,11 @@ function useUnderlyingAsset() {
 }
 
 /**
- * The four numbers GHO-11 asks for, plus the two that give them context.
+ * A user's vault position.
  *
- * Batched through `useReadContracts` rather than six separate hooks: the
- * calls are multicalled into one RPC round trip, so every figure on screen
- * comes from the *same block*. Read separately they would land at different
- * heights, and a health factor computed at one block against a lien read at
- * another is exactly the kind of quietly-wrong number this screen exists to
- * prevent.
+ * Batched into one multicall so every figure resolves at the same block
+ * height. Separate hooks would land at different heights, making a health
+ * factor inconsistent with the lien shown beside it.
  */
 export function useVaultPosition() {
   const { address } = useConnection();
@@ -75,9 +69,8 @@ export function useVaultPosition() {
     ],
     query: {
       enabled,
-      // Arbitrum blocks are sub-second, but interest accrues per second and
-      // none of this is worth a request per block. 12s keeps a health factor
-      // near the line visibly moving without hammering a public RPC.
+      // Arbitrum blocks are sub-second; interest accrues per second. 12s
+      // keeps a health factor near the line moving without polling per block.
       refetchInterval: 12_000,
     },
   });
@@ -88,8 +81,8 @@ export function useVaultPosition() {
   return {
     enabled,
     isLoading: query.isLoading || asset.isLoading,
-    // A failed read must never render as zero: zero collateral and unknown
-    // collateral look identical on screen and mean opposite things.
+    // Surfaced so callers render an error rather than zero: an empty position
+    // and an unreadable one look identical but mean opposite things.
     isError: query.isError || query.data?.some((r) => r.status === "failure"),
     refetch: query.refetch,
     decimals: asset.decimals,

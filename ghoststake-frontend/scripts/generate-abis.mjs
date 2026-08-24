@@ -8,9 +8,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const contracts = path.resolve(here, "../../ghoststake-contracts");
 const target = path.resolve(here, "../src/lib/abis.ts");
 
-// Only the reads GHO-11 displays. A full ABI would be ~40 entries of write
-// functions and events the frontend has no use for yet, and every one of
-// them is surface area for a bundle and for confusion about what is wired.
+// Only the functions the UI reads. A full ABI carries write functions and
+// events nothing calls yet, which bloats the bundle and obscures what is
+// actually wired up.
 const WANTED = {
   CollateralVault: [
     "asset", "decimals", "balanceOf", "convertToAssets",

@@ -3,16 +3,10 @@ import { env } from "./env";
 /**
  * Client for the Go API's SIWE handshake.
  *
- * Note what this file does NOT do: compose the message. The server renders
- * the full SIWE text and keeps its own copy, and verifies against that copy
- * rather than against anything we send back. So the wallet signs the string
- * verbatim and we never parse or rebuild it — if the frontend composed its
- * own message, the two could drift and every signature would fail for
- * reasons invisible from either side.
- *
- * Likewise verify() sends only the nonce and the signature. The address is
- * looked up server-side from the nonce, which is what stops a client from
- * nominating an address it does not control.
+ * The server renders the SIWE message and verifies against its own stored
+ * copy, so this file never composes or parses one — the wallet signs the
+ * string verbatim. `verify` sends only the nonce and signature; the address
+ * is resolved server-side from the nonce, so a client cannot nominate one.
  */
 
 export class ApiError extends Error {
@@ -33,9 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
   } catch {
-    // A network-level failure is almost always the API not running locally or
-    // the origin missing from CORS_ORIGINS. Say so, rather than surfacing
-    // "Failed to fetch" and leaving the developer to guess.
+    // Names the two likely causes; the browser only reports "Failed to fetch".
     throw new ApiError(
       `Cannot reach the API at ${env.apiUrl}. Is it running, and is this origin in CORS_ORIGINS?`,
       0,
@@ -100,14 +92,9 @@ export interface StoredSession {
 }
 
 /**
- * The JWT lives in localStorage, which means an XSS bug can read it. That is
- * a real and known trade-off, taken because the alternative — an HttpOnly
- * cookie — needs `AllowCredentials` on the API's CORS config plus CSRF
- * protection, and the backend is currently set up for bearer tokens.
- *
- * What limits the blast radius: this token authenticates reads of profile
- * data only. It cannot move funds. Every value-bearing action is a wallet
- * signature against a contract, which this token has no part in.
+ * The JWT is in localStorage, so an XSS bug can read it. Accepted because the
+ * token only authenticates profile reads — moving funds requires a wallet
+ * signature it plays no part in. Revisit if the API gains write endpoints.
  */
 export function loadSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
@@ -115,8 +102,8 @@ export function loadSession(): StoredSession | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as StoredSession;
-    // Expired tokens are dropped here rather than being sent and 401'd, so a
-    // returning user sees "connect" instead of a flash of a broken session.
+    // Dropped here rather than sent and 401'd, so a returning user sees the
+    // signed-out state instead of a session that breaks on first use.
     if (new Date(session.expiresAt).getTime() <= Date.now()) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;

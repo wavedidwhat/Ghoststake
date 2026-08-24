@@ -6,17 +6,15 @@ import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi";
 
 export function Providers({ children }: { children: ReactNode }) {
-  // Created in state, not at module scope: a module-level client is shared
-  // across every request on the server, which leaks one user's cached reads
-  // into another's render.
+  // In state, not at module scope: a module-level client is shared across
+  // server requests, leaking one user's cached reads into another's render.
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Chain reads go stale on their own schedule (a block), so
-            // refetching on every window focus is noise. The individual
-            // hooks set their own polling interval.
+            // Chain reads go stale per block, not per focus event; the hooks
+            // that need freshness set their own interval.
             refetchOnWindowFocus: false,
             retry: 1,
           },

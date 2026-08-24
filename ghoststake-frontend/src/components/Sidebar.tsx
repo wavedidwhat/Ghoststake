@@ -4,10 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * The left rail from the Stakent reference. Sections that do not exist yet
- * are rendered as disabled with the issue that will build them, rather than
- * omitted — it keeps the shape of the finished app visible during a demo,
- * and a dead link is worse than a labelled one.
+ * Primary navigation. Routes that do not exist yet are listed as disabled
+ * with the issue that builds them, so the shape of the app stays visible
+ * without shipping links that lead nowhere.
  */
 const NAV = [
   { href: "/", label: "Dashboard", ready: true },

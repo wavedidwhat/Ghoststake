@@ -1,19 +1,6 @@
 import { Figure } from "./Figure";
 import { formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
 
-/**
- * The North Star number: "you can always see what's still yours."
- *
- * This component escalates. At rest it is one stat among several; as the
- * position approaches the liquidation line it takes on colour, a border, and
- * a sentence explaining what happens next. That progression is the whole
- * design — a health factor that looks identical at 3.0 and at 1.05 is
- * decoration, because the number only matters when it is small.
- *
- * The bands are UI-side and start well above the contract's 1.0 line. See
- * `healthBand` for why.
- */
-
 const COPY: Record<HealthBand, { label: string; detail: string }> = {
   none: {
     label: "No debt",
@@ -34,17 +21,20 @@ const COPY: Record<HealthBand, { label: string; detail: string }> = {
   },
 };
 
-const STYLES: Record<HealthBand, { border: string; text: string; chip: string }> = {
-  none: { border: "border-border", text: "text-ink-muted", chip: "bg-raised text-ink-muted" },
-  safe: { border: "border-border", text: "text-positive", chip: "bg-positive-soft text-positive" },
-  caution: {
-    border: "border-warning/40",
-    text: "text-warning",
-    chip: "bg-warning-soft text-warning",
-  },
-  danger: { border: "border-negative/60", text: "text-negative", chip: "bg-negative-soft text-negative" },
+const STYLES: Record<HealthBand, { border: string; chip: string }> = {
+  none: { border: "border-border", chip: "bg-raised text-ink-muted" },
+  safe: { border: "border-border", chip: "bg-positive-soft text-positive" },
+  caution: { border: "border-warning/40", chip: "bg-warning-soft text-warning" },
+  danger: { border: "border-negative/60", chip: "bg-negative-soft text-negative" },
 };
 
+/**
+ * Health factor, styled by band rather than at a constant volume: a card that
+ * looks the same at 3.0 and at 1.05 conveys nothing, since the number only
+ * matters when it is small.
+ *
+ * Bands come from `healthBand`, which warns above the contract's 1.0 line.
+ */
 export function HealthFactorCard({ value }: { value: bigint | undefined }) {
   if (value === undefined) {
     return (
@@ -74,14 +64,15 @@ export function HealthFactorCard({ value }: { value: bigint | undefined }) {
       </div>
 
       <div className="mt-4 flex items-end gap-3">
-        {/* No lien reads as an em dash, never as the uint256 max sentinel
-            the contract returns. See NO_DEBT in lib/format. */}
+        {/* null means no lien, not a formatting failure. See NO_DEBT. */}
         {formatted === null ? (
           <span className="text-figure font-medium text-ink-faint">—</span>
         ) : (
-          <Figure value={formatted} size="display" tone={
-            band === "danger" ? "negative" : band === "caution" ? "warning" : "positive"
-          } />
+          <Figure
+            value={formatted}
+            size="display"
+            tone={band === "danger" ? "negative" : band === "caution" ? "warning" : "positive"}
+          />
         )}
       </div>
 
@@ -93,14 +84,13 @@ export function HealthFactorCard({ value }: { value: bigint | undefined }) {
 }
 
 /**
- * A scale, not a progress bar. The marker sits against a fixed 1.0
- * liquidation line so the distance to it is legible at a glance — a bar that
- * simply fills tells you a value without telling you what it is near.
+ * Position against a fixed 1.00 liquidation line, so the distance to it is
+ * readable. A bar that only fills states a value without placing it.
  */
 function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
   const asNumber = Number(value) / 1e18;
-  // Clamped at 3.0: past that the exact figure stops mattering and the
-  // marker would otherwise compress the region that does.
+  // Clamped at 3.0. Beyond it the exact figure stops mattering, and letting
+  // the scale grow would compress the region near 1.0 that does.
   const position = Math.min(asNumber / 3, 1) * 100;
   const fill = band === "danger" ? "bg-negative" : band === "caution" ? "bg-warning" : "bg-positive";
 
@@ -111,7 +101,7 @@ function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
           className={`absolute inset-y-0 left-0 rounded-full ${fill}`}
           style={{ width: `${position}%` }}
         />
-        {/* The 1.0 liquidation line, at one third of a 0–3 scale. */}
+        {/* 1.00, at one third of the 0–3 range. */}
         <div className="absolute inset-y-[-4px] left-1/3 w-px bg-border-strong" />
       </div>
       <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
