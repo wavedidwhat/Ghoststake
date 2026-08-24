@@ -3,6 +3,7 @@ import {
   NO_DEBT,
   WAD,
   formatAmount,
+  formatApr,
   formatHealthFactor,
   formatPercent,
   hasDebt,
@@ -148,5 +149,19 @@ describe("audit regressions", () => {
 describe("addresses", () => {
   it("shortens without dropping the checksum-bearing ends", () => {
     expect(shortenAddress("0x1234567890abcdef1234567890abcdef12345678")).toBe("0x1234…5678");
+  });
+});
+
+describe("apr", () => {
+  it("annualises a per-second rate", () => {
+    // The pool stores 5% APR as a per-second WAD; the UI must show 5%, not
+    // the per-second figure, and not a compounded APY the contract never
+    // charges.
+    const fivePercent = (5n * WAD) / 100n / (365n * 24n * 60n * 60n);
+    expect(formatApr(fivePercent)).toBe("5.00%");
+  });
+
+  it("shows a zero rate as zero, not blank", () => {
+    expect(formatApr(0n)).toBe("0.00%");
   });
 });

@@ -123,10 +123,16 @@ function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
         {/* 1.00, at one third of the 0–3 range. */}
         <div className="absolute inset-y-[-4px] left-1/3 w-px bg-border-strong" />
       </div>
-      <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
-        <span>0</span>
-        <span className="ml-[-1rem]">1.00 liquidation</span>
-        <span>3.00+</span>
+      {/* The middle label is positioned against the tick, not spaced evenly.
+          Under `justify-between` it centred at 50% while the line it names
+          sits at 33% — on a risk scale, a marker pointing at the wrong value
+          is worse than no marker. */}
+      <div className="relative mt-2 h-4 text-[11px] text-ink-faint">
+        <span className="absolute left-0">0</span>
+        <span className="absolute left-1/3 -translate-x-1/2 whitespace-nowrap">
+          1.00 liquidation
+        </span>
+        <span className="absolute right-0">3.00+</span>
       </div>
     </div>
   );

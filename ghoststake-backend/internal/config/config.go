@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +77,11 @@ func Load() (Config, error) {
 		AppDomain:   env("APP_DOMAIN", "localhost:3000"),
 		AppURI:      env("APP_URI", "http://localhost:3000"),
 		ChainID:     envInt64("CHAIN_ID", 421614),
-		RPCURL:      env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc"),
+		// RPC_URL is the name that survives; ARBITRUM_RPC_URL is kept as a
+		// fallback because the deployed .env files already use it. The chain
+		// is no longer necessarily Arbitrum — chain.Dial's id check is what
+		// actually guarantees we are where we think we are.
+		RPCURL:      env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
 		CORSOrigins: envList("CORS_ORIGINS", "http://localhost:3000"),
 		Indexer: IndexerConfig{
 			Enabled:       envBool("INDEXER_ENABLED", false),
@@ -107,6 +112,21 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	// Outside development these must be set explicitly. The defaults point at
+	// localhost, and a production deploy that silently keeps them binds every
+	// SIWE message to the wrong origin — which the comment on these fields
+	// already says is phishable, while nothing enforced it.
+	if !c.IsDev() {
+		if c.AppDomain == "localhost:3000" || c.AppURI == "http://localhost:3000" {
+			return Config{}, fmt.Errorf("APP_DOMAIN and APP_URI must be set when APP_ENV=%s", c.Env)
+		}
+		for _, origin := range c.CORSOrigins {
+			if strings.HasPrefix(origin, "http://localhost") {
+				return Config{}, fmt.Errorf("CORS_ORIGINS must be set when APP_ENV=%s, got %q", c.Env, origin)
+			}
+		}
+	}
+
 	// Checked at load rather than at first poll: an indexer that starts,
 	// looks healthy and silently indexes nothing is worse than a refusal to
 	// boot.
@@ -114,11 +134,35 @@ func Load() (Config, error) {
 		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" {
 			return Config{}, fmt.Errorf("VAULT_ADDRESS and POOL_ADDRESS are required when INDEXER_ENABLED=true")
 		}
+		// Validated here because nothing downstream will. common.HexToAddress
+		// does not return an error — it left-pads or zero-fills whatever it is
+		// given, so a typo becomes an address with no code and the indexer
+		// polls it forever, reporting healthy and writing nothing.
+		for name, addr := range map[string]string{
+			"VAULT_ADDRESS": c.Indexer.VaultAddress,
+			"POOL_ADDRESS":  c.Indexer.PoolAddress,
+		} {
+			if err := validateAddress(name, addr); err != nil {
+				return Config{}, err
+			}
+		}
 		if c.Indexer.StartBlock == 0 {
 			return Config{}, fmt.Errorf("INDEXER_START_BLOCK is required when INDEXER_ENABLED=true")
 		}
 	}
 	return c, nil
+}
+
+var addressRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+
+func validateAddress(name, value string) error {
+	if !addressRe.MatchString(value) {
+		return fmt.Errorf("%s is not a valid address: %q", name, value)
+	}
+	if strings.EqualFold(value, "0x0000000000000000000000000000000000000000") {
+		return fmt.Errorf("%s is the zero address", name)
+	}
+	return nil
 }
 
 func envBool(k string, def bool) bool {

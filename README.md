@@ -13,6 +13,25 @@ setup, and deploys independently.
 
 ## Getting started
 
+The fastest path to a running system is the local stack: it starts anvil,
+deploys every contract, seeds real positions and a live round, and writes the
+env files the frontend and backend read.
+
+```bash
+./scripts/local-stack.sh
+
+cd ghoststake-frontend && pnpm install && pnpm dev     # :3000
+cd ghoststake-backend  && make run-local               # :8080, indexer on
+```
+
+anvil holds state in memory, so restarting it resets the world and the
+addresses change. Re-run the script rather than repairing a local chain.
+
+To see a funded position, import the anvil key the script prints and add a
+network on chain `31337` at `http://127.0.0.1:8545`.
+
+Per package, without the local stack:
+
 ```bash
 # frontend
 cd ghoststake-frontend && pnpm install && pnpm dev     # :3000
@@ -22,8 +41,7 @@ cd ghoststake-backend && cp .env.example .env          # set JWT_SECRET
 make up                                                 # :8080
 
 # contracts
-cd ghoststake-contracts && cp .env.example .env        # only needed for deploy scripts
-forge test
+cd ghoststake-contracts && forge test
 ```
 
 Each package has its own README with details.
