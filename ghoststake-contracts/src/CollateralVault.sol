@@ -148,6 +148,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     event PositionTransferred(address indexed from, address indexed to, uint256 principal, uint256 settledYield);
     event LienSettledAtExit(address indexed user, uint256 lienAmount, uint256 collateralReturned);
     event Borrowed(address indexed user, uint256 amount, uint256 lienAfter);
+    event BorrowDelegationApproved(address indexed user, address indexed delegate, uint256 amount);
     event Repaid(address indexed payer, address indexed user, uint256 amount, uint256 lienAfter);
     event Liquidated(
         address indexed liquidator,
@@ -164,11 +165,13 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     error CollateralBelowLien(address user, uint256 collateral, uint256 lien);
     error NoLienSource();
     error ExceedsMaxLTV(address user, uint256 requestedDebt, uint256 maxDebt);
+    error InsufficientBorrowAllowance(address user, address delegate, uint256 allowed, uint256 requested);
     error NothingToRepay(address user);
     error PositionNotLiquidatable(address user, uint256 healthFactor);
     error ExceedsCloseFactor(uint256 requested, uint256 maxRepayable);
     error InvalidRiskParameters();
     error ZeroAmount();
+    error ZeroAddress();
 
     constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_, ILienSource lienSource_, RiskParams memory risk)
         ERC20("GhostStake Collateral Shares", "gsCOL")
@@ -275,6 +278,21 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         return ceiling > lien ? ceiling - lien : 0;
     }
 
+    /// @notice How much a delegate may borrow against your collateral.
+    ///
+    /// Debt is not something a contract should be able to open on your behalf
+    /// merely because it is whitelisted. This is the borrower's own opt-in:
+    /// bounded, and revoked by setting it back to zero.
+    mapping(address user => mapping(address delegate => uint256)) public borrowAllowance;
+
+    /// @notice Let `delegate` borrow up to `amount` against your collateral.
+    /// `type(uint256).max` is a standing approval and is never decremented.
+    function approveBorrowDelegate(address delegate, uint256 amount) external {
+        if (delegate == address(0)) revert ZeroAddress();
+        borrowAllowance[msg.sender][delegate] = amount;
+        emit BorrowDelegationApproved(msg.sender, delegate, amount);
+    }
+
     /// @notice Draw against your collateral. The collateral stays deposited
     /// and keeps earning; the funds come from the shared pool.
     ///
@@ -284,23 +302,53 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// is the whole point: originating at the liquidation threshold would
     /// mean one block of interest makes you liquidatable.
     function borrow(uint256 amount) external nonReentrant {
+        _borrow(msg.sender, amount, msg.sender);
+    }
+
+    /// @notice Draw against `onBehalfOf`'s collateral, paying the proceeds to
+    /// the caller.
+    ///
+    /// This is what lets a router move borrowed funds somewhere without them
+    /// passing through the borrower's wallet. Two things make it safe to
+    /// expose: the debt lands on `onBehalfOf` and the LTV ceiling is checked
+    /// against *their* position, and the caller must hold an allowance that
+    /// `onBehalfOf` granted directly.
+    ///
+    /// The proceeds go to `msg.sender` rather than a nominated address on
+    /// purpose. A recipient parameter would let a delegate holding a bounded
+    /// credit line send the funds anywhere, which is not a bounded credit line.
+    function borrowFor(address onBehalfOf, uint256 amount) external nonReentrant {
+        uint256 allowed = borrowAllowance[onBehalfOf][msg.sender];
+        if (allowed < amount) {
+            revert InsufficientBorrowAllowance(onBehalfOf, msg.sender, allowed, amount);
+        }
+        if (allowed != type(uint256).max) {
+            borrowAllowance[onBehalfOf][msg.sender] = allowed - amount;
+        }
+        _borrow(onBehalfOf, amount, msg.sender);
+    }
+
+    /// @dev The single borrow path. `borrow` and `borrowFor` differ only in
+    /// who owes and who is paid; keeping every check in one place is what
+    /// stops the delegated route drifting away from the direct one.
+    function _borrow(address user, uint256 amount, address recipient) private {
         if (address(lienSource) == address(0)) revert NoLienSource();
         if (amount == 0) revert ZeroAmount();
 
         // Bank yield first: it feeds collateralValue, so borrowing capacity
         // should reflect everything earned up to this instant.
-        _settle(msg.sender);
+        _settle(user);
         lienSource.accrue();
 
-        uint256 newDebt = lienOf(msg.sender) + amount;
-        uint256 maxDebt = Math.mulDiv(collateralValue(msg.sender), maxLTV, WAD);
-        if (newDebt > maxDebt) revert ExceedsMaxLTV(msg.sender, newDebt, maxDebt);
+        uint256 newDebt = lienOf(user) + amount;
+        uint256 maxDebt = Math.mulDiv(collateralValue(user), maxLTV, WAD);
+        if (newDebt > maxDebt) revert ExceedsMaxLTV(user, newDebt, maxDebt);
 
         // The pool pays the module, which is this contract; forward it on.
-        lienSource.borrow(amount, msg.sender);
-        SafeERC20.safeTransfer(IERC20(asset()), msg.sender, amount);
+        lienSource.borrow(amount, user);
+        SafeERC20.safeTransfer(IERC20(asset()), recipient, amount);
 
-        emit Borrowed(msg.sender, amount, newDebt);
+        emit Borrowed(user, amount, newDebt);
     }
 
     /// @notice Repay someone's lien. Open to any payer — clearing another
