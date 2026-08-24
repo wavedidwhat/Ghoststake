@@ -17,8 +17,30 @@ defaults:
 
 jobs:
   build:
+    # Name is pinned: it is a required status check, so renaming it would
+    # leave every PR waiting on a check that never reports.
     name: lint, test, build
     runs-on: ubuntu-latest
+
+    # The store's tests need real Postgres — the unique constraint and
+    # NUMERIC(78,0) are the things under test, and neither exists in a fake.
+    # A service container rather than the VPS: CI must not depend on a
+    # personal box being up.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ghoststake
+          POSTGRES_PASSWORD: ghoststake
+          POSTGRES_DB: ghoststake_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ghoststake -d ghoststake_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -27,11 +49,19 @@ jobs:
           go-version-file: ghoststake-backend/go.mod
           cache-dependency-path: ghoststake-backend/go.sum
 
-      - name: Lint (vet + gofmt)
+      # `make lint` depends on check-go-version, which asserts the
+      # Dockerfile's Go matches go.mod's. Nothing here builds the image, and
+      # RDK has no CI/CD — so without this, a mismatch stays invisible until
+      # a human runs `rdk up`.
+      - name: Lint (go version, vet, gofmt)
         run: make lint
 
       - name: Test
-        run: make test
+        run: make test-integration
+        env:
+          # Without this the store's tests skip. Set here so a skip in CI
+          # means something is broken, not that nobody wired the database up.
+          TEST_DATABASE_URL: postgres://ghoststake:ghoststake@localhost:5432/ghoststake_test?sslmode=disable
 
       - name: Build
         run: make build

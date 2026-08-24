@@ -35,6 +35,35 @@ type Config struct {
 	RPCURL  string
 
 	CORSOrigins []string
+
+	Indexer IndexerConfig
+}
+
+// IndexerConfig configures the event indexer. Disabled by default: the
+// contracts are not deployed yet, and an indexer pointed at an address with
+// no code polls forever finding nothing.
+type IndexerConfig struct {
+	Enabled bool
+
+	VaultAddress string
+	PoolAddress  string
+
+	// StartBlock should be the deployment block. Scanning from genesis on a
+	// public RPC is slow and returns nothing for the whole range.
+	StartBlock uint64
+
+	// Confirmations is how far behind the head to stay before writing.
+	//
+	// Arbitrum blocks are final once posted to L1, but the sequencer can
+	// reorder before that, so this is not zero. It is also not an L1-sized
+	// number, because the risk being covered is sequencer reordering rather
+	// than proof-of-work depth.
+	Confirmations uint64
+
+	// BatchSize bounds one eth_getLogs range; public RPCs reject wide ones.
+	BatchSize uint64
+
+	PollInterval time.Duration
 }
 
 func Load() (Config, error) {
@@ -49,6 +78,15 @@ func Load() (Config, error) {
 		ChainID:     envInt64("CHAIN_ID", 421614),
 		RPCURL:      env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc"),
 		CORSOrigins: envList("CORS_ORIGINS", "http://localhost:3000"),
+		Indexer: IndexerConfig{
+			Enabled:       envBool("INDEXER_ENABLED", false),
+			VaultAddress:  env("VAULT_ADDRESS", ""),
+			PoolAddress:   env("POOL_ADDRESS", ""),
+			StartBlock:    uint64(envInt64("INDEXER_START_BLOCK", 0)),
+			Confirmations: uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
+			BatchSize:     uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
+			PollInterval:  envDuration("INDEXER_POLL_INTERVAL", 12*time.Second),
+		},
 	}
 
 	secret := env("JWT_SECRET", "")
@@ -68,7 +106,31 @@ func Load() (Config, error) {
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
 	}
+
+	// Checked at load rather than at first poll: an indexer that starts,
+	// looks healthy and silently indexes nothing is worse than a refusal to
+	// boot.
+	if c.Indexer.Enabled {
+		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" {
+			return Config{}, fmt.Errorf("VAULT_ADDRESS and POOL_ADDRESS are required when INDEXER_ENABLED=true")
+		}
+		if c.Indexer.StartBlock == 0 {
+			return Config{}, fmt.Errorf("INDEXER_START_BLOCK is required when INDEXER_ENABLED=true")
+		}
+	}
 	return c, nil
+}
+
+func envBool(k string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return parsed
 }
 
 func (c Config) IsDev() bool { return c.Env == "development" }

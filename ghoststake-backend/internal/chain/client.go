@@ -11,6 +11,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -74,4 +76,25 @@ func (c *Client) BalanceOf(ctx context.Context, address string) (*big.Int, error
 		return nil, fmt.Errorf("balance of %s: %w", address, err)
 	}
 	return bal, nil
+}
+
+// FilterLogs and HeaderByNumber back the indexer.
+//
+// No internal timeout on either: a log range can legitimately take a while on
+// a public RPC, and the caller's context already bounds it. Wrapping them in
+// a fixed deadline here would cancel healthy backfills.
+func (c *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
+	logs, err := c.eth.FilterLogs(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("filter logs: %w", err)
+	}
+	return logs, nil
+}
+
+func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	h, err := c.eth.HeaderByNumber(ctx, number)
+	if err != nil {
+		return nil, fmt.Errorf("header by number: %w", err)
+	}
+	return h, nil
 }
