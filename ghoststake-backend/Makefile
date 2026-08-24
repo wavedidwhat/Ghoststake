@@ -1,4 +1,4 @@
-.PHONY: help run build test test-integration test-remote gen-abis lint tidy up down logs migrate-status
+.PHONY: help run build test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -23,9 +23,19 @@ test-remote: ## Bring a Postgres up on the VPS via rdk, tunnel it, run the full 
 gen-abis: ## Re-extract contract event ABIs (after `forge build` in ghoststake-contracts)
 	go run ./cmd/genabi
 
-lint: ## Vet + formatting check
+lint: check-go-version ## Vet + formatting check
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || (echo "unformatted files:"; gofmt -l .; exit 1)
+
+check-go-version: ## Assert the Dockerfile's Go matches go.mod's
+	@mod=$$(awk '/^go /{print $$2}' go.mod | cut -d. -f1,2); \
+	img=$$(awk -F= '/^ARG GO_VERSION=/{print $$2}' Dockerfile); \
+	if [ "$$mod" != "$$img" ]; then \
+		echo "go.mod requires Go $$mod but the Dockerfile builds on $$img."; \
+		echo "The image build would silently download a toolchain instead of"; \
+		echo "using its pinned base. Update ARG GO_VERSION in the Dockerfile."; \
+		exit 1; \
+	fi
 
 tidy: ## Tidy modules
 	go mod tidy

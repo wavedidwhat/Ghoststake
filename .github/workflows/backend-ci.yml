@@ -49,7 +49,11 @@ jobs:
           go-version-file: ghoststake-backend/go.mod
           cache-dependency-path: ghoststake-backend/go.sum
 
-      - name: Lint (vet + gofmt)
+      # `make lint` depends on check-go-version, which asserts the
+      # Dockerfile's Go matches go.mod's. Nothing here builds the image, and
+      # RDK has no CI/CD — so without this, a mismatch stays invisible until
+      # a human runs `rdk up`.
+      - name: Lint (go version, vet, gofmt)
         run: make lint
 
       - name: Test
