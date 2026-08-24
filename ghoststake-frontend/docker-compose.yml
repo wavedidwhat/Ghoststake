@@ -4,13 +4,25 @@ services:
       context: .
       # Build args, not runtime environment: Next inlines NEXT_PUBLIC_* into
       # the client bundle during `next build`, so a value supplied at run time
-      # never reaches the browser. Change an address, rebuild the image.
+      # never reaches the browser.
+      #
+      # The deployed addresses are the DEFAULTS here rather than living only
+      # in a gitignored .env. RDK builds from a merged compose file in a
+      # temporary directory, so compose never finds this project's .env and
+      # every value falls back — which shipped a bundle pointing at Arbitrum
+      # Sepolia with no addresses at all. Anything that must survive a deploy
+      # from the VS Code extension has to be in this file.
+      #
+      # None of it is secret: it is all inlined into a public client bundle.
+      # After deploying new contracts, update these and rebuild.
       args:
-        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-421614}
-        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-}
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ghoststake.dev.wavedidwhat.com}
-        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-}
-        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-}
+        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0x4697ce4c2436750b89543405527c10bfaba8f8d0}
+        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0xd5655ac906e54b2fe5175126aee0c96dbb5f1dc4}
+        NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0xd95fc2f28a74087b81d6c915c639c864f3d55c63}
+        NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0xd811bb51427e7d6f399dcc0587707ddd588a7735}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.
