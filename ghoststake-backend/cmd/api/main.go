@@ -12,6 +12,7 @@ import (
 	"github.com/wavedidwhat/ghoststake/internal/chain"
 	"github.com/wavedidwhat/ghoststake/internal/config"
 	"github.com/wavedidwhat/ghoststake/internal/httpx"
+	"github.com/wavedidwhat/ghoststake/internal/indexer"
 	"github.com/wavedidwhat/ghoststake/internal/store"
 )
 
@@ -55,6 +56,10 @@ func run() error {
 
 	go sweepNonces(ctx, st)
 
+	if err := startIndexer(ctx, cfg, st, ch); err != nil {
+		return err
+	}
+
 	srv := httpx.NewServer(cfg, st, ch)
 
 	errCh := make(chan error, 1)
@@ -92,6 +97,40 @@ func setupLogger(cfg config.Config) {
 		h = slog.NewJSONHandler(os.Stdout, opts)
 	}
 	slog.SetDefault(slog.New(h))
+}
+
+// startIndexer wires the event indexer if it is enabled.
+//
+// It runs in-process rather than as a second binary. One deployable, one
+// database connection pool, one set of migrations — and the indexer is a
+// polling loop with no inbound surface, so it costs the API nothing to
+// carry. Splitting it out is a scaling decision to take when there is
+// something to scale.
+func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *chain.Client) error {
+	if !cfg.Indexer.Enabled {
+		slog.Info("indexer disabled", "hint", "set INDEXER_ENABLED=true once contracts are deployed")
+		return nil
+	}
+
+	ix, err := indexer.New(ch, st, indexer.Config{
+		ChainID:       cfg.ChainID,
+		VaultAddress:  cfg.Indexer.VaultAddress,
+		PoolAddress:   cfg.Indexer.PoolAddress,
+		StartBlock:    cfg.Indexer.StartBlock,
+		Confirmations: cfg.Indexer.Confirmations,
+		BatchSize:     cfg.Indexer.BatchSize,
+		PollInterval:  cfg.Indexer.PollInterval,
+	})
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		if err := ix.Run(ctx); err != nil {
+			slog.Error("indexer stopped", "err", err)
+		}
+	}()
+	return nil
 }
 
 // sweepNonces periodically clears spent and expired login challenges so the
