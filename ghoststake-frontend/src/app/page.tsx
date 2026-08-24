@@ -61,7 +61,10 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
     <div className="grid gap-4 lg:grid-cols-3">
       {/* Leads the page: the number a user needs before any other. */}
       <div className="lg:col-span-2">
-        <HealthFactorCard value={position.healthFactor} />
+        <HealthFactorCard
+          value={position.healthFactor}
+          liquidatable={position.isLiquidatable}
+        />
       </div>
 
       <Stat label="Collateral value" hint="capped at redeemable">

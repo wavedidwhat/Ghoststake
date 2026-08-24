@@ -17,12 +17,23 @@ function optionalAddress(value: string | undefined): Address | undefined {
   return value as Address;
 }
 
+function requiredChainId(value: string | undefined): number {
+  if (!value) return 421614;
+  const parsed = Number(value);
+  // A non-numeric value would coerce to NaN and silently select the default
+  // chain, so the app would talk to a network nobody chose.
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid NEXT_PUBLIC_CHAIN_ID: ${value}`);
+  }
+  return parsed;
+}
+
 export const env = {
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080",
 
   /** Must match the backend's CHAIN_ID: it is bound into the SIWE message,
    *  so a mismatch means signing for a different chain. 421614 = Arb Sepolia. */
-  chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 421614),
+  chainId: requiredChainId(process.env.NEXT_PUBLIC_CHAIN_ID),
 
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
 

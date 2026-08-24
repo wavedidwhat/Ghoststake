@@ -96,19 +96,39 @@ export interface StoredSession {
  * token only authenticates profile reads — moving funds requires a wallet
  * signature it plays no part in. Revisit if the API gains write endpoints.
  */
+function isStoredSession(value: unknown): value is StoredSession {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.token === "string" &&
+    typeof candidate.address === "string" &&
+    typeof candidate.expiresAt === "string" &&
+    !Number.isNaN(Date.parse(candidate.expiresAt))
+  );
+}
+
 export function loadSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const session = JSON.parse(raw) as StoredSession;
-    // Dropped here rather than sent and 401'd, so a returning user sees the
-    // signed-out state instead of a session that breaks on first use.
-    if (new Date(session.expiresAt).getTime() <= Date.now()) {
+
+    // Validated, not just cast. localStorage is writable by the user and by
+    // any extension, so a malformed entry is reachable without an exploit —
+    // and an unchecked cast turns one into a TypeError during render.
+    const parsed: unknown = JSON.parse(raw);
+    if (!isStoredSession(parsed)) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    return session;
+
+    // Dropped here rather than sent and 401'd, so a returning user sees the
+    // signed-out state instead of a session that breaks on first use.
+    if (Date.parse(parsed.expiresAt) <= Date.now()) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

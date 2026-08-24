@@ -1,5 +1,3 @@
-import { formatUnits } from "viem";
-
 export const WAD = 10n ** 18n;
 
 /**
@@ -9,8 +7,36 @@ export const WAD = 10n ** 18n;
  */
 export const NO_DEBT = (1n << 256n) - 1n;
 
+/**
+ * Above this, a health factor stops carrying information — the position is
+ * simply unencumbered — and the digits become noise in display type.
+ */
+const HEALTH_DISPLAY_CEILING = 999n * WAD;
+
 export function hasDebt(healthFactor: bigint): boolean {
   return healthFactor !== NO_DEBT;
+}
+
+/**
+ * Fixed-point render of a scaled integer, done in bigint throughout.
+ *
+ * Going via `Number` loses precision past ~17 significant digits, and it
+ * loses it silently: a balance would print trailing zeros that look exact
+ * and are fabricated. Rounding is half-up, matching `toFixed`.
+ */
+function formatFixed(value: bigint, decimals: number, fractionDigits: number): string {
+  const negative = value < 0n;
+  const magnitude = negative ? -value : value;
+
+  const unit = 10n ** BigInt(decimals);
+  const precision = 10n ** BigInt(fractionDigits);
+  const scaled = (magnitude * precision + unit / 2n) / unit;
+
+  const whole = (scaled / precision).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction =
+    fractionDigits > 0 ? `.${(scaled % precision).toString().padStart(fractionDigits, "0")}` : "";
+
+  return `${negative ? "-" : ""}${whole}${fraction}`;
 }
 
 /** Splits at the decimal point so the tail can be rendered dimmer. */
@@ -21,33 +47,28 @@ export function splitFigure(value: string): { lead: string; tail: string } {
 }
 
 /** Grouped thousands, fixed decimals, never scientific notation. */
-export function formatAmount(
-  value: bigint,
-  decimals = 18,
-  fractionDigits = 4,
-): string {
-  const asNumber = Number(formatUnits(value, decimals));
-  return asNumber.toLocaleString("en-US", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  });
+export function formatAmount(value: bigint, decimals = 18, fractionDigits = 4): string {
+  return formatFixed(value, decimals, fractionDigits);
 }
 
-/** WAD-scaled ratios rendered as a percentage, e.g. 8e17 -> "80.00%". */
+/** WAD-scaled ratios as a percentage: 8e17 -> "80.00%". */
 export function formatPercent(wad: bigint, fractionDigits = 2): string {
-  const asNumber = Number(formatUnits(wad, 18)) * 100;
-  return `${asNumber.toFixed(fractionDigits)}%`;
+  // x/1e18 as a percentage is x/1e16, so the scale shifts by two.
+  return `${formatFixed(wad, 16, fractionDigits)}%`;
 }
 
 /**
  * Health factor as a multiple, where 1.00 is the liquidation line.
  *
  * Returns null for the no-debt sentinel: the nullable return is what forces
- * callers to handle that case instead of printing it.
+ * callers to handle that case instead of printing it. Values above the
+ * display ceiling are capped — a dust lien can push the ratio past 1e20,
+ * which is both meaningless and unreadable at display size.
  */
 export function formatHealthFactor(wad: bigint, fractionDigits = 2): string | null {
   if (!hasDebt(wad)) return null;
-  return Number(formatUnits(wad, 18)).toFixed(fractionDigits);
+  if (wad > HEALTH_DISPLAY_CEILING) return "999+";
+  return formatFixed(wad, 18, fractionDigits);
 }
 
 export type HealthBand = "none" | "safe" | "caution" | "danger";

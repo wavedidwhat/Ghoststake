@@ -97,6 +97,54 @@ describe("amounts and percentages", () => {
   });
 });
 
+describe("audit regressions", () => {
+  it("never renders a health factor in scientific notation", () => {
+    // toFixed switches to exponential at 1e21, and a dust lien pushes the
+    // ratio well past it: repay down to 1 wei and the figure explodes.
+    const dustLien = (1_000n * WAD * ((85n * WAD) / 100n)) / 1n;
+    const rendered = formatHealthFactor(dustLien);
+    expect(rendered).not.toMatch(/e\+/i);
+    expect(rendered).toBe("999+");
+  });
+
+  it("caps only above the ceiling, not at ordinary values", () => {
+    expect(formatHealthFactor(999n * WAD)).toBe("999.00");
+    expect(formatHealthFactor(999n * WAD + 1n)).toBe("999+");
+  });
+
+  it("does not fabricate digits on a large balance", () => {
+    // Via Number this rendered as ...567,000.0000 — trailing zeros that look
+    // exact and are float precision running out.
+    const value = 12345678901234567891234567890123456789n;
+    expect(formatAmount(value)).toBe("12,345,678,901,234,567,891.2346");
+  });
+
+  it("stays exact at the far end of uint256", () => {
+    // Carries every digit, where Number would have rounded off the tail.
+    // Compared against half-up, not integer division, which truncates.
+    const huge = 2n ** 200n;
+    const unit = 10n ** 18n;
+    const expected = (huge + unit / 2n) / unit;
+    expect(formatAmount(huge, 18, 0).replace(/,/g, "")).toBe(expected.toString());
+    expect(formatAmount(huge, 18, 0)).toHaveLength(43 + 14); // 43 digits, 14 separators
+  });
+
+  it("rounds half-up rather than truncating", () => {
+    expect(formatAmount(15n * 10n ** 17n, 18, 0)).toBe("2");
+    expect(formatAmount(14n * 10n ** 17n, 18, 0)).toBe("1");
+  });
+
+  it("renders zero and sub-unit amounts without losing the leading zero", () => {
+    expect(formatAmount(1n)).toBe("0.0000");
+    expect(formatAmount(10n ** 14n)).toBe("0.0001");
+  });
+
+  it("groups thousands only in the integer part", () => {
+    expect(formatAmount(1234567n * WAD)).toBe("1,234,567.0000");
+    expect(formatPercent(WAD * 1234n)).toBe("123,400.00%");
+  });
+});
+
 describe("addresses", () => {
   it("shortens without dropping the checksum-bearing ends", () => {
     expect(shortenAddress("0x1234567890abcdef1234567890abcdef12345678")).toBe("0x1234…5678");
