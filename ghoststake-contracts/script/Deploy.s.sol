@@ -9,6 +9,7 @@ import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 import { ChainlinkRoundOracle } from "../src/ChainlinkRoundOracle.sol";
 import { ParimutuelRound, IRoundOracle } from "../src/ParimutuelRound.sol";
+import { BorrowToPositionRouter } from "../src/BorrowToPositionRouter.sol";
 import { AggregatorV3Interface } from "../src/interfaces/AggregatorV3Interface.sol";
 import { MockUSDC } from "./mocks/MockUSDC.sol";
 import { MockAggregatorV3 } from "../test/mocks/MockAggregatorV3.sol";
@@ -114,6 +115,11 @@ contract Deploy is Script {
             deployer
         );
 
+        // The router is what joins the two halves. Whitelisting it is the
+        // owner's act, so it happens here rather than in the constructor.
+        BorrowToPositionRouter router = new BorrowToPositionRouter(vault, market);
+        market.setRouter(address(router), true);
+
         vm.stopBroadcast();
 
         console2.log("");
@@ -124,6 +130,7 @@ contract Deploy is Script {
         console2.log("PriceFeed           ", feed);
         console2.log("ChainlinkRoundOracle", address(oracle));
         console2.log("ParimutuelRound     ", address(market));
+        console2.log("BorrowToPositionRtr ", address(router));
         console2.log("deployer            ", deployer);
         console2.log("");
         console2.log("--- frontend .env.local ---");
