@@ -8,8 +8,9 @@ import { HealthFactorCard } from "@/components/HealthFactor";
 import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
+import { usePoolStats } from "@/hooks/usePoolStats";
 import { contractsConfigured } from "@/lib/env";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatApr, formatPercent } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
 
 export default function DashboardPage() {
@@ -81,11 +82,15 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         {position.lien === undefined || decimals === undefined ? (
           <Skeleton />
         ) : position.lien === 0n ? (
-          <Figure value={formatAmount(0n, decimals)} unit={symbol} tone="muted" />
+          <Figure value={formatAmount(0n, decimals)} unit={symbol} size="stat" tone="muted" />
         ) : (
           <Figure
             value={`(${formatAmount(position.lien, decimals)})`}
             unit={symbol}
+            // Sized like its siblings. Omitting this fell back to the larger
+            // default, so Debt rendered half again as big as every other
+            // stat and pushed its unit past the card edge.
+            size="stat"
             tone="negative"
           />
         )}
@@ -94,7 +99,65 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
       <Stat label="Still borrowable" hint="to the LTV ceiling">
         <PendingFigure value={amount(position.maxBorrowable)} unit={symbol} />
       </Stat>
+
+      {/* Protocol-wide, not this wallet's. Separated by a labelled rule so
+          the two are never read as one set of numbers. */}
+      <div className="lg:col-span-3">
+        <PoolStats decimals={decimals} symbol={symbol} />
+      </div>
     </div>
+  );
+}
+
+function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol: string }) {
+  const pool = usePoolStats();
+
+  const amount = (value: bigint | undefined) =>
+    value === undefined || decimals === undefined ? undefined : formatAmount(value, decimals);
+
+  return (
+    <section aria-labelledby="pool-heading" className="mt-2">
+      <div className="mb-3 flex items-center gap-3">
+        <h2
+          id="pool-heading"
+          className="text-xs font-medium tracking-wide text-ink-muted uppercase"
+        >
+          Lending pool
+        </h2>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      {pool.isError ? (
+        <Card>
+          <p className="text-sm text-ink-muted">Pool figures are unavailable right now.</p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="Total supplied" hint="lender deposits">
+            <PendingFigure value={amount(pool.totalSupplied)} unit={symbol} />
+          </Stat>
+          <Stat label="Total borrowed" hint="outstanding">
+            <PendingFigure value={amount(pool.totalBorrowed)} unit={symbol} />
+          </Stat>
+          <Stat label="Utilization" hint="borrowed / supplied">
+            <PendingFigure
+              value={pool.utilization === undefined ? undefined : formatPercent(pool.utilization)}
+              unit=""
+            />
+          </Stat>
+          <Stat label="Borrow rate" hint="simple, annualised">
+            <PendingFigure
+              value={
+                pool.borrowRatePerSecond === undefined
+                  ? undefined
+                  : formatApr(pool.borrowRatePerSecond)
+              }
+              unit=""
+            />
+          </Stat>
+        </div>
+      )}
+    </section>
   );
 }
 
