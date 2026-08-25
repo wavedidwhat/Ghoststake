@@ -42,7 +42,12 @@ func TestMigrateRefusesADatabaseAheadOfTheBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer func() { _ = conn.Close(ctx) }()
+	// Registered before the delete below so it runs *after* it: cleanups are
+	// LIFO. A plain `defer` here would close the connection at function
+	// return, which is before any Cleanup runs — so the delete would find a
+	// closed connection and leave the planted version behind. It did exactly
+	// that the first time.
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 
 	// A migration this binary has never heard of, exactly as a newer deploy
 	// would have left it.
