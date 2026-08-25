@@ -16,6 +16,12 @@ export type MarketParams = {
   entryCutoff: bigint;
   minSidePool: bigint;
   rake: bigint;
+  /** How late a lock may land before the round voids instead. */
+  lockWindow: bigint;
+  /** How long a locked round may go unsettled before it may be refunded. */
+  resolveDeadline: bigint;
+  /** Who may open and force-void rounds here. */
+  owner: `0x${string}`;
 };
 
 /**
@@ -35,6 +41,12 @@ export function useMarketParams() {
       { ...base, address: m.address, functionName: "entryCutoff" } as const,
       { ...base, address: m.address, functionName: "minSidePool" } as const,
       { ...base, address: m.address, functionName: "rake" } as const,
+      // Only the operator console reads these three, but they belong in the
+      // same batch: a console that read the timings separately would render
+      // deadlines from one block against pools from another.
+      { ...base, address: m.address, functionName: "lockWindow" } as const,
+      { ...base, address: m.address, functionName: "resolveDeadline" } as const,
+      { ...base, address: m.address, functionName: "owner" } as const,
     ]),
     query: { enabled: marketsConfigured, staleTime: Infinity },
   });
@@ -42,12 +54,33 @@ export function useMarketParams() {
   const byMarket = useMemo(() => {
     const out = new Map<string, MarketParams>();
     if (!query.data) return out;
+    const PER_MARKET = 6;
     markets.forEach((m, i) => {
-      const cutoff = query.data[i * 3]?.result as bigint | undefined;
-      const minSide = query.data[i * 3 + 1]?.result as bigint | undefined;
-      const rake = query.data[i * 3 + 2]?.result as bigint | undefined;
-      if (cutoff === undefined || minSide === undefined || rake === undefined) return;
-      out.set(m.key, { entryCutoff: cutoff, minSidePool: minSide, rake });
+      const at = (n: number) => query.data?.[i * PER_MARKET + n]?.result;
+      const cutoff = at(0) as bigint | undefined;
+      const minSide = at(1) as bigint | undefined;
+      const rake = at(2) as bigint | undefined;
+      const lockWindow = at(3) as bigint | undefined;
+      const resolveDeadline = at(4) as bigint | undefined;
+      const owner = at(5) as `0x${string}` | undefined;
+      if (
+        cutoff === undefined ||
+        minSide === undefined ||
+        rake === undefined ||
+        lockWindow === undefined ||
+        resolveDeadline === undefined ||
+        owner === undefined
+      ) {
+        return;
+      }
+      out.set(m.key, {
+        entryCutoff: cutoff,
+        minSidePool: minSide,
+        rake,
+        lockWindow,
+        resolveDeadline,
+        owner,
+      });
     });
     return out;
   }, [query.data]);
