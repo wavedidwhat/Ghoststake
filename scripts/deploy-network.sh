@@ -44,6 +44,10 @@ esac
 export ARBISCAN_API_KEY="${ARBISCAN_API_KEY:-}"
 export FEED_ADDRESS="${FEED_ADDRESS:-}"
 export SEQUENCER_FEED_ADDRESS="${SEQUENCER_FEED_ADDRESS:-}"
+# A second market on a feed the deployer publishes into, so a round can be
+# shown settling without waiting on a heartbeat (GHO-29). On by default for a
+# real network: that is the only place the wait is a problem.
+export DEMO_MARKET="${DEMO_MARKET:-true}"
 log() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 
 cd "$ROOT/ghoststake-contracts"
@@ -85,6 +89,8 @@ addr_of() { echo "$DEPLOY_OUT" | grep -E "^\s+$1\s+0x" | awk '{print $NF}'; }
 ASSET=$(addr_of "Asset"); POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault"); MARKET=$(addr_of "ParimutuelRound")
 ROUTER=$(addr_of "BorrowToPositionRtr")
+DEMO_FEED=$(addr_of "DemoPriceFeed"); DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound")
+DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr")
 START_BLOCK=$(echo "$DEPLOY_OUT" | grep -oE "INDEXER_START_BLOCK=[0-9]+" | cut -d= -f2)
 
 if [ -z "$VAULT" ] || [ -z "$POOL" ] || [ -z "$MARKET" ]; then
@@ -116,6 +122,9 @@ NEXT_PUBLIC_VAULT_ADDRESS=$VAULT
 NEXT_PUBLIC_POOL_ADDRESS=$POOL
 NEXT_PUBLIC_MARKET_ADDRESS=$MARKET
 NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
+NEXT_PUBLIC_DEMO_MARKET_ADDRESS=$DEMO_MARKET_ADDR
+NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=$DEMO_ROUTER
+NEXT_PUBLIC_DEMO_FEED_ADDRESS=$DEMO_FEED
 ENV
 
 cat >"$ROOT/ghoststake-backend/.env.local" <<ENV
@@ -139,10 +148,17 @@ cat <<SUMMARY
   CollateralVault       $VAULT
   ParimutuelRound       $MARKET
   BorrowToPositionRtr   $ROUTER
+  DemoPriceFeed         ${DEMO_FEED:-(none)}
+  Demo ParimutuelRound  ${DEMO_MARKET_ADDR:-(none)}
+  Demo router           ${DEMO_ROUTER:-(none)}
 
   $EXPLORER/address/$VAULT
 
   Connect $DEPLOYER and the position is already there.
   Env files written for both packages.
+
+  The demo market settles on cue — $DEPLOYER publishes its prices:
+
+    MARKET=demo NETWORK=$NETWORK ./scripts/live-e2e.sh
 
 SUMMARY
