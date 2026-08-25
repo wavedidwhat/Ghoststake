@@ -123,8 +123,15 @@ contract Deploy is MarketDeployer {
         // frontend's build args (GHO-34). Listing happens here because the
         // registry refuses a market whose router is not wired up, and this is
         // where the wiring is done.
-        registry = new MarketRegistry(deployer);
-        registry.list(market, router, uint64(vm.envOr("MARKET_HORIZON", uint256(1 hours))));
+        //
+        // `REGISTRY=false` reproduces a deployment that predates the registry
+        // — which the Sepolia one does, and which `DeployRegistry` exists to
+        // upgrade. Without a way to reach that state, the upgrade path can
+        // only be tested on the deployment it is meant to fix.
+        if (vm.envOr("REGISTRY", true)) {
+            registry = new MarketRegistry(deployer);
+            registry.list(market, router, uint64(vm.envOr("MARKET_HORIZON", uint256(1 hours))));
+        }
 
         // The demo market, on a feed this deployer can publish into on cue.
         // Only worth deploying where the primary feed is a real one that
@@ -150,7 +157,14 @@ contract Deploy is MarketDeployer {
         console2.log("ChainlinkRoundOracle", address(oracle));
         console2.log("ParimutuelRound     ", address(market));
         console2.log("BorrowToPositionRtr ", address(router));
-        console2.log("MarketRegistry      ", address(registry));
+        // Printed only when there is one. A logged zero address is parsed by
+        // the deploy scripts like any other, and `0x000…0` is a *well-formed*
+        // address with no code — so the frontend would accept it as a
+        // configured registry and render an empty market list rather than
+        // falling back to its environment.
+        if (address(registry) != address(0)) {
+            console2.log("MarketRegistry      ", address(registry));
+        }
         if (demoMarket != address(0)) {
             console2.log("DemoPriceFeed       ", demoFeed);
             console2.log("DemoParimutuelRound ", demoMarket);
@@ -163,7 +177,9 @@ contract Deploy is MarketDeployer {
         console2.log("NEXT_PUBLIC_POOL_ADDRESS=%s", vm.toString(address(pool)));
         console2.log("NEXT_PUBLIC_MARKET_ADDRESS=%s", vm.toString(address(market)));
         console2.log("NEXT_PUBLIC_ROUTER_ADDRESS=%s", vm.toString(address(router)));
-        console2.log("NEXT_PUBLIC_REGISTRY_ADDRESS=%s", vm.toString(address(registry)));
+        if (address(registry) != address(0)) {
+            console2.log("NEXT_PUBLIC_REGISTRY_ADDRESS=%s", vm.toString(address(registry)));
+        }
         if (demoMarket != address(0)) {
             console2.log("NEXT_PUBLIC_DEMO_MARKET_ADDRESS=%s", vm.toString(demoMarket));
             console2.log("NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=%s", vm.toString(demoRouter));
