@@ -8,8 +8,12 @@ package ledger
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -110,6 +114,38 @@ type Cursor struct {
 	// LastHash is what makes reorg detection possible: the next cycle
 	// re-reads that block and compares. Empty means unverified.
 	LastHash string
+	// Contracts identifies the address set this position was reached by
+	// reading. See Fingerprint. Empty means a cursor written before the
+	// fingerprint existed.
+	Contracts string
+}
+
+// Fingerprint identifies a set of watched contract addresses.
+//
+// The stream name is chain-scoped, so a redeployment of the contracts reuses
+// the previous deployment's cursor. That cursor is at the old deployment's
+// head, which is almost always *past* the new deployment's start block — so
+// the indexer resumes ahead of the new contracts' history and never backfills
+// it. Nothing errors: it polls, finds nothing, and reports healthy while the
+// tables stay empty. This is that failure made detectable.
+//
+// The addresses are lowercased and sorted, so the fingerprint describes which
+// contracts are watched and not the order they were configured in or how they
+// happened to be cased.
+func Fingerprint(addresses []string) string {
+	normalized := make([]string, 0, len(addresses))
+	for _, a := range addresses {
+		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+			normalized = append(normalized, a)
+		}
+	}
+	sort.Strings(normalized)
+
+	sum := sha256.Sum256([]byte(strings.Join(normalized, ",")))
+	// Truncated: this is an identity check between two values we produced,
+	// not a defence against anyone constructing a collision. Full width would
+	// only make the log line harder to read.
+	return hex.EncodeToString(sum[:8])
 }
 
 // Repository is the port the indexer writes through.

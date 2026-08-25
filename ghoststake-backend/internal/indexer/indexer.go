@@ -64,7 +64,9 @@ type Indexer struct {
 	contracts []contractSpec
 	addresses []common.Address
 	stream    string
-	publisher Publisher
+	// fingerprint identifies the watched address set; see ledger.Fingerprint.
+	fingerprint string
+	publisher   Publisher
 }
 
 func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error) {
@@ -112,18 +114,25 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 		})
 	}
 	addresses := make([]common.Address, 0, len(contracts))
+	addressHexes := make([]string, 0, len(contracts))
 	for _, c := range contracts {
 		addresses = append(addresses, c.address)
+		// The parsed address, not the configured string: this must describe
+		// what is actually being filtered on, so a differently-cased or
+		// zero-padded spelling of the same contract does not read as a
+		// different deployment.
+		addressHexes = append(addressHexes, c.address.Hex())
 	}
 
 	return &Indexer{
-		client:    client,
-		repo:      repo,
-		cfg:       cfg,
-		contracts: contracts,
-		addresses: addresses,
-		stream:    ledger.StreamName(cfg.ChainID),
-		publisher: cfg.Publisher,
+		client:      client,
+		repo:        repo,
+		cfg:         cfg,
+		contracts:   contracts,
+		addresses:   addresses,
+		stream:      ledger.StreamName(cfg.ChainID),
+		fingerprint: ledger.Fingerprint(addressHexes),
+		publisher:   cfg.Publisher,
 	}, nil
 }
 
@@ -135,6 +144,49 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 // recover — so the subscription would be a second code path that only works
 // when nothing has gone wrong. Polling `eth_getLogs` from a persisted cursor
 // is the same code for backfill, catch-up and steady state.
+// Preflight refuses to start against a cursor built by reading different
+// contracts.
+//
+// The stream is chain-scoped, so a redeployment inherits the previous
+// deployment's cursor. That cursor is at the old contracts' head, which is
+// past the new ones' start block — so the loop would resume *ahead* of the
+// new deployment's history and never backfill it. Every symptom of that is a
+// non-symptom: no error, no gap, the cursor advancing normally, and empty
+// tables. It cost an afternoon once already.
+//
+// Called before the loop rather than inside it, so the answer is a refusal to
+// boot instead of a warning repeating every poll interval.
+func (ix *Indexer) Preflight(ctx context.Context) error {
+	cursor, found, err := ix.repo.LoadCursor(ctx, ix.stream)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil // nothing to disagree with
+	}
+
+	// A cursor written before this check existed. Adopting it is the only
+	// option that does not break every running deployment on upgrade, and it
+	// is logged because it is the one path here that assumes rather than
+	// verifies.
+	if cursor.Contracts == "" {
+		slog.Warn("indexer cursor predates the contract fingerprint, adopting the current set",
+			"stream", ix.stream, "last_block", cursor.LastBlock, "contracts", ix.fingerprint)
+		return nil
+	}
+
+	if cursor.Contracts != ix.fingerprint {
+		return fmt.Errorf(
+			"indexer: cursor for stream %s was built from contracts %s but this process watches %s. "+
+				"The contracts were redeployed: resuming would skip the new deployment's history "+
+				"(cursor is at block %d, start block is %d) and index nothing while reporting healthy. "+
+				"Reset the derived index to re-read from the start:\n"+
+				"  DELETE FROM ledger_entries; DELETE FROM round_events; DELETE FROM indexer_cursor;",
+			ix.stream, cursor.Contracts, ix.fingerprint, cursor.LastBlock, ix.cfg.StartBlock)
+	}
+	return nil
+}
+
 func (ix *Indexer) Run(ctx context.Context) error {
 	ticker := time.NewTicker(ix.cfg.PollInterval)
 	defer ticker.Stop()
@@ -184,7 +236,10 @@ func (ix *Indexer) Step(ctx context.Context) error {
 	if !found {
 		// A fresh stream starts one block below StartBlock so the first
 		// range includes StartBlock itself.
-		cursor = ledger.Cursor{Stream: ix.stream, ChainID: ix.cfg.ChainID, LastBlock: ix.cfg.StartBlock - 1}
+		cursor = ledger.Cursor{
+			Stream: ix.stream, ChainID: ix.cfg.ChainID,
+			LastBlock: ix.cfg.StartBlock - 1, Contracts: ix.fingerprint,
+		}
 	}
 
 	if err := ix.checkReorg(ctx, &cursor); err != nil {
@@ -226,6 +281,7 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		ChainID:   ix.cfg.ChainID,
 		LastBlock: to,
 		LastHash:  tip.Hash().Hex(),
+		Contracts: ix.fingerprint,
 	}
 	if err := ix.repo.Append(ctx, batch, next); err != nil {
 		return err
