@@ -85,14 +85,16 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 	}
 
 	const upsertCursor = `
-		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, updated_at)
-		VALUES ($1, $2, $3, $4, now())
+		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, contracts, updated_at)
+		VALUES ($1, $2, $3, $4, $5, now())
 		ON CONFLICT (stream) DO UPDATE
 		SET last_block = EXCLUDED.last_block,
 		    last_block_hash = EXCLUDED.last_block_hash,
 		    chain_id = EXCLUDED.chain_id,
+		    contracts = EXCLUDED.contracts,
 		    updated_at = now()`
-	if _, err := tx.Exec(ctx, upsertCursor, cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash); err != nil {
+	if _, err := tx.Exec(ctx, upsertCursor,
+		cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash, cursor.Contracts); err != nil {
 		return fmt.Errorf("upsert cursor: %w", err)
 	}
 
@@ -101,10 +103,13 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 
 // LoadCursor returns the stream's position, or ok=false if it has never run.
 func (s *Store) LoadCursor(ctx context.Context, stream string) (ledger.Cursor, bool, error) {
-	const q = `SELECT stream, chain_id, last_block, last_block_hash FROM indexer_cursor WHERE stream = $1`
+	const q = `
+		SELECT stream, chain_id, last_block, last_block_hash, contracts
+		FROM indexer_cursor WHERE stream = $1`
 
 	var c ledger.Cursor
-	err := s.pool.QueryRow(ctx, q, stream).Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash)
+	err := s.pool.QueryRow(ctx, q, stream).
+		Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash, &c.Contracts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ledger.Cursor{}, false, nil
 	}

@@ -142,6 +142,14 @@ func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *c
 		return httpx.Deps{}, err
 	}
 
+	// Synchronously, before the loop starts: a cursor built from a different
+	// contract set is a configuration error, and the API refusing to boot is
+	// how config errors are reported here. Backgrounding it would leave the
+	// API serving empty rounds and positions as if they were the answer.
+	if err := ix.Preflight(ctx); err != nil {
+		return httpx.Deps{}, err
+	}
+
 	go func() {
 		if err := ix.Run(ctx); err != nil {
 			slog.Error("indexer stopped", "err", err)
