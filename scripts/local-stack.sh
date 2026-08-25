@@ -60,8 +60,13 @@ addr_of() { echo "$DEPLOY_OUT" | grep -E "^\s+$1\s+0x" | awk '{print $NF}'; }
 ASSET=$(addr_of "Asset")
 POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault")
-DEMO_FEED=$(addr_of "DemoPriceFeed"); DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound")
-DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr")
+# `|| true` on each, unlike the addresses above: these three are absent
+# whenever the demo market is off, and `grep` finding nothing is a failed
+# pipeline. Under `set -o pipefail` that takes the whole script down at the
+# assignment — silently, before anything is printed.
+DEMO_FEED=$(addr_of "DemoPriceFeed" || true)
+DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound" || true)
+DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr" || true)
 MARKET=$(addr_of "ParimutuelRound")
 ROUTER=$(addr_of "BorrowToPositionRtr")
 ORACLE=$(addr_of "ChainlinkRoundOracle")
