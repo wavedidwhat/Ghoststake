@@ -36,7 +36,19 @@ ENV_FILE="$ROOT/ghoststake-frontend/.env.local"
 # attached to a deployment nobody is looking at.
 if [ -z "${VAULT_ADDRESS:-}" ]; then
   [ -f "$ENV_FILE" ] || { echo "no VAULT_ADDRESS and no $ENV_FILE to read one from" >&2; exit 1; }
-  VAULT_ADDRESS="$(grep -E '^NEXT_PUBLIC_VAULT_ADDRESS=' "$ENV_FILE" | cut -d= -f2)"
+
+  # Only if the file describes this network. It is rewritten by every local
+  # run, so after an afternoon of `local-stack.sh` it holds anvil addresses —
+  # and a demo market attached to a vault that does not exist here is a market
+  # whose every position reverts.
+  ENV_CHAIN="$(grep -E '^NEXT_PUBLIC_CHAIN_ID=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
+  if [ -n "$ENV_CHAIN" ] && [ "$ENV_CHAIN" != "$CHAIN_ID" ]; then
+    echo "$ENV_FILE describes chain $ENV_CHAIN, but NETWORK=$NETWORK is chain $CHAIN_ID." >&2
+    echo "Pass VAULT_ADDRESS explicitly, or re-generate the file for this network." >&2
+    exit 1
+  fi
+
+  VAULT_ADDRESS="$(grep -E '^NEXT_PUBLIC_VAULT_ADDRESS=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
 fi
 [ -n "$VAULT_ADDRESS" ] || { echo "VAULT_ADDRESS is empty" >&2; exit 1; }
 export VAULT_ADDRESS
