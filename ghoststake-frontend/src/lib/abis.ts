@@ -112,6 +112,19 @@ export const collateralVaultAbi = [
   },
   {
     "type": "function",
+    "name": "closeFactor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "collateralValue",
     "inputs": [
       {
@@ -263,6 +276,19 @@ export const collateralVaultAbi = [
   },
   {
     "type": "function",
+    "name": "liquidationBonus",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "liquidationThreshold",
     "inputs": [],
     "outputs": [
@@ -400,6 +426,19 @@ export const collateralVaultAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "yieldRatePerSecond",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   }
 ] as const;
 

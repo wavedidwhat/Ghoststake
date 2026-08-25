@@ -21,11 +21,11 @@ export default function VaultPage() {
   const position = useVaultPosition();
 
   return (
-    <AppShell title="Vault" subtitle="Deposit collateral and earn yield on it">
+    <AppShell title="Stake" subtitle="Earns while it sits, and backs everything you borrow">
       {connection.status !== "connected" ? (
-        <NeedsWallet what="Your collateral, yield and borrowing capacity live at your address." />
+        <NeedsWallet what="Your stake, what it earns, and what you can borrow against it all live at your address." />
       ) : !contractsConfigured ? (
-        <NotConfigured what="No vault is configured for this network." />
+        <NotConfigured what="No stake vault is configured for this network." />
       ) : (
         <VaultScreen position={position} address={connection.address} />
       )}
@@ -250,12 +250,13 @@ function DepositWithdraw({
         </div>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-raised/40 p-4">
-          <Line label="Deposited" value={deposited} decimals={decimals} symbol={symbol} />
+          <Line label="Staked" value={deposited} decimals={decimals} symbol={symbol} />
           <Line label="Shares" value={shares} decimals={18} symbol="gsCOL" />
-          <Line label="Debt against it" value={lien} decimals={decimals} symbol={symbol} />
+          <Line label="Borrowed against it" value={lien} decimals={decimals} symbol={symbol} />
           <p className="mt-1 text-xs text-ink-muted">
-            Collateral keeps earning while it backs a loan. Yield accrues per second and is
-            settled whenever the position is touched.
+            Your stake never leaves to back a loan — borrowing places a lien against it and the
+            funds come from the lending pool. It keeps earning the whole time, which is the
+            point: you take a view without unwinding your savings.
           </p>
         </div>
       </div>
