@@ -1,0 +1,33 @@
+# The round keeper (GHO-24), as an opt-in overlay.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.keeper.yml up -d
+#
+# Deliberately not part of docker-compose.yml. The keeper needs a funded hot
+# wallet and, to open rounds, the markets' owner key — so a deployment that
+# has neither should not be running it, and `restart: unless-stopped` on a
+# service that refuses to boot without a key is a crash loop rather than a
+# useful default. Opting in is one `-f`.
+#
+# The key reaches the container through `.env.keeper` and nothing else. The
+# API's `.env` is not layered in here, and this file is not layered into the
+# API: the whole point of the keeper being a second binary is that exactly one
+# process can sign, and sharing an env file would quietly undo it.
+services:
+  keeper:
+    build:
+      context: .
+      dockerfile: Dockerfile.keeper
+    image: ghoststake-keeper
+    env_file:
+      # Chain id, RPC URL and APP_ENV — the topology the keeper shares with
+      # the API. Note this file sets no keeper variables of its own: they all
+      # live in .env.keeper, alongside the key they belong with.
+      - path: deploy.defaults.env
+        required: true
+      - path: .env.keeper
+        required: true
+    # No ports and no `expose`: the keeper has no inbound surface. It is also
+    # not in `depends_on` for anything, because it needs no database — every
+    # decision it makes comes from the chain, so it can be restarted or moved
+    # with no state to reconcile.
+    restart: unless-stopped

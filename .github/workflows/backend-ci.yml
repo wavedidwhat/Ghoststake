@@ -65,3 +65,9 @@ jobs:
 
       - name: Build
         run: make build
+
+      # The keeper is a second binary with a second Dockerfile, deployed
+      # separately. Nothing else in this job compiles it, so without this a
+      # break in cmd/keeper ships green.
+      - name: Build keeper
+        run: make build-keeper
