@@ -5,6 +5,8 @@ import { console2 } from "forge-std/console2.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { CollateralVault } from "../src/CollateralVault.sol";
+import { ParimutuelRound } from "../src/ParimutuelRound.sol";
+import { BorrowToPositionRouter } from "../src/BorrowToPositionRouter.sol";
 import { MarketDeployer } from "./MarketDeployer.sol";
 
 /// @notice Adds the demo market (GHO-29) to a deployment that already exists.
@@ -38,6 +40,10 @@ contract DeployDemoMarket is MarketDeployer {
 
         CollateralVault vault = CollateralVault(vm.envAddress("VAULT_ADDRESS"));
         address sequencerFeed = vm.envOr("SEQUENCER_FEED_ADDRESS", address(0));
+        // Where a registry exists, the new market is listed in it; where one
+        // does not, the frontend still reads its addresses from the
+        // environment and this is simply skipped.
+        address registry = vm.envOr("REGISTRY_ADDRESS", address(0));
 
         // Read before broadcasting: a wrong or codeless VAULT_ADDRESS fails
         // here, on a static call, rather than after four contracts have been
@@ -47,6 +53,12 @@ contract DeployDemoMarket is MarketDeployer {
 
         vm.startBroadcast(deployerKey);
         deployDemoMarket(asset, vault, sequencerFeed, deployer);
+        listIfPossible(
+            registry,
+            ParimutuelRound(demoMarket),
+            BorrowToPositionRouter(demoRouter),
+            uint64(vm.envOr("DEMO_HORIZON", uint256(5 minutes)))
+        );
         vm.stopBroadcast();
 
         console2.log("");

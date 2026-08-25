@@ -96,6 +96,7 @@ ROUTER=$(addr_of "BorrowToPositionRtr")
 DEMO_FEED=$(addr_of "DemoPriceFeed" || true)
 DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound" || true)
 DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr" || true)
+REGISTRY=$(addr_of "MarketRegistry" || true)
 START_BLOCK=$(echo "$DEPLOY_OUT" | grep -oE "INDEXER_START_BLOCK=[0-9]+" | cut -d= -f2)
 
 if [ -z "$VAULT" ] || [ -z "$POOL" ] || [ -z "$MARKET" ]; then
@@ -130,6 +131,9 @@ NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
 NEXT_PUBLIC_DEMO_MARKET_ADDRESS=$DEMO_MARKET_ADDR
 NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=$DEMO_ROUTER
 NEXT_PUBLIC_DEMO_FEED_ADDRESS=$DEMO_FEED
+# With this set, the four addresses above are ignored and the market list is
+# read from the chain instead (GHO-34).
+NEXT_PUBLIC_REGISTRY_ADDRESS=$REGISTRY
 ENV
 
 cat >"$ROOT/ghoststake-backend/.env.local" <<ENV
@@ -156,6 +160,7 @@ cat <<SUMMARY
   DemoPriceFeed         ${DEMO_FEED:-(none)}
   Demo ParimutuelRound  ${DEMO_MARKET_ADDR:-(none)}
   Demo router           ${DEMO_ROUTER:-(none)}
+  MarketRegistry        ${REGISTRY:-(none)}
 
   $EXPLORER/address/$VAULT
 
