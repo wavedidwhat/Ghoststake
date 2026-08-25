@@ -23,6 +23,10 @@ const NAV = [
   { href: "/borrow", label: "Borrow", ready: true, note: "against it" },
   { href: "/markets", label: "Markets", ready: true, note: "take a view" },
   { href: "/history", label: "History", ready: false, note: "GHO-17" },
+  // Last, and separated by what it is rather than by a permission check: the
+  // page is reachable by anyone because half of what it does is
+  // permissionless, and the contracts say so louder than a hidden link would.
+  { href: "/operator", label: "Operator", ready: true, note: "run rounds" },
 ] as const;
 
 export function Sidebar() {
