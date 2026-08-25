@@ -5,10 +5,13 @@ import { Card, Stat } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { Figure } from "@/components/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
+import { PipelineSummary } from "@/components/PipelineSummary";
 import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { usePoolStats } from "@/hooks/usePoolStats";
+import { useRounds } from "@/hooks/useRounds";
+import { Phase } from "@/lib/rounds";
 import { contractsConfigured } from "@/lib/env";
 import { formatAmount, formatApr, formatPercent } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
@@ -26,7 +29,7 @@ export default function DashboardPage() {
 
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div>
-            <h1 className="text-lg font-semibold">Dashboard</h1>
+            <h1 className="text-lg font-semibold">Overview</h1>
             <p className="text-xs text-ink-faint">{activeChain.name}</p>
           </div>
           <ConnectButton />
@@ -60,7 +63,13 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {/* Leads the page: the number a user needs before any other. */}
+      {/* The pipeline leads, because the relationship between the three
+          numbers is the product. Health factor follows as the detail behind
+          the middle step. */}
+      <div className="lg:col-span-3">
+        <PipelineStrip position={position} />
+      </div>
+
       <div className="lg:col-span-2">
         <HealthFactorCard
           value={position.healthFactor}
@@ -106,6 +115,42 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         <PoolStats decimals={decimals} symbol={symbol} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Reads the user's open positions so the summary can say what the borrowed
+ * money is actually doing, rather than stopping at "you have debt".
+ */
+function PipelineStrip({ position }: { position: ReturnType<typeof useVaultPosition> }) {
+  const { rounds } = useRounds();
+
+  let atRisk = 0n;
+  let open = 0;
+  for (const r of rounds) {
+    const mine = (r.up ?? 0n) + (r.down ?? 0n);
+    if (mine === 0n) continue;
+    // Only live rounds are "working". A settled one is history and belongs on
+    // the markets page, not in a summary of what is currently at stake.
+    if (r.phase !== Phase.Resolved && r.phase !== Phase.Void) {
+      atRisk += mine;
+      open += 1;
+    }
+  }
+
+  return (
+    <PipelineSummary
+      staked={position.collateralValue}
+      yieldRate={position.yieldRatePerSecond}
+      accrued={position.accruedYield}
+      borrowed={position.lien}
+      healthFactor={position.healthFactor}
+      liquidatable={position.isLiquidatable}
+      atRiskInMarkets={atRisk}
+      openPositions={open}
+      decimals={position.decimals!}
+      symbol={position.symbol}
+    />
   );
 }
 
