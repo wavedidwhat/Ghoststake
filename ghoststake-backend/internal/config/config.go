@@ -37,6 +37,12 @@ type Config struct {
 
 	CORSOrigins []string
 
+	// AllowSchemaAhead permits booting against a database that has applied
+	// migrations this binary does not carry. Off by default: the binary would
+	// otherwise read and write columns a later migration may have renamed,
+	// and nothing downstream would notice. See store.Migrate.
+	AllowSchemaAhead bool
+
 	Indexer IndexerConfig
 }
 
@@ -82,8 +88,9 @@ func Load() (Config, error) {
 		// fallback because the deployed .env files already use it. The chain
 		// is no longer necessarily Arbitrum — chain.Dial's id check is what
 		// actually guarantees we are where we think we are.
-		RPCURL:      env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
-		CORSOrigins: envList("CORS_ORIGINS", "http://localhost:3000"),
+		RPCURL:           env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
+		CORSOrigins:      envList("CORS_ORIGINS", "http://localhost:3000"),
+		AllowSchemaAhead: envBool("ALLOW_SCHEMA_AHEAD", false),
 		Indexer: IndexerConfig{
 			Enabled:       envBool("INDEXER_ENABLED", false),
 			VaultAddress:  env("VAULT_ADDRESS", ""),

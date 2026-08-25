@@ -39,7 +39,7 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer st.Close()
-	if err := st.Migrate(); err != nil {
+	if err := st.Migrate(false); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
