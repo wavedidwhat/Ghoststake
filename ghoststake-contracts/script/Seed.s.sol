@@ -81,11 +81,42 @@ contract Seed is Script {
         vault.deposit(4_000 * USDC, bob);
         vm.stopBroadcast();
 
+        // The round is opened with a lead and left empty. Staking into it is
+        // `stakeRound()`, a separate invocation, because the two cannot share
+        // one broadcast:
+        //
+        // `openRound` rejects a start in the past, and `takePosition` rejects
+        // one before entry opens. Between them they leave a window exactly as
+        // wide as the gap between simulating and mining — and that gap is not
+        // zero. During simulation `block.timestamp` is the *last mined
+        // block's*, which on an idle anvil is already stale, and every
+        // transaction in a broadcast mines its own block and moves the clock
+        // again. Opening at a bare `block.timestamp` therefore lands in the
+        // past, with `InvalidSchedule`; opening with a lead makes the stakes
+        // too early. The caller warps between the two instead.
+        uint64 openAt = uint64(block.timestamp) + OPEN_LEAD;
+
         vm.startBroadcast(DEPLOYER_KEY);
-        uint256 roundId = market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
-        );
+        uint256 roundId = market.openRound(openAt, openAt + 10 minutes, openAt + 20 minutes);
         vm.stopBroadcast();
+
+        console2.log("SEED_ROUND=%s", vm.toString(roundId));
+        console2.log("SEED_OPEN_AT=%s", vm.toString(uint256(openAt)));
+
+        report(vault, alice, "alice");
+    }
+
+    /// @notice Put both sides into a round that is already open.
+    ///
+    /// Separate from `run` so the caller can move the chain's clock past
+    /// `openTime` first — see the comment there. On anvil that is
+    /// `evm_increaseTime`; nowhere else does this run.
+    function stakeRound() external {
+        MockUSDC asset = MockUSDC(vm.envAddress("ASSET_ADDRESS"));
+        ParimutuelRound market = ParimutuelRound(vm.envAddress("MARKET_ADDRESS"));
+        uint256 roundId = vm.envUint("SEED_ROUND");
+
+        require(market.entryIsOpen(roundId), "entry is not open: warp past openTime first");
 
         vm.startBroadcast(ALICE_KEY);
         asset.approve(address(market), type(uint256).max);
@@ -97,7 +128,9 @@ contract Seed is Script {
         market.takePosition(roundId, ParimutuelRound.Side.Down, 300 * USDC);
         vm.stopBroadcast();
 
-        report(vault, alice, "alice");
+        console2.log("");
+        console2.log("=== staked ===");
+        console2.log("  round #%s: alice 500 up, bob 300 down", vm.toString(roundId));
     }
 
     /// @dev One signer, which on a real network is whoever is paying for gas.

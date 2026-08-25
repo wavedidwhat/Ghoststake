@@ -28,6 +28,10 @@ services:
         # pointing at an address that holds no contract.
         NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-}
         NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-}
+        # Set this and the four addresses above stop being read: the market
+        # list comes from the chain, and adding a market is a transaction
+        # rather than a rebuild of this image (GHO-34).
+        NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.

@@ -6,6 +6,7 @@ import { TxStatus } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
+import { useMarkets } from "@/hooks/useMarkets";
 import { useNow } from "@/hooks/useNow";
 import { useMarketParams, useRounds, type MarketParams, type MarketRound } from "@/hooks/useRounds";
 import { useTransaction } from "@/hooks/useTransaction";
@@ -16,7 +17,7 @@ import {
   parimutuelRoundAbi,
 } from "@/lib/abis";
 import { formatAmount } from "@/lib/format";
-import { markets, marketsConfigured, type Market } from "@/lib/markets";
+import { anyMarketConfigured, type Market } from "@/lib/markets";
 import {
   Action,
   actionFor,
@@ -55,7 +56,7 @@ export default function OperatorPage() {
 
   return (
     <AppShell title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
-      {!marketsConfigured ? (
+      {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : connection.status !== "connected" ? (
         <NeedsWallet what="Every action here is a transaction, so a wallet is needed to send one." />
@@ -68,9 +69,13 @@ export default function OperatorPage() {
 
 function Console({ address }: { address: `0x${string}` }) {
   const now = useNow();
-  const params = useMarketParams();
-  const feeds = useMarketFeeds();
-  const { rounds, isLoading, isError, refetch } = useRounds();
+  // Every market, including delisted ones. An operator's job includes the
+  // markets nobody is browsing — a delisted market with a locked round still
+  // has to be settled or refunded, and hiding it here would strand it.
+  const { markets, isLoading: marketsLoading } = useMarkets();
+  const params = useMarketParams(markets);
+  const feeds = useMarketFeeds(markets);
+  const { rounds, isLoading, isError, refetch } = useRounds(markets);
   const position = useVaultPosition();
 
   if (isError) {
@@ -84,7 +89,7 @@ function Console({ address }: { address: `0x${string}` }) {
     );
   }
 
-  if (isLoading || params.byMarket.size === 0) {
+  if (marketsLoading || isLoading || params.byMarket.size === 0) {
     return (
       <Card>
         <div className="h-24 animate-pulse rounded bg-raised" />
@@ -94,7 +99,7 @@ function Console({ address }: { address: `0x${string}` }) {
 
   return (
     <div className="flex flex-col gap-10">
-      {markets.map((market) => {
+      {markets.map((market: Market) => {
         const marketParams = params.byMarket.get(market.key);
         if (!marketParams) return null;
         return (
@@ -138,7 +143,7 @@ function MarketConsole({
   refetch: () => void;
 }) {
   const isOwner = address.toLowerCase() === params.owner.toLowerCase();
-  const label = feed ? (feed.description.split(" - ").pop() ?? market.label) : market.label;
+  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
 
   // Newest first, and only the ones still in play — a settled round needs no
   // operator and a list of them buries the two that do.

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useConnection, useReadContracts } from "wagmi";
 import { parimutuelRoundAbi } from "@/lib/abis";
-import { markets, marketsConfigured, type Market } from "@/lib/markets";
+import type { Market } from "@/lib/markets";
 import type { Round } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
 
@@ -35,7 +35,7 @@ export type MarketParams = {
  * script with the same arguments today, but "the parameters happen to match"
  * is not something a UI should assume on a user's behalf.
  */
-export function useMarketParams() {
+export function useMarketParams(markets: Market[]) {
   const query = useReadContracts({
     contracts: markets.flatMap((m) => [
       { ...base, address: m.address, functionName: "entryCutoff" } as const,
@@ -48,7 +48,7 @@ export function useMarketParams() {
       { ...base, address: m.address, functionName: "resolveDeadline" } as const,
       { ...base, address: m.address, functionName: "owner" } as const,
     ]),
-    query: { enabled: marketsConfigured, staleTime: Infinity },
+    query: { enabled: markets.length > 0, staleTime: Infinity },
   });
 
   const byMarket = useMemo(() => {
@@ -83,7 +83,7 @@ export function useMarketParams() {
       });
     });
     return out;
-  }, [query.data]);
+  }, [query.data, markets]);
 
   return { isLoading: query.isLoading, byMarket };
 }
@@ -113,14 +113,14 @@ export type MarketRound = {
  *
  * Round ids restart at 1 in each market, so nothing here keys on `id` alone.
  */
-export function useRounds() {
+export function useRounds(markets: Market[]) {
   const { address } = useConnection();
 
   const counts = useReadContracts({
     contracts: markets.map(
       (m) => ({ ...base, address: m.address, functionName: "roundCount" }) as const,
     ),
-    query: { enabled: marketsConfigured, refetchInterval: 12_000 },
+    query: { enabled: markets.length > 0, refetchInterval: 12_000 },
   });
 
   // Flat, so the two batches below index straight into it.
@@ -135,7 +135,7 @@ export function useRounds() {
       }
     });
     return out;
-  }, [counts.data]);
+  }, [counts.data, markets]);
 
   const rounds = useReadContracts({
     contracts: keys.flatMap(({ market, id }) => [

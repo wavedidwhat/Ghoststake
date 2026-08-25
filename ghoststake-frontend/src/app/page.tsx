@@ -10,6 +10,7 @@ import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { usePoolStats } from "@/hooks/usePoolStats";
+import { useMarkets } from "@/hooks/useMarkets";
 import { useRounds } from "@/hooks/useRounds";
 import { Phase } from "@/lib/rounds";
 import { contractsConfigured } from "@/lib/env";
@@ -123,7 +124,11 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
  * money is actually doing, rather than stopping at "you have debt".
  */
 function PipelineStrip({ position }: { position: ReturnType<typeof useVaultPosition> }) {
-  const { rounds } = useRounds();
+  // Every market, not just the listed ones: a position in a market the owner
+  // has since delisted is still the user's money at risk, and leaving it out
+  // of this summary would understate what is at stake.
+  const { markets } = useMarkets();
+  const { rounds } = useRounds(markets);
 
   let atRisk = 0n;
   let open = 0;

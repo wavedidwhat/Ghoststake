@@ -52,6 +52,9 @@ const WANTED = {
   // The operator-driven feed behind a demo market (GHO-29). Only reachable
   // where such a market is deployed; the console hides it otherwise.
   DemoPriceFeed: ["push", "pushAt", "latestRoundId", "owner", "description", "decimals"],
+  // The list of markets the app offers (GHO-34). `all` in one call, because
+  // the alternative is a request per market and a list that trickles in.
+  MarketRegistry: ["all", "count", "at", "find"],
   BorrowLiquidityPool: [
     "balanceOfDebt", "balanceOfSupply", "utilization",
     "borrowRatePerSecond", "availableLiquidity", "totalBorrowed", "totalSupplied",
