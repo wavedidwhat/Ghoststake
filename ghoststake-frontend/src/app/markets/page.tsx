@@ -8,7 +8,8 @@ import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { RoundCard } from "@/components/RoundCard";
 import { useNow } from "@/hooks/useNow";
-import { useMarketParams, useRounds } from "@/hooks/useRounds";
+import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
+import { useMarketParams, useRounds, type MarketRound } from "@/hooks/useRounds";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import {
@@ -16,7 +17,8 @@ import {
   collateralVaultAbi,
   parimutuelRoundAbi,
 } from "@/lib/abis";
-import { env, marketConfigured } from "@/lib/env";
+import { env } from "@/lib/env";
+import { markets, marketsConfigured, type Market } from "@/lib/markets";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
 import { Phase, Side, type PhaseValue, type SideValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
@@ -26,7 +28,7 @@ export default function RoundsPage() {
 
   return (
     <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
-      {!marketConfigured ? (
+      {!marketsConfigured ? (
         <NotConfigured what="No market is configured for this network." />
       ) : connection.status !== "connected" ? (
         <NeedsWallet what="Positions are tied to your address, so a wallet is needed to see or open one." />
@@ -40,10 +42,13 @@ export default function RoundsPage() {
 function RoundsScreen({ address }: { address: `0x${string}` }) {
   const now = useNow();
   const params = useMarketParams();
+  const feeds = useMarketFeeds();
   const { rounds, isLoading, isError, refetch } = useRounds();
   const position = useVaultPosition();
 
-  const [taking, setTaking] = useState<{ id: bigint; side: SideValue } | null>(null);
+  // Which round, in which market. Round ids restart at 1 in every market, so
+  // the id alone would open the form on two cards at once.
+  const [taking, setTaking] = useState<{ key: string; id: bigint; side: SideValue } | null>(null);
 
   if (isError) {
     return (
@@ -56,93 +61,202 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
     );
   }
 
-  if (isLoading || params.entryCutoff === undefined || position.decimals === undefined) {
+  if (isLoading || params.byMarket.size === 0 || position.decimals === undefined) {
     return <Card><div className="h-24 animate-pulse rounded bg-raised" /></Card>;
   }
 
-  if (rounds.length === 0) {
-    return (
-      <Card>
-        <p className="text-sm text-ink-muted">
-          No markets are open yet. Rounds are scheduled by the keeper (GHO-24); until it runs,
-          the owner opens them by hand.
-        </p>
-      </Card>
-    );
-  }
+  return (
+    <div className="flex flex-col gap-10">
+      {markets.map((market) => (
+        <MarketBlock
+          key={market.key}
+          market={market}
+          params={params.byMarket.get(market.key)}
+          feed={feeds.byMarket.get(market.key)}
+          rounds={rounds.filter((r) => r.market.key === market.key)}
+          address={address}
+          position={position}
+          now={now}
+          taking={taking}
+          setTaking={setTaking}
+          refetch={refetch}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One market and its rounds, under a header that says where its price comes
+ * from.
+ *
+ * The header is not decoration. Two markets running the same contracts differ
+ * in exactly one way that matters to someone about to stake — who decides the
+ * settlement price — and that is the thing this says, on every market, in the
+ * same place. A demo market that looked like the real one would be the single
+ * most misleading screen in the product.
+ */
+function MarketBlock({
+  market,
+  params,
+  feed,
+  rounds,
+  address,
+  position,
+  now,
+  taking,
+  setTaking,
+  refetch,
+}: {
+  market: Market;
+  params: { entryCutoff: bigint; minSidePool: bigint; rake: bigint } | undefined;
+  feed: MarketFeed | undefined;
+  rounds: MarketRound[];
+  address: `0x${string}`;
+  position: ReturnType<typeof useVaultPosition>;
+  now: bigint | undefined;
+  taking: { key: string; id: bigint; side: SideValue } | null;
+  setTaking: (v: { key: string; id: bigint; side: SideValue } | null) => void;
+  refetch: () => void;
+}) {
+  if (!params) return null;
 
   const live = rounds.filter((r) => r.phase !== Phase.Resolved && r.phase !== Phase.Void);
   const done = rounds.filter((r) => r.phase === Phase.Resolved || r.phase === Phase.Void);
 
-  return (
-    <div className="flex flex-col gap-8">
-      <Section title="Live" empty="Nothing open right now.">
-        {live.map((r) => (
-          <RoundCard
-            key={r.id.toString()}
-            id={r.id}
-            round={r.round}
-            phase={(r.phase ?? Phase.None) as PhaseValue}
-            entryCutoff={params.entryCutoff!}
-            minSidePool={params.minSidePool!}
-            rake={params.rake!}
-            decimals={position.decimals!}
-            symbol={position.symbol}
-            now={now}
-            yourUp={r.up}
-            yourDown={r.down}
-            onStake={(side) => setTaking({ id: r.id, side })}
-          >
-            {taking?.id === r.id && (
-              <PositionForm
-                roundId={r.id}
-                side={taking.side}
-                address={address}
-                position={position}
-                onClose={() => setTaking(null)}
-                onDone={() => {
-                  setTaking(null);
-                  refetch();
-                  position.refetch();
-                }}
-              />
-            )}
-          </RoundCard>
-        ))}
-      </Section>
+  const card = (r: MarketRound, withClaim: boolean) => (
+    <RoundCard
+      key={`${market.key}-${r.id}`}
+      id={r.id}
+      round={r.round}
+      phase={(r.phase ?? Phase.None) as PhaseValue}
+      entryCutoff={params.entryCutoff}
+      minSidePool={params.minSidePool}
+      rake={params.rake}
+      decimals={position.decimals!}
+      symbol={position.symbol}
+      now={now}
+      yourUp={r.up}
+      yourDown={r.down}
+      onStake={withClaim ? undefined : (side) => setTaking({ key: market.key, id: r.id, side })}
+    >
+      {withClaim ? (
+        <ClaimRow
+          market={market}
+          roundId={r.id}
+          claimable={r.claimable}
+          claimed={r.isClaimed}
+          positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
+          decimals={position.decimals!}
+          symbol={position.symbol}
+          address={address}
+          onDone={() => {
+            refetch();
+            position.refetch();
+          }}
+        />
+      ) : (
+        taking?.key === market.key &&
+        taking.id === r.id && (
+          <PositionForm
+            market={market}
+            roundId={r.id}
+            side={taking.side}
+            address={address}
+            position={position}
+            onClose={() => setTaking(null)}
+            onDone={() => {
+              setTaking(null);
+              refetch();
+              position.refetch();
+            }}
+          />
+        )
+      )}
+    </RoundCard>
+  );
 
-      <Section title="Settled" empty="Nothing has settled yet.">
-        {done.map((r) => (
-          <RoundCard
-            key={r.id.toString()}
-            id={r.id}
-            round={r.round}
-            phase={(r.phase ?? Phase.None) as PhaseValue}
-            entryCutoff={params.entryCutoff!}
-            minSidePool={params.minSidePool!}
-            rake={params.rake!}
-            decimals={position.decimals!}
-            symbol={position.symbol}
-            now={now}
-            yourUp={r.up}
-            yourDown={r.down}
-          >
-            <ClaimRow
-              roundId={r.id}
-              claimable={r.claimable}
-              claimed={r.isClaimed}
-              positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
-              decimals={position.decimals!}
-              symbol={position.symbol}
-              address={address}
-              onDone={() => {
-                refetch();
-                position.refetch();
-              }}
-            />
-          </RoundCard>
-        ))}
-      </Section>
+  return (
+    <section className="flex flex-col gap-4">
+      <MarketHeader market={market} feed={feed} />
+
+      {rounds.length === 0 ? (
+        <Card>
+          <p className="text-sm text-ink-muted">
+            No rounds have been opened on this market yet. Rounds are scheduled by the keeper
+            (GHO-24); until it runs, the owner opens them by hand.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <Section title="Live" empty="Nothing open right now.">
+            {live.map((r) => card(r, false))}
+          </Section>
+          <Section title="Settled" empty="Nothing has settled yet.">
+            {done.map((r) => card(r, true))}
+          </Section>
+        </>
+      )}
+    </section>
+  );
+}
+
+function MarketHeader({ market, feed }: { market: Market; feed: MarketFeed | undefined }) {
+  // Either source saying "demo" is enough. The chain is the authority, but
+  // until it has answered the configured slot is the safer guess: erring
+  // towards the demo label costs a Chainlink market a badge for a second,
+  // while erring the other way tells someone a hand-set price is a Chainlink
+  // one.
+  const demo = market.kind === "demo" || feed?.isDemo === true;
+  const knownFeed = feed !== undefined;
+
+  // The feed's own description — "ETH / USD" on a Chainlink aggregator. The
+  // demo feed prefixes its label with a shout, which the badge already says,
+  // so only the asset half is kept here.
+  const label = feed ? (feed.description.split(" - ").pop() ?? market.label) : market.label;
+
+  return (
+    <div
+      className={`rounded-card border p-4 ${
+        demo ? "border-warning/50 bg-warning/5" : "border-border bg-surface"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-base font-semibold text-ink">{label}</h2>
+        {demo ? (
+          <span className="rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
+            Demo feed
+          </span>
+        ) : knownFeed ? (
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+            Chainlink
+          </span>
+        ) : (
+          <span className="rounded-full bg-raised px-2.5 py-0.5 text-xs text-ink-faint">
+            reading feed…
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+        {demo ? (
+          <>
+            <span className="font-medium text-warning">
+              The price on this market is set by hand by the operator.
+            </span>{" "}
+            The contracts, the staking and the settlement are the real ones — only the feed is
+            not. It exists because a round cannot resolve until its feed publishes after the
+            close, and a real feed&rsquo;s heartbeat runs to tens of minutes; here a round can be
+            watched all the way through.
+          </>
+        ) : knownFeed ? (
+          <>
+            Settlement is pinned to a Chainlink feed nobody here controls: the price is the last
+            one the feed published at or before the close, and the round after it proves that.
+          </>
+        ) : (
+          <>Reading this market&rsquo;s price feed from the chain.</>
+        )}
+      </p>
     </div>
   );
 }
@@ -180,6 +294,7 @@ function Section({
  * someone should do it, so it is shown before the button, not after.
  */
 function PositionForm({
+  market,
   roundId,
   side,
   address,
@@ -187,6 +302,7 @@ function PositionForm({
   onClose,
   onDone,
 }: {
+  market: Market;
   roundId: bigint;
   side: SideValue;
   address: `0x${string}`;
@@ -212,7 +328,7 @@ function PositionForm({
     address: position.assetAddress,
     abi: erc20Abi,
     functionName: "allowance",
-    args: [address, env.routerAddress!],
+    args: [address, market.router],
     chainId: activeChain.id,
     query: { enabled: Boolean(position.assetAddress) },
   });
@@ -221,7 +337,7 @@ function PositionForm({
     address: env.vaultAddress!,
     abi: collateralVaultAbi,
     functionName: "borrowAllowance",
-    args: [address, env.routerAddress!],
+    args: [address, market.router],
     chainId: activeChain.id,
   });
 
@@ -248,7 +364,7 @@ function PositionForm({
         address: position.assetAddress!,
         abi: erc20Abi,
         functionName: "approve",
-        args: [env.routerAddress!, ownAmount],
+        args: [market.router, ownAmount],
       });
       if (!ok) return;
       await routerAllowance.refetch();
@@ -262,14 +378,14 @@ function PositionForm({
         address: env.vaultAddress!,
         abi: collateralVaultAbi,
         functionName: "approveBorrowDelegate",
-        args: [env.routerAddress!, borrowAmount],
+        args: [market.router, borrowAmount],
       });
       if (!ok) return;
       await delegation.refetch();
     }
 
     const ok = await tx.send({
-      address: env.routerAddress!,
+      address: market.router,
       abi: borrowToPositionRouterAbi,
       functionName: "openPosition",
       args: [roundId, side, borrowAmount, ownAmount],
@@ -424,6 +540,7 @@ function HealthPreview({
  * the position and stops — no encouragement to try again, and nothing dressed up.
  */
 function ClaimRow({
+  market,
   roundId,
   claimable,
   claimed,
@@ -433,6 +550,7 @@ function ClaimRow({
   address,
   onDone,
 }: {
+  market: Market;
   roundId: bigint;
   claimable: bigint | undefined;
   claimed: boolean | undefined;
@@ -474,7 +592,7 @@ function ClaimRow({
           disabled={busy}
           onClick={async () => {
             const ok = await tx.send({
-              address: env.marketAddress!,
+              address: market.address,
               abi: parimutuelRoundAbi,
               functionName: "claim",
               args: [roundId, address],

@@ -543,6 +543,19 @@ export const parimutuelRoundAbi = [
   },
   {
     "type": "function",
+    "name": "oracle",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IRoundOracle"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "phaseOf",
     "inputs": [
       {
@@ -865,6 +878,64 @@ export const borrowToPositionRouterAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract CollateralVault"
+      }
+    ],
+    "stateMutability": "view"
+  }
+] as const;
+
+export const chainlinkRoundOracleAbi = [
+  {
+    "type": "function",
+    "name": "feed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract AggregatorV3Interface"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxStaleness",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  }
+] as const;
+
+export const aggregatorV3InterfaceAbi = [
+  {
+    "type": "function",
+    "name": "decimals",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "description",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "stateMutability": "view"
