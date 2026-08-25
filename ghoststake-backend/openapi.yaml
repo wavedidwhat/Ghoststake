@@ -1,0 +1,589 @@
+openapi: 3.1.0
+
+info:
+  title: GhostStake API
+  version: "1.0.0"
+  summary: Read the protocol's derived state without talking to a chain.
+  description: |
+    Every figure here is derived from public chain state — either from the
+    append-only ledger the indexer writes, or from a live `eth_call` pinned to
+    one block. Nothing is authoritative: the contracts are. This exists so a
+    client does not need a multicall and an ABI to render a page.
+
+    ## Two conventions that will otherwise catch you out
+
+    **Every uint256 is a decimal string, never a JSON number.** JSON numbers
+    are IEEE-754 doubles and a token balance in wei exceeds their 53 bits of
+    integer precision routinely, so `JSON.parse` would silently fabricate the
+    low digits. Feed these to `BigInt()`.
+
+    **`healthFactor` and `ltv` are `null` when there is no debt.** The contract
+    returns `type(uint256).max`, which is correct on-chain and a 78-digit
+    integer in JSON that every consumer would have to special-case. `hasDebt`
+    tells you which case you are in.
+
+    ## Freshness
+
+    Indexed reads are deliberately behind the chain head: the indexer stays
+    `INDEXER_CONFIRMATIONS` blocks back, because a shallower block can still be
+    reorged out. Every indexed response carries `indexedBlock` and `asOf` —
+    show them rather than implying the data is live. A user who has just staked
+    and does not see it yet has found the confirmation lag, not a bug.
+
+    `/health/{address}` is different: it reads the chain directly, pinned to
+    one block, and reports that block in `block`.
+
+servers:
+  - url: https://api.ghoststake.dev.wavedidwhat.com
+    description: Dev deployment (Ethereum Sepolia, chain id 11155111)
+  - url: http://localhost:8080
+    description: Local
+
+tags:
+  - name: health
+    description: Liveness and readiness, for orchestrators.
+  - name: auth
+    description: Sign-In With Ethereum handshake.
+  - name: market
+    description: Rounds and positions, from the indexed ledger.
+  - name: lending
+    description: Collateral, debt and health, read live from the chain.
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness
+      description: |
+        The process is up. Deliberately touches no dependencies — a database
+        blip must not make an orchestrator kill an otherwise healthy container.
+      security: []
+      responses:
+        "200":
+          description: Process is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness
+      description: Safe to receive traffic, so this *does* check the database.
+      security: []
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+                  database: { type: string, const: ok }
+        "503":
+          description: Database unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: degraded }
+                  database: { type: string, const: unreachable }
+
+  /api/v1/auth/nonce:
+    post:
+      tags: [auth]
+      summary: Request a login challenge
+      description: |
+        Returns the exact SIWE message to sign. The server stores what it
+        rendered and verifies against its own copy, so the client must sign
+        this string verbatim and never compose or edit one.
+
+        Rate limited to 20 requests per minute per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  $ref: "#/components/schemas/Address"
+      responses:
+        "200":
+          description: Challenge issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nonce: { type: string }
+                  message:
+                    type: string
+                    description: Sign this exactly as given.
+                  expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/auth/verify:
+    post:
+      tags: [auth]
+      summary: Exchange a signature for a token
+      description: |
+        The address is resolved server-side from the nonce, so a client cannot
+        nominate one. Failures are deliberately vague: a specific reason would
+        make this an oracle for probing valid addresses and live nonces.
+
+        Rate limited to 20 requests per minute per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nonce, signature]
+              properties:
+                nonce: { type: string }
+                signature: { type: string }
+      responses:
+        "200":
+          description: Signature verified.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, description: JWT bearer token. }
+                  address: { $ref: "#/components/schemas/Address" }
+                  expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/me:
+    get:
+      tags: [auth]
+      summary: The authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address: { $ref: "#/components/schemas/Address" }
+                  createdAt: { type: string, format: date-time }
+                  lastLoginAt: { type: [string, "null"], format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/rounds:
+    get:
+      tags: [market]
+      summary: Recent rounds with pool splits
+      description: |
+        Newest first. Pools are summed from indexed `PositionTaken` events, so
+        a client never has to sum on-chain.
+
+        Unauthenticated on purpose: every figure is derived from public chain
+        state, and requiring a login to read a public blockchain would be
+        theatre. Rate limited to 120 requests per minute per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Rounds, newest first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/IndexedEnvelope"
+                  - type: object
+                    properties:
+                      rake:
+                        allOf: [{ $ref: "#/components/schemas/Uint256" }]
+                        description: Protocol cut of a resolved round, WAD-scaled.
+                      entryCutoffSeconds:
+                        type: integer
+                        description: Entry closes this many seconds before lockTime.
+                      rounds:
+                        type: array
+                        items: { $ref: "#/components/schemas/Round" }
+
+  /api/v1/positions/{address}:
+    get:
+      tags: [market]
+      summary: An address's positions, open and historical
+      description: |
+        `open` is positions in rounds still running; `history` is everything
+        settled or voided. Each entry carries the whole round, so a client does
+        not have to join two responses.
+
+        Rate limited to 120 requests per minute per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AddressPath"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Positions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/IndexedEnvelope"
+                  - type: object
+                    properties:
+                      address: { $ref: "#/components/schemas/Address" }
+                      open:
+                        type: array
+                        items: { $ref: "#/components/schemas/Position" }
+                      history:
+                        type: array
+                        items: { $ref: "#/components/schemas/Position" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/v1/health/{address}:
+    get:
+      tags: [lending]
+      summary: Collateral, debt and health factor
+      description: |
+        Read live from the chain rather than from the ledger, and every call in
+        the request is pinned to one block — figures from two different blocks
+        never coexisted, and a health factor computed across them is a number
+        that was never true.
+
+        The debt figure projects interest forward to `asOf`, which the
+        contract's own stored value does not: `debtAtStoredIndex` is what the
+        chain last wrote, `pendingInterest` is the difference, and `debt` is
+        what is actually owed now.
+
+        Rate limited to 120 requests per minute per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AddressPath"
+      responses:
+        "200":
+          description: Position health.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503":
+          description: |
+            Chain reads are not configured on this deployment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/v1/ws:
+    get:
+      tags: [market]
+      summary: Live round updates (WebSocket)
+      description: |
+        A WebSocket upgrade, not a JSON endpoint — OpenAPI cannot describe the
+        frames, so they are documented here.
+
+        Connect to `wss://<host>/api/v1/ws`, optionally with `?address=0x…` to
+        also receive that address's positions. The origin is checked against
+        the same allowlist as CORS; a browser cannot be tricked into opening
+        this from another site.
+
+        The server sends one frame on connect and another whenever an indexed
+        range touches a round (or, if you named an address, that account).
+        Every frame is a **complete snapshot**, never a delta — a client that
+        misses one is not left inconsistent, and a slow client is dropped
+        rather than buffered without bound.
+
+        Frame shape:
+
+        ```json
+        {
+          "type": "rounds",
+          "block": 11562445,
+          "chainId": 11155111,
+          "asOf": "2026-08-25T06:59:58Z",
+          "rounds": [ /* Round */ ],
+          "address": "0x…",
+          "positions": [ /* Position, only when ?address= was given */ ]
+        }
+        ```
+
+        The client is not expected to send anything. Frames it does send are
+        read and discarded, which is what keeps the read deadline and the
+        pong handler alive.
+      security: []
+      parameters:
+        - name: address
+          in: query
+          required: false
+          description: Also stream this address's positions.
+          schema: { $ref: "#/components/schemas/Address" }
+      responses:
+        "101":
+          description: Switching protocols; the WebSocket is open.
+        "400":
+          description: Malformed address, or not a valid WebSocket upgrade.
+        "403":
+          description: Origin not in the allowlist.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AddressPath:
+      name: address
+      in: path
+      required: true
+      description: Ethereum address. Case-insensitive; normalised to EIP-55.
+      schema: { $ref: "#/components/schemas/Address" }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        Rounds to return. Defaults to 20, clamped to 100 — the query behind it
+        reads every event of every round it returns, so an unbounded limit is a
+        request that reads the whole table. Values that are unparseable or
+        non-positive fall back to the default rather than erroring.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, invalid or expired token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such record.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Too many requests from this IP.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: |
+            Deliberately generic on auth failures — a specific reason would
+            make the response an oracle for probing addresses and nonces.
+
+    Address:
+      type: string
+      pattern: "^0x[0-9a-fA-F]{40}$"
+      examples: ["0xE64b1081681c475A0Ec61b3B3f90e82734049275"]
+
+    Uint256:
+      type: string
+      pattern: "^[0-9]+$"
+      description: |
+        A uint256 as a decimal string. Never a JSON number — see the note on
+        precision in the API description. Parse with `BigInt()`.
+      examples: ["5000000000"]
+
+    IndexedEnvelope:
+      type: object
+      description: Fields every indexed response carries, describing its freshness.
+      properties:
+        chainId: { type: integer, examples: [11155111] }
+        indexedBlock:
+          type: integer
+          description: |
+            Highest block the indexer has processed. Behind the chain head by
+            the configured confirmation depth.
+        asOf:
+          type: string
+          format: date-time
+          description: When the response was rendered. Always UTC.
+
+    Round:
+      type: object
+      properties:
+        id: { type: integer }
+        status:
+          type: string
+          enum: [none, open, locked, resolved, void]
+          description: Stored state on the contract.
+        phase:
+          type: string
+          enum: [none, open, cutoff, observation, resolved, void]
+          description: |
+            What the round looks like from outside, including the two phases
+            that are functions of the clock rather than of storage. `cutoff`
+            and `observation` never appear as `status`.
+        entryOpen:
+          type: boolean
+          description: |
+            Whether a stake would be accepted *now*. False during `cutoff`
+            even though the round has not locked — which is why a UI must read
+            this rather than inferring it from `phase == open`.
+        openTime: { type: string, format: date-time }
+        lockTime: { type: string, format: date-time }
+        closeTime: { type: string, format: date-time }
+        upPool: { $ref: "#/components/schemas/Uint256" }
+        downPool: { $ref: "#/components/schemas/Uint256" }
+        totalPool: { $ref: "#/components/schemas/Uint256" }
+        upOdds:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            WAD-scaled payout multiplier for a unit staked on this side, net of
+            rake. 1e18 is break-even.
+        downOdds: { $ref: "#/components/schemas/Uint256" }
+        lockPrice:
+          oneOf:
+            - $ref: "#/components/schemas/Uint256"
+            - type: "null"
+          description: Null until the round locks.
+        closePrice:
+          oneOf:
+            - $ref: "#/components/schemas/Uint256"
+            - type: "null"
+          description: Null until the round resolves.
+        winner:
+          type: string
+          enum: [up, down]
+          description: Present only when resolved.
+        rakeTaken:
+          oneOf:
+            - $ref: "#/components/schemas/Uint256"
+            - type: "null"
+          description: Taken at resolution. Always null on a void.
+        voidReason:
+          type: string
+          description: |
+            Why the round voided, as the contract reported it — for example
+            "lock window missed". Present only when voided.
+          examples: ["lock window missed"]
+        lastBlock:
+          type: integer
+          description: Block of the most recent event for this round.
+
+    Position:
+      type: object
+      properties:
+        round: { $ref: "#/components/schemas/Round" }
+        upStake: { $ref: "#/components/schemas/Uint256" }
+        downStake: { $ref: "#/components/schemas/Uint256" }
+        totalStake: { $ref: "#/components/schemas/Uint256" }
+        claimable:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            Payable now. On a void this is the stake back; on a resolved round,
+            the share of the pot. Zero while the round is still running.
+        claimed: { type: boolean }
+        claimedAmount: { $ref: "#/components/schemas/Uint256" }
+        leveraged:
+          type: boolean
+          description: |
+            Opened with borrowed funds through the router, so settlement routes
+            back through it to repay the debt rather than paying the user.
+        openedAt: { type: string, format: date-time }
+
+    Health:
+      type: object
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        chainId: { type: integer }
+        block:
+          type: integer
+          description: Every figure below was read at this block.
+        asOf: { type: string, format: date-time }
+
+        principal:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: Deposit basis. Earns yield, never absorbs it.
+        settledYield: { $ref: "#/components/schemas/Uint256" }
+        accruedYield:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: Earned since the last checkpoint, not yet banked.
+        ledgerValue:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            principal + settledYield + accruedYield. **Not backed by assets** —
+            nothing funds this yield. Never lend against this figure.
+        sharesValue:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: What the vault could actually pay for these shares.
+        collateral:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            `min(ledgerValue, sharesValue)` — the safe figure, and the one the
+            health factor is computed from. Capping is what stops unfunded
+            yield becoming phantom collateral.
+
+        debt:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: Owed now, with interest projected forward to `asOf`.
+        debtAtStoredIndex:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: What the chain last wrote, before projection.
+        pendingInterest:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: The difference between the two above.
+        scaledDebt:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            Index-scaled debt, invariant under accrual. This is the figure that
+            sums; nominal borrow and repay amounts do not.
+        borrowIndex: { $ref: "#/components/schemas/Uint256" }
+        accruedBorrowIndex:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: The index projected to `asOf`.
+        maxBorrowable: { $ref: "#/components/schemas/Uint256" }
+
+        healthFactor:
+          oneOf:
+            - $ref: "#/components/schemas/Uint256"
+            - type: "null"
+          description: |
+            WAD-scaled: 1e18 is exactly at the liquidation line, above is safe.
+            **Null when there is no debt** — the contract returns
+            `type(uint256).max`, which is a 78-digit integer in JSON.
+        ltv:
+          oneOf:
+            - $ref: "#/components/schemas/Uint256"
+            - type: "null"
+          description: WAD-scaled. Null when there is no debt.
+        hasDebt:
+          type: boolean
+          description: Tells you which case the two nullable fields are in.
+        liquidatable:
+          type: boolean
+          description: healthFactor < 1e18.
+        band:
+          type: string
+          enum: [none, safe, watch, risk, danger, liquidatable]
+          description: |
+            Coarse classification for display, so a UI does not reimplement the
+            thresholds and disagree with the server about what "at risk" means.
