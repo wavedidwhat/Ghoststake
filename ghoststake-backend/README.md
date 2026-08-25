@@ -98,6 +98,11 @@ Properties this gives you:
 
 ## Endpoints
 
+The full contract is [`openapi.yaml`](openapi.yaml) — request and response
+shapes, status codes, and the websocket frame format. It is checked against the
+router by `TestOpenAPIMatchesTheRegisteredRoutes`, so an endpoint added without
+being documented fails CI rather than quietly making the spec a lie.
+
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/healthz` | – | liveness; touches no dependencies |
@@ -117,7 +122,21 @@ database read or an RPC call. `?limit=` on the two listings is clamped.
 
 Every uint256 crosses the wire as a **decimal string**. JSON numbers are
 doubles, and a balance in wei exceeds their 53 bits of integer precision — a
-raw number would silently lose its low digits in `JSON.parse`.
+raw number would silently lose its low digits in `JSON.parse`. Parse them with
+`BigInt()`.
+
+`healthFactor` and `ltv` are **`null` when there is no debt**, not a very large
+number. The contract returns `type(uint256).max`, which is right on-chain and a
+78-digit integer in JSON that every consumer would have to special-case.
+`hasDebt` says which case you are in.
+
+Indexed responses are deliberately **behind the chain head** — the indexer
+stays `INDEXER_CONFIRMATIONS` blocks back, because a shallower block can still
+be reorged out. `indexedBlock` and `asOf` are on every one of them, and a UI
+should show them rather than implying the numbers are live: a user who has just
+staked and cannot see it yet has found the confirmation lag, not a bug.
+`/api/v1/health/{address}` is the exception — it reads the chain directly, with
+every call in the request pinned to one block, and reports that block.
 
 `/api/v1/ws` accepts an optional `?address=`, and then includes that wallet's
 positions alongside the rounds. It sends whole snapshots rather than deltas, so
