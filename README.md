@@ -8,7 +8,7 @@ setup, and deploys independently.
 | Package | Stack | Notes |
 |---|---|---|
 | [`ghoststake-frontend/`](ghoststake-frontend) | Next.js 16, App Router, Tailwind v4 | `shadcn/typeset` for rendered markdown; lint/typecheck/build enforced in CI |
-| [`ghoststake-backend/`](ghoststake-backend) | Go 1.27, chi, Postgres | SIWE wallet auth, Arbitrum RPC; `make lint`/`test`/`build` enforced in CI |
+| [`ghoststake-backend/`](ghoststake-backend) | Go 1.27, chi, Postgres | SIWE wallet auth, Arbitrum RPC, and the round keeper; `make lint`/`test`/`build` enforced in CI |
 | [`ghoststake-contracts/`](ghoststake-contracts) | Solidity, Foundry | Arbitrum, `forge fmt`/`forge test` enforced in CI |
 
 ## Getting started
@@ -22,7 +22,11 @@ env files the frontend and backend read.
 
 cd ghoststake-frontend && pnpm install && pnpm dev     # :3000
 cd ghoststake-backend  && make run-local               # :8080, indexer on
+cd ghoststake-backend  && make run-keeper-local        # drives the rounds
 ```
+
+The keeper is optional but is what makes the local stack *move*: without it
+the seeded round sits open until somebody locks it by hand from `/operator`.
 
 anvil holds state in memory, so restarting it resets the world and the
 addresses change. Re-run the script rather than repairing a local chain.

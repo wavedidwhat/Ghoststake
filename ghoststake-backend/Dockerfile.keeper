@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+#
+# The round keeper (GHO-24), built as its own image.
+#
+# A second Dockerfile rather than a second stage in the API's, because the two
+# are deployed independently and only one of them holds a key. Sharing an
+# image would mean the API container carried a binary that can sign — harmless
+# in itself, and exactly the kind of "harmless in itself" that makes an
+# eventual mistake possible.
+
+ARG GO_VERSION=1.27
+
+# ---- builder ----------------------------------------------------------------
+FROM golang:${GO_VERSION}-alpine AS builder
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+# CGO_ENABLED=0 as for the API: go-ethereum falls back to the pure-Go
+# secp256k1, which is what makes the distroless runtime below possible. The
+# keeper signs transactions with it.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux \
+    go build -trimpath -ldflags="-s -w" -o /out/keeper ./cmd/keeper
+
+# ---- runtime ----------------------------------------------------------------
+# No shell and no package manager, which matters more here than anywhere else
+# in this repo: this is the one process holding a private key, and there is
+# nothing in the image to exec into if it is ever reached.
+#
+# No zoneinfo either — the keeper embeds the IANA database via `time/tzdata`
+# rather than depending on the image for it, because the market-hours calendar
+# is stated in America/New_York and a missing timezone would fail here while
+# working on every developer's laptop.
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+COPY --from=builder /out/keeper /app/keeper
+
+USER nonroot:nonroot
+
+# No EXPOSE: the keeper has no inbound surface at all. It polls an RPC
+# endpoint and sends transactions, and nothing ever connects to it.
+ENTRYPOINT ["/app/keeper"]

@@ -91,6 +91,11 @@ func (c *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]type
 	return logs, nil
 }
 
+// PendingBlockNumber is the argument HeaderByNumber takes for the block a
+// transaction sent now would land in. Negative block numbers are how
+// go-ethereum spells the named tags.
+var PendingBlockNumber = big.NewInt(-1)
+
 func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	h, err := c.eth.HeaderByNumber(ctx, number)
 	if err != nil {
