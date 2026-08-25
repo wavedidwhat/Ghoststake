@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -15,46 +16,67 @@ import (
 // between the port and this adapter is a build failure, not a runtime one.
 var _ ledger.Repository = (*Store)(nil)
 
-// AppendEntries writes entries and advances the cursor in one transaction.
+// Append writes one indexed range and advances the cursor in one transaction.
 //
-// Both or neither: a cursor that moved past rows that were never written
-// would skip them permanently, since nothing revisits a block the cursor has
-// already passed.
-func (s *Store) AppendEntries(ctx context.Context, entries []ledger.Entry, cursor ledger.Cursor) error {
+// All or nothing, across both tables: a cursor that moved past rows that were
+// never written would skip them permanently, since nothing revisits a block
+// the cursor has already passed. And a round position committed without the
+// borrow that funded it — they arrive in the same transaction on the leveraged
+// path — would be a stake with no debt behind it until the next cycle.
+func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cursor) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	const insert = `
+	const insertEntry = `
 		INSERT INTO ledger_entries (
 			chain_id, block_number, block_hash, block_time, tx_hash, log_index,
-			entry_index, contract, event_name, kind, account, ledger, delta,
+			record_index, contract, event_name, kind, account, ledger, delta,
 			counterparty
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		-- Idempotent by construction: replaying a range is a no-op rather
 		-- than a double count.
-		ON CONFLICT (chain_id, tx_hash, log_index, entry_index) DO NOTHING`
+		ON CONFLICT (chain_id, tx_hash, log_index, record_index) DO NOTHING`
 
-	batch := &pgx.Batch{}
-	for _, e := range entries {
-		var counterparty any
-		if e.Counterparty != "" {
-			counterparty = e.Counterparty
-		}
-		batch.Queue(insert,
+	const insertRound = `
+		INSERT INTO round_events (
+			chain_id, block_number, block_hash, block_time, tx_hash, log_index,
+			record_index, contract, event_name, round_id, account, side, amount,
+			data
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		ON CONFLICT (chain_id, tx_hash, log_index, record_index) DO NOTHING`
+
+	queued := &pgx.Batch{}
+	for _, e := range batch.Entries {
+		queued.Queue(insertEntry,
 			e.ChainID, e.BlockNumber, e.BlockHash, e.BlockTime, e.TxHash, e.LogIndex,
-			e.EntryIndex, e.Contract, e.EventName, e.Kind, e.Account, e.Ledger,
-			e.Delta.String(), counterparty,
+			e.RecordIndex, e.Contract, e.EventName, e.Kind, e.Account, e.Ledger,
+			e.Delta.String(), nullable(e.Counterparty),
 		)
 	}
-	if batch.Len() > 0 {
-		results := tx.SendBatch(ctx, batch)
-		for range entries {
+	for _, e := range batch.Rounds {
+		var amount any
+		if e.Amount != nil {
+			amount = e.Amount.String()
+		}
+		data, err := json.Marshal(e.Data)
+		if err != nil {
+			return fmt.Errorf("encode round event data: %w", err)
+		}
+		queued.Queue(insertRound,
+			e.ChainID, e.BlockNumber, e.BlockHash, e.BlockTime, e.TxHash, e.LogIndex,
+			e.RecordIndex, e.Contract, e.EventName, e.RoundID, nullable(e.Account),
+			nullable(e.Side), amount, data,
+		)
+	}
+	if queued.Len() > 0 {
+		results := tx.SendBatch(ctx, queued)
+		for range queued.Len() {
 			if _, err := results.Exec(); err != nil {
 				_ = results.Close()
-				return fmt.Errorf("insert entry: %w", err)
+				return fmt.Errorf("insert record: %w", err)
 			}
 		}
 		if err := results.Close(); err != nil {
@@ -63,14 +85,16 @@ func (s *Store) AppendEntries(ctx context.Context, entries []ledger.Entry, curso
 	}
 
 	const upsertCursor = `
-		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, updated_at)
-		VALUES ($1, $2, $3, $4, now())
+		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, contracts, updated_at)
+		VALUES ($1, $2, $3, $4, $5, now())
 		ON CONFLICT (stream) DO UPDATE
 		SET last_block = EXCLUDED.last_block,
 		    last_block_hash = EXCLUDED.last_block_hash,
 		    chain_id = EXCLUDED.chain_id,
+		    contracts = EXCLUDED.contracts,
 		    updated_at = now()`
-	if _, err := tx.Exec(ctx, upsertCursor, cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash); err != nil {
+	if _, err := tx.Exec(ctx, upsertCursor,
+		cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash, cursor.Contracts); err != nil {
 		return fmt.Errorf("upsert cursor: %w", err)
 	}
 
@@ -79,10 +103,13 @@ func (s *Store) AppendEntries(ctx context.Context, entries []ledger.Entry, curso
 
 // LoadCursor returns the stream's position, or ok=false if it has never run.
 func (s *Store) LoadCursor(ctx context.Context, stream string) (ledger.Cursor, bool, error) {
-	const q = `SELECT stream, chain_id, last_block, last_block_hash FROM indexer_cursor WHERE stream = $1`
+	const q = `
+		SELECT stream, chain_id, last_block, last_block_hash, contracts
+		FROM indexer_cursor WHERE stream = $1`
 
 	var c ledger.Cursor
-	err := s.pool.QueryRow(ctx, q, stream).Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash)
+	err := s.pool.QueryRow(ctx, q, stream).
+		Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash, &c.Contracts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ledger.Cursor{}, false, nil
 	}
@@ -116,6 +143,13 @@ func (s *Store) RollbackFrom(ctx context.Context, chainID int64, stream string, 
 	if err != nil {
 		return 0, fmt.Errorf("delete entries: %w", err)
 	}
+	// Round events rewind on exactly the same rule. Missing this table would
+	// leave a resolved round that the chain no longer resolved.
+	roundTag, err := tx.Exec(ctx,
+		`DELETE FROM round_events WHERE chain_id = $1 AND block_number >= $2`, chainID, fromBlock)
+	if err != nil {
+		return 0, fmt.Errorf("delete round events: %w", err)
+	}
 
 	// The hash is cleared rather than guessed: the indexer re-reads the block
 	// it rewinds to on the next cycle, and an empty hash means "unverified"
@@ -129,7 +163,17 @@ func (s *Store) RollbackFrom(ctx context.Context, chainID int64, stream string, 
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
-	return tag.RowsAffected(), nil
+	return tag.RowsAffected() + roundTag.RowsAffected(), nil
+}
+
+// nullable maps an empty string to SQL NULL, so an absent counterparty,
+// account or side is stored as "there is none" rather than as an empty
+// string that every query would then have to exclude by hand.
+func nullable(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
 }
 
 // BalanceOf derives one book for one account by summing its entries.

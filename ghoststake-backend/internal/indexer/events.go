@@ -3,10 +3,8 @@
 package indexer
 
 import (
-	"embed"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -16,47 +14,30 @@ import (
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 )
 
-//go:embed abis/*.json
-var abiFS embed.FS
-
 // contractSpec binds a deployed address to the ABI and the decoder for it.
 type contractSpec struct {
 	name    string
 	address common.Address
 	abi     abi.ABI
-	decode  func(name string, f *fields, log types.Log) []ledger.Entry
+	decode  func(name string, f *fields, log types.Log) ledger.Batch
 }
 
-func loadABI(file string) (abi.ABI, error) {
-	raw, err := abiFS.ReadFile("abis/" + file)
-	if err != nil {
-		return abi.ABI{}, fmt.Errorf("read embedded abi %s: %w", file, err)
-	}
-	// The generated files hold a bare array of event objects, which is a
-	// valid ABI document on its own.
-	parsed, err := abi.JSON(strings.NewReader(string(raw)))
-	if err != nil {
-		return abi.ABI{}, fmt.Errorf("parse abi %s: %w", file, err)
-	}
-	return parsed, nil
-}
-
-// decodeLog turns one log into zero or more ledger entries.
-func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Time) ([]ledger.Entry, error) {
+// decodeLog turns one log into zero or more ledger records.
+func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Time) (ledger.Batch, error) {
 	if len(log.Topics) == 0 {
-		return nil, nil
+		return ledger.Batch{}, nil
 	}
 	event, err := c.abi.EventByID(log.Topics[0])
 	if err != nil {
 		// Not an event we track. Normal: the filter is by address, so
 		// everything a watched contract emits arrives here.
-		return nil, nil
+		return ledger.Batch{}, nil
 	}
 
 	args := map[string]any{}
 	if len(log.Data) > 0 {
 		if err := c.abi.UnpackIntoMap(args, event.Name, log.Data); err != nil {
-			return nil, fmt.Errorf("unpack %s: %w", event.Name, err)
+			return ledger.Batch{}, fmt.Errorf("unpack %s: %w", event.Name, err)
 		}
 	}
 	// Indexed arguments live in topics, not in data, and UnpackIntoMap does
@@ -69,29 +50,43 @@ func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Tim
 	}
 	if len(indexed) > 0 {
 		if err := abi.ParseTopicsIntoMap(args, indexed, log.Topics[1:]); err != nil {
-			return nil, fmt.Errorf("parse topics %s: %w", event.Name, err)
+			return ledger.Batch{}, fmt.Errorf("parse topics %s: %w", event.Name, err)
 		}
 	}
 
 	f := &fields{args: args}
-	entries := c.decode(event.Name, f, log)
+	batch := c.decode(event.Name, f, log)
 	// Checked after decoding rather than per-field, so one bad event names
 	// everything it could not read instead of only the first thing.
 	if err := f.err(event.Name); err != nil {
-		return nil, err
+		return ledger.Batch{}, err
 	}
-	for i := range entries {
-		entries[i].ChainID = chainID
-		entries[i].BlockNumber = log.BlockNumber
-		entries[i].BlockHash = log.BlockHash.Hex()
-		entries[i].BlockTime = blockTime
-		entries[i].TxHash = log.TxHash.Hex()
-		entries[i].LogIndex = log.Index
-		entries[i].EntryIndex = i
-		entries[i].Contract = c.name
-		entries[i].EventName = event.Name
+
+	// Provenance is stamped here, once, rather than in every decoder: a
+	// decoder that forgot a field would write a record no rollback could find.
+	//
+	// RecordIndex restarts at zero for each kind because the two kinds are
+	// written to different tables, each with its own uniqueness constraint on
+	// (chain, tx, log index, record index).
+	stamp := ledger.Provenance{
+		ChainID:     chainID,
+		BlockNumber: log.BlockNumber,
+		BlockHash:   log.BlockHash.Hex(),
+		BlockTime:   blockTime,
+		TxHash:      log.TxHash.Hex(),
+		LogIndex:    log.Index,
+		Contract:    c.name,
+		EventName:   event.Name,
 	}
-	return entries, nil
+	for i := range batch.Entries {
+		batch.Entries[i].Provenance = stamp
+		batch.Entries[i].RecordIndex = i
+	}
+	for i := range batch.Rounds {
+		batch.Rounds[i].Provenance = stamp
+		batch.Rounds[i].RecordIndex = i
+	}
+	return batch, nil
 }
 
 // fields reads decoded event arguments, remembering anything it could not
@@ -128,6 +123,50 @@ func (f *fields) amount(key string) *big.Int {
 	return new(big.Int).Set(v)
 }
 
+// u64 reads a uint64 argument (the round timing fields).
+func (f *fields) u64(key string) uint64 {
+	v, ok := f.args[key].(uint64)
+	if !ok {
+		f.missing = append(f.missing, key)
+		return 0
+	}
+	return v
+}
+
+// enum reads a Solidity enum, which arrives as a uint8.
+func (f *fields) enum(key string) uint8 {
+	v, ok := f.args[key].(uint8)
+	if !ok {
+		f.missing = append(f.missing, key)
+		return 0
+	}
+	return v
+}
+
+func (f *fields) str(key string) string {
+	v, ok := f.args[key].(string)
+	if !ok {
+		f.missing = append(f.missing, key)
+		return ""
+	}
+	return v
+}
+
+// roundID reads the indexed uint256 round id.
+//
+// Narrowed to uint64 because it is a counter incremented once per round, and
+// a uint64 is what the database column and every URL that names a round use.
+// The narrowing is checked rather than assumed: a value that does not fit is
+// a decoder bug, not a round id.
+func (f *fields) roundID(key string) uint64 {
+	v, ok := f.args[key].(*big.Int)
+	if !ok || !v.IsUint64() {
+		f.missing = append(f.missing, key)
+		return 0
+	}
+	return v.Uint64()
+}
+
 func (f *fields) err(event string) error {
 	if len(f.missing) == 0 {
 		return nil
@@ -136,6 +175,14 @@ func (f *fields) err(event string) error {
 }
 
 func neg(v *big.Int) *big.Int { return new(big.Int).Neg(v) }
+
+// entriesOnly adapts a decoder that produces ledger entries and nothing else.
+// The vault and the pool are money-only; only the market produces both kinds.
+func entriesOnly(fn func(string, *fields, types.Log) []ledger.Entry) func(string, *fields, types.Log) ledger.Batch {
+	return func(name string, f *fields, log types.Log) ledger.Batch {
+		return ledger.Batch{Entries: fn(name, f, log)}
+	}
+}
 
 // The mint/burn sentinel, in the same checksummed form fields.addr emits.
 // (It has no letters, so the case would not matter — but relying on that is

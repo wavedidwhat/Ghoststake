@@ -9,18 +9,22 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/wavedidwhat/ghoststake/internal/abis"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 )
 
-func mustABI(t *testing.T, file string) contractSpec {
+func mustABI(t *testing.T, name string) contractSpec {
 	t.Helper()
-	parsed, err := loadABI(file)
+	parsed, err := abis.Load(name)
 	if err != nil {
-		t.Fatalf("load %s: %v", file, err)
+		t.Fatalf("load %s: %v", name, err)
 	}
-	name, decode := "CollateralVault", decodeVault
-	if file != "CollateralVault.json" {
-		name, decode = "BorrowLiquidityPool", decodePool
+	decode := entriesOnly(decodeVault)
+	switch name {
+	case abis.BorrowLiquidityPool:
+		decode = entriesOnly(decodePool)
+	case abis.ParimutuelRound:
+		decode = decodeRound
 	}
 	return contractSpec{name: name, address: common.HexToAddress("0x1"), abi: parsed, decode: decode}
 }
@@ -67,11 +71,16 @@ func testTime() time.Time { return time.Unix(1700000000, 0).UTC() }
 
 func decode(t *testing.T, spec contractSpec, log types.Log) []ledger.Entry {
 	t.Helper()
-	entries, err := spec.decodeLog(421614, log, time.Unix(1700000000, 0).UTC())
+	return decodeBatch(t, spec, log).Entries
+}
+
+func decodeBatch(t *testing.T, spec contractSpec, log types.Log) ledger.Batch {
+	t.Helper()
+	batch, err := spec.decodeLog(421614, log, time.Unix(1700000000, 0).UTC())
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	return entries
+	return batch
 }
 
 // ---------------------------------------------------------------------
@@ -79,7 +88,7 @@ func decode(t *testing.T, spec contractSpec, log types.Log) []ledger.Entry {
 // ---------------------------------------------------------------------
 
 func TestTransferDebitsAndCreditsBothSides(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	log := makeLog(t, spec, "Transfer", []common.Hash{topicAddr(alice), topicAddr(bob)}, wei(500))
 
 	entries := decode(t, spec, log)
@@ -102,13 +111,13 @@ func TestTransferDebitsAndCreditsBothSides(t *testing.T) {
 
 	// Entry indices must differ, or the unique constraint collapses them
 	// into one row and half the transfer is silently dropped.
-	if entries[0].EntryIndex == entries[1].EntryIndex {
-		t.Fatal("both entries share an entry_index")
+	if entries[0].RecordIndex == entries[1].RecordIndex {
+		t.Fatal("both entries share an record_index")
 	}
 }
 
 func TestMintOnlyCreditsTheReceiver(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	zero := common.Hash{}
 	log := makeLog(t, spec, "Transfer", []common.Hash{zero, topicAddr(alice)}, wei(1000))
 
@@ -126,7 +135,7 @@ func TestMintOnlyCreditsTheReceiver(t *testing.T) {
 }
 
 func TestBurnOnlyDebitsTheSender(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	log := makeLog(t, spec, "Transfer", []common.Hash{topicAddr(alice), common.Hash{}}, wei(250))
 
 	entries := decode(t, spec, log)
@@ -146,7 +155,7 @@ func TestBurnOnlyDebitsTheSender(t *testing.T) {
 // withdrawal, where assets = lienAmount + collateralReturned. If more than
 // one of them touched the same book, a single exit would be counted twice.
 func TestExitPathEventsDoNotShareABook(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 
 	withdrawn := decode(t, spec, makeLog(t, spec, "Withdrawn",
 		[]common.Hash{topicAddr(alice)}, wei(1000), wei(900)))
@@ -171,8 +180,8 @@ func TestExitPathEventsDoNotShareABook(t *testing.T) {
 // for the same movement. Only the pool's may be balance-bearing, because
 // only it carries the scaled amount.
 func TestOnlyThePoolOwnsTheDebtBook(t *testing.T) {
-	vault := mustABI(t, "CollateralVault.json")
-	pool := mustABI(t, "BorrowLiquidityPool.json")
+	vault := mustABI(t, abis.CollateralVault)
+	pool := mustABI(t, abis.BorrowLiquidityPool)
 
 	fromVault := decode(t, vault, makeLog(t, vault, "Borrowed",
 		[]common.Hash{topicAddr(alice)}, wei(100), wei(100)))
@@ -195,7 +204,7 @@ func TestOnlyThePoolOwnsTheDebtBook(t *testing.T) {
 }
 
 func TestRepayDebitsTheScaledDebtAndKeepsThePayer(t *testing.T) {
-	pool := mustABI(t, "BorrowLiquidityPool.json")
+	pool := mustABI(t, abis.BorrowLiquidityPool)
 	log := makeLog(t, pool, "Repaid",
 		[]common.Hash{topicAddr(bob), topicAddr(alice)}, wei(50), wei(48))
 
@@ -221,7 +230,7 @@ func TestRepayDebitsTheScaledDebtAndKeepsThePayer(t *testing.T) {
 // ---------------------------------------------------------------------
 
 func TestEveryEntryCarriesItsProvenance(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	log := makeLog(t, spec, "Deposited", []common.Hash{topicAddr(alice)}, wei(10), wei(9))
 
 	entries := decode(t, spec, log)
@@ -238,7 +247,7 @@ func TestEveryEntryCarriesItsProvenance(t *testing.T) {
 }
 
 func TestProtocolLevelEventsProduceNoEntries(t *testing.T) {
-	pool := mustABI(t, "BorrowLiquidityPool.json")
+	pool := mustABI(t, abis.BorrowLiquidityPool)
 	// Accrued moves the indices, which changes what every scaled balance is
 	// worth — but it is not one account's movement and must not become one.
 	log := makeLog(t, pool, "Accrued", nil, wei(1), wei(2), wei(3))
@@ -249,18 +258,18 @@ func TestProtocolLevelEventsProduceNoEntries(t *testing.T) {
 }
 
 func TestUnknownEventIsIgnoredRatherThanFailing(t *testing.T) {
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	// Filtering is by address, so anything the contract emits arrives here.
 	// An unrecognised topic must not stall the whole range.
 	log := types.Log{
 		Address: spec.address,
 		Topics:  []common.Hash{crypto.Keccak256Hash([]byte("NotOurEvent(uint256)"))},
 	}
-	entries, err := spec.decodeLog(421614, log, time.Now())
+	batch, err := spec.decodeLog(421614, log, time.Now())
 	if err != nil {
 		t.Fatalf("unknown event should not error: %v", err)
 	}
-	if len(entries) != 0 {
-		t.Fatalf("want no entries, got %d", len(entries))
+	if batch.Len() != 0 {
+		t.Fatalf("want no records, got %d", batch.Len())
 	}
 }

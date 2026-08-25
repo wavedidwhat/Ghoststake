@@ -1,10 +1,15 @@
-// Command genabi extracts event definitions from the forge build artifacts
-// into internal/indexer/abis, which the indexer embeds.
+// Command genabi copies contract ABIs out of the forge build artifacts into
+// internal/abis, which the backend embeds.
 //
 // Copying rather than hand-writing them is the point: a mistyped event
-// signature does not fail, it silently matches no logs, and the indexer would
-// run forever writing nothing. Regenerate with `make gen-abis` after changing
-// a contract.
+// signature does not fail, it silently matches no logs, and a mistyped
+// function signature produces a selector no contract answers to. Regenerate
+// with `make gen-abis` after changing a contract.
+//
+// The whole ABI is copied, not just the events. The indexer only needs events,
+// but the API calls views (health factor, indices, round state) and those need
+// the function entries from the same document — one file per contract, one
+// source of truth.
 package main
 
 import (
@@ -15,8 +20,9 @@ import (
 	"path/filepath"
 )
 
-// Only the contracts the indexer watches. Rounds are GHO-17.
-var contracts = []string{"CollateralVault", "BorrowLiquidityPool"}
+// Contracts the backend reads: the indexer watches all three, and the API
+// calls views on all three.
+var contracts = []string{"CollateralVault", "BorrowLiquidityPool", "ParimutuelRound"}
 
 func main() {
 	if err := run(); err != nil {
@@ -47,7 +53,9 @@ func run() error {
 			return fmt.Errorf("parse %s: %w", src, err)
 		}
 
-		events := make([]json.RawMessage, 0, len(artifact.ABI))
+		// Counted by kind purely so the output says what was copied. An
+		// artifact with no events would mean the wrong file was read.
+		var events, functions int
 		for _, entry := range artifact.ABI {
 			var kind struct {
 				Type string `json:"type"`
@@ -55,23 +63,26 @@ func run() error {
 			if err := json.Unmarshal(entry, &kind); err != nil {
 				return err
 			}
-			if kind.Type == "event" {
-				events = append(events, entry)
+			switch kind.Type {
+			case "event":
+				events++
+			case "function":
+				functions++
 			}
 		}
-		if len(events) == 0 {
+		if events == 0 {
 			return fmt.Errorf("%s: no events found", name)
 		}
 
-		out, err := json.MarshalIndent(events, "", "  ")
+		out, err := json.MarshalIndent(artifact.ABI, "", "  ")
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join("internal", "indexer", "abis", name+".json")
+		dst := filepath.Join("internal", "abis", name+".json")
 		if err := os.WriteFile(dst, append(out, '\n'), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", dst, err)
 		}
-		fmt.Printf("%s: %d events -> %s\n", name, len(events), dst)
+		fmt.Printf("%s: %d events, %d functions -> %s\n", name, events, functions, dst)
 	}
 	return nil
 }

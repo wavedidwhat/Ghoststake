@@ -69,6 +69,7 @@ func TestIndexerRejectsAMalformedAddress(t *testing.T) {
 			t.Setenv("INDEXER_START_BLOCK", "100")
 			t.Setenv("VAULT_ADDRESS", bad)
 			t.Setenv("POOL_ADDRESS", "0x47804e9acD330b10eb17480252b6602b500598d6")
+			t.Setenv("MARKET_ADDRESS", "0x2b5A4e5493d4a54E717057B127cf0C000d876f5F")
 			if _, err := config.Load(); err == nil {
 				t.Fatalf("VAULT_ADDRESS=%q was accepted", bad)
 			}
@@ -82,6 +83,7 @@ func TestIndexerAcceptsAValidAddress(t *testing.T) {
 	t.Setenv("INDEXER_START_BLOCK", "100")
 	t.Setenv("VAULT_ADDRESS", "0xb733034613Ed737666eA378ECA74B2E615367A59")
 	t.Setenv("POOL_ADDRESS", "0x47804e9acD330b10eb17480252b6602b500598d6")
+	t.Setenv("MARKET_ADDRESS", "0x2b5A4e5493d4a54E717057B127cf0C000d876f5F")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("valid addresses rejected: %v", err)
@@ -96,6 +98,7 @@ func TestIndexerRequiresAStartBlock(t *testing.T) {
 	t.Setenv("INDEXER_ENABLED", "true")
 	t.Setenv("VAULT_ADDRESS", "0xb733034613Ed737666eA378ECA74B2E615367A59")
 	t.Setenv("POOL_ADDRESS", "0x47804e9acD330b10eb17480252b6602b500598d6")
+	t.Setenv("MARKET_ADDRESS", "0x2b5A4e5493d4a54E717057B127cf0C000d876f5F")
 	if _, err := config.Load(); err == nil {
 		t.Fatal("a zero start block was accepted")
 	}

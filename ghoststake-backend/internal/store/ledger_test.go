@@ -50,10 +50,13 @@ func entry(account, book string, delta int64, block uint64, tx string, logIndex 
 		kind = ledger.KindFlow
 	}
 	return ledger.Entry{
-		ChainID: testChainID, BlockNumber: block, BlockHash: "0xblock", BlockTime: time.Unix(1700000000, 0).UTC(),
-		TxHash: tx, LogIndex: logIndex, EntryIndex: entryIndex,
-		Contract: "CollateralVault", EventName: "Transfer", Kind: kind,
-		Account: account, Ledger: book, Delta: big.NewInt(delta),
+		Provenance: ledger.Provenance{
+			ChainID: testChainID, BlockNumber: block, BlockHash: "0xblock",
+			BlockTime: time.Unix(1700000000, 0).UTC(),
+			TxHash:    tx, LogIndex: logIndex, RecordIndex: entryIndex,
+			Contract: "CollateralVault", EventName: "Transfer",
+		},
+		Kind: kind, Account: account, Ledger: book, Delta: big.NewInt(delta),
 	}
 }
 
@@ -73,11 +76,11 @@ func TestBalanceIsDerivedFromEntries(t *testing.T) {
 	ctx := context.Background()
 	acct := account(t, "")
 
-	err := st.AppendEntries(ctx, []ledger.Entry{
+	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
 		entry(acct, "shares", 1000, 10, "0xa", 0, 0),
 		entry(acct, "shares", -250, 11, "0xb", 0, 0),
 		entry(acct, "shares", 40, 12, "0xc", 0, 0),
-	}, cursorAt(12, "0xh12"))
+	}}, cursorAt(12, "0xh12"))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -99,12 +102,12 @@ func TestReplayingARangeIsANoOp(t *testing.T) {
 	ctx := context.Background()
 	acct := account(t, "")
 
-	batch := []ledger.Entry{
+	entries := []ledger.Entry{
 		entry(acct, "shares", 500, 20, "0xdup", 0, 0),
 		entry(acct, "shares", 500, 20, "0xdup", 0, 1),
 	}
 	for i := 0; i < 3; i++ {
-		if err := st.AppendEntries(ctx, batch, cursorAt(20, "0xh20")); err != nil {
+		if err := st.Append(ctx, ledger.Batch{Entries: entries}, cursorAt(20, "0xh20")); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -126,14 +129,16 @@ func TestBothLegsOfOneLogSurvive(t *testing.T) {
 	ctx := context.Background()
 	from, to := account(t, "from"), account(t, "to")
 
-	err := st.AppendEntries(ctx, []ledger.Entry{
-		{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb", BlockTime: time.Now().UTC(),
-			TxHash: "0xleg", LogIndex: 7, EntryIndex: 0, Contract: "CollateralVault",
-			EventName: "Transfer", Kind: "balance", Account: from, Ledger: "shares", Delta: big.NewInt(-100)},
-		{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb", BlockTime: time.Now().UTC(),
-			TxHash: "0xleg", LogIndex: 7, EntryIndex: 1, Contract: "CollateralVault",
-			EventName: "Transfer", Kind: "balance", Account: to, Ledger: "shares", Delta: big.NewInt(100)},
-	}, cursorAt(30, "0xh30"))
+	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
+		{Provenance: ledger.Provenance{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb",
+			BlockTime: time.Now().UTC(), TxHash: "0xleg", LogIndex: 7, RecordIndex: 0,
+			Contract: "CollateralVault", EventName: "Transfer"},
+			Kind: "balance", Account: from, Ledger: "shares", Delta: big.NewInt(-100)},
+		{Provenance: ledger.Provenance{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb",
+			BlockTime: time.Now().UTC(), TxHash: "0xleg", LogIndex: 7, RecordIndex: 1,
+			Contract: "CollateralVault", EventName: "Transfer"},
+			Kind: "balance", Account: to, Ledger: "shares", Delta: big.NewInt(100)},
+	}}, cursorAt(30, "0xh30"))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -150,10 +155,10 @@ func TestFlowEntriesNeverEnterABalance(t *testing.T) {
 	ctx := context.Background()
 	acct := account(t, "")
 
-	err := st.AppendEntries(ctx, []ledger.Entry{
+	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
 		entry(acct, "shares", 100, 40, "0xf", 0, 0),
 		entry(acct, "deposits", 9999, 40, "0xf", 1, 0),
-	}, cursorAt(40, "0xh40"))
+	}}, cursorAt(40, "0xh40"))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -175,11 +180,11 @@ func TestRollbackRemovesEntriesAndRewindsTheCursor(t *testing.T) {
 	ctx := context.Background()
 	acct := account(t, "")
 
-	err := st.AppendEntries(ctx, []ledger.Entry{
+	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
 		entry(acct, "shares", 100, 50, "0xr1", 0, 0),
 		entry(acct, "shares", 100, 51, "0xr2", 0, 0),
 		entry(acct, "shares", 100, 52, "0xr3", 0, 0),
-	}, cursorAt(52, "0xh52"))
+	}}, cursorAt(52, "0xh52"))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -221,7 +226,7 @@ func TestFullWidthUint256SurvivesTheRoundTrip(t *testing.T) {
 	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 	e := entry(acct, "shares", 0, 60, "0xbig", 0, 0)
 	e.Delta = max
-	if err := st.AppendEntries(ctx, []ledger.Entry{e}, cursorAt(60, "0xh60")); err != nil {
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{e}}, cursorAt(60, "0xh60")); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
@@ -251,7 +256,7 @@ func TestCursorRoundTrips(t *testing.T) {
 		t.Fatalf("want not found, got found=%v err=%v", found, err)
 	}
 
-	if err := st.AppendEntries(ctx, nil, cursorAt(77, "0xh77")); err != nil {
+	if err := st.Append(ctx, ledger.Batch{}, cursorAt(77, "0xh77")); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	cursor, found, err := st.LoadCursor(ctx, "test")

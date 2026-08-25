@@ -8,7 +8,12 @@ package ledger
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"math/big"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -57,22 +62,31 @@ const (
 	RepayFlow    = "repay_flow"
 )
 
-// Entry is one line of the ledger, derived from one log.
-type Entry struct {
-	// Provenance: every entry names the log it came from.
+// Provenance names the log a record was derived from.
+//
+// Shared by every kind of record this package defines, because the rule is the
+// same for all of them: nothing is written that cannot be traced back to a
+// specific log on a specific block, and nothing is trusted that a reorg
+// rollback could not find again by block number.
+type Provenance struct {
 	ChainID     int64
 	BlockNumber uint64
 	BlockHash   string
 	BlockTime   time.Time
 	TxHash      string
 	LogIndex    uint
-	// EntryIndex disambiguates entries from a single log: a transfer debits
+	// RecordIndex disambiguates records from a single log: a transfer debits
 	// one account and credits another, so the log's coordinates are not
 	// unique on their own.
-	EntryIndex int
+	RecordIndex int
 
 	Contract  string
 	EventName string
+}
+
+// Entry is one line of the ledger, derived from one log.
+type Entry struct {
+	Provenance
 
 	Kind         string
 	Account      string
@@ -80,6 +94,17 @@ type Entry struct {
 	Delta        *big.Int
 	Counterparty string
 }
+
+// StreamName is the cursor key for a chain's single indexing stream.
+//
+// Named here rather than in the indexer because the API reads it too, to
+// report how far behind the chain a projection is — and a reader that guesses
+// the key it was written under reports "never indexed" forever.
+//
+// It was "lending:<chain>" while the indexer only watched the vault and the
+// pool; migration 0003 renames existing cursors so that adding the market did
+// not silently restart the backfill from the deploy block.
+func StreamName(chainID int64) string { return fmt.Sprintf("ghoststake:%d", chainID) }
 
 // Cursor is how far a stream has been read.
 type Cursor struct {
@@ -89,6 +114,38 @@ type Cursor struct {
 	// LastHash is what makes reorg detection possible: the next cycle
 	// re-reads that block and compares. Empty means unverified.
 	LastHash string
+	// Contracts identifies the address set this position was reached by
+	// reading. See Fingerprint. Empty means a cursor written before the
+	// fingerprint existed.
+	Contracts string
+}
+
+// Fingerprint identifies a set of watched contract addresses.
+//
+// The stream name is chain-scoped, so a redeployment of the contracts reuses
+// the previous deployment's cursor. That cursor is at the old deployment's
+// head, which is almost always *past* the new deployment's start block — so
+// the indexer resumes ahead of the new contracts' history and never backfills
+// it. Nothing errors: it polls, finds nothing, and reports healthy while the
+// tables stay empty. This is that failure made detectable.
+//
+// The addresses are lowercased and sorted, so the fingerprint describes which
+// contracts are watched and not the order they were configured in or how they
+// happened to be cased.
+func Fingerprint(addresses []string) string {
+	normalized := make([]string, 0, len(addresses))
+	for _, a := range addresses {
+		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+			normalized = append(normalized, a)
+		}
+	}
+	sort.Strings(normalized)
+
+	sum := sha256.Sum256([]byte(strings.Join(normalized, ",")))
+	// Truncated: this is an identity check between two values we produced,
+	// not a defence against anyone constructing a collision. Full width would
+	// only make the log line harder to read.
+	return hex.EncodeToString(sum[:8])
 }
 
 // Repository is the port the indexer writes through.
@@ -98,15 +155,15 @@ type Cursor struct {
 // about Postgres, which is what lets the whole polling loop be tested against
 // an in-memory fake instead of a database.
 type Repository interface {
-	// AppendEntries writes entries and advances the cursor atomically.
+	// Append writes one indexed range and advances the cursor atomically.
 	// Implementations must be idempotent on
-	// (ChainID, TxHash, LogIndex, EntryIndex).
-	AppendEntries(ctx context.Context, entries []Entry, cursor Cursor) error
+	// (ChainID, TxHash, LogIndex, RecordIndex).
+	Append(ctx context.Context, batch Batch, cursor Cursor) error
 
 	// LoadCursor returns a stream's position, or ok=false if never run.
 	LoadCursor(ctx context.Context, stream string) (Cursor, bool, error)
 
-	// RollbackFrom deletes entries at or above a block and rewinds the
-	// cursor below it, returning how many entries went.
+	// RollbackFrom deletes every record at or above a block and rewinds the
+	// cursor below it, returning how many records went.
 	RollbackFrom(ctx context.Context, chainID int64, stream string, fromBlock uint64) (int64, error)
 }

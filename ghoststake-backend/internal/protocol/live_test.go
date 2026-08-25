@@ -1,0 +1,192 @@
+package protocol_test
+
+import (
+	"context"
+	"math/big"
+	"os"
+	"testing"
+
+	"github.com/wavedidwhat/ghoststake/internal/abis"
+	"github.com/wavedidwhat/ghoststake/internal/chain"
+	"github.com/wavedidwhat/ghoststake/internal/finance"
+	"github.com/wavedidwhat/ghoststake/internal/protocol"
+)
+
+// The seed script's borrower — a deposit and a live debt, which is what makes
+// the health factor a real number rather than a division by zero.
+const seededBorrower = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+
+// This is the test that justifies the finance package existing.
+//
+// `internal/finance` reimplements the contracts' arithmetic in Go so the API
+// can derive a whole position from three reads instead of six, and so it can
+// answer questions no contract view answers ("what would this become if you
+// borrowed another 500"). A reimplementation is a second opinion, and a second
+// opinion that drifts from the contract is worse than no opinion at all: a
+// health factor that says safe while the contract says liquidate is how
+// somebody loses collateral believing a screen.
+//
+// So the reimplementation is checked against the original, on a real chain,
+// at one pinned block. If a contract's maths changes and this package does
+// not, this fails.
+//
+// Needs the local stack up (scripts/local-stack.sh) and the deploy addresses.
+// Run it with `make test-live`.
+func TestDerivedFiguresMatchTheContracts(t *testing.T) {
+	rpcURL := os.Getenv("LIVE_RPC_URL")
+	vault, pool := os.Getenv("VAULT_ADDRESS"), os.Getenv("POOL_ADDRESS")
+	market := os.Getenv("MARKET_ADDRESS")
+	if rpcURL == "" || vault == "" || pool == "" || market == "" {
+		t.Skip("needs LIVE_RPC_URL, VAULT_ADDRESS, POOL_ADDRESS, MARKET_ADDRESS")
+	}
+
+	ctx := context.Background()
+
+	client, err := chain.Dial(ctx, rpcURL, 31337)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	reader, err := protocol.New(client, vault, pool, market)
+	if err != nil {
+		t.Fatalf("reader: %v", err)
+	}
+
+	params, err := reader.VaultParams(ctx)
+	if err != nil {
+		t.Fatalf("vault params: %v", err)
+	}
+
+	health, snapshot, err := reader.Health(ctx, seededBorrower)
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	t.Logf("block %d (%s)", snapshot.Block, snapshot.Time)
+	t.Logf("collateral %s  debt %s  hf %v  band %s",
+		health.Collateral, health.Debt, health.HealthFactor, health.Band)
+
+	// The same block the reader pinned its own calls to. Comparing against
+	// "latest" would be comparing two different instants, and on a chain that
+	// accrues interest per second they would differ for a reason that has
+	// nothing to do with correctness.
+	block := new(big.Int).SetUint64(snapshot.Block)
+
+	vaultContract, err := client.Bind(abis.CollateralVault, vault)
+	if err != nil {
+		t.Fatalf("bind vault: %v", err)
+	}
+	poolContract, err := client.Bind(abis.BorrowLiquidityPool, pool)
+	if err != nil {
+		t.Fatalf("bind pool: %v", err)
+	}
+
+	address, err := chain.ParseAddress(seededBorrower)
+	if err != nil {
+		t.Fatalf("address: %v", err)
+	}
+
+	same := func(what string, got *big.Int, contract *chain.Contract, method string, args ...any) {
+		t.Helper()
+		want, err := contract.CallBig(ctx, block, method, args...)
+		if err != nil {
+			t.Fatalf("%s: %v", method, err)
+		}
+		if got.Cmp(want) != 0 {
+			t.Errorf("%s: derived %s, contract says %s", what, got, want)
+			return
+		}
+		t.Logf("%-14s %s (matches %s)", what, got, method)
+	}
+
+	same("accrued yield", health.AccruedYield, vaultContract, "accruedYield", address)
+	same("collateral", health.Collateral, vaultContract, "collateralValue", address)
+	// Compared at the *stored* index, which is what the contract's views read.
+	// The figures the API actually reports differ — see below.
+	same("stored debt", health.DebtAtStoredIndex, poolContract, "balanceOfDebt", address)
+	// The vault reads the debt back through the pool, so this also proves the
+	// two agree — which is the desync the security review found and removed.
+	same("stored (lien)", health.DebtAtStoredIndex, vaultContract, "lienOf", address)
+
+	storedRoom := finance.MaxBorrowable(health.Collateral, params.MaxLTV, health.DebtAtStoredIndex)
+	same("stored room", storedRoom, vaultContract, "maxBorrowable", address)
+
+	if !health.HasDebt {
+		t.Fatal("the seeded borrower has no debt — the seed did not run, and this test proves nothing")
+	}
+
+	// The health factor, at the stored index, must equal the contract's view
+	// exactly. This is the arithmetic parity check.
+	contractHF, err := vaultContract.CallBig(ctx, block, "healthFactor", address)
+	if err != nil {
+		t.Fatalf("healthFactor: %v", err)
+	}
+	storedHF, _ := finance.HealthFactor(health.Collateral, params.LiquidationThreshold, health.DebtAtStoredIndex)
+	if storedHF.Cmp(contractHF) != 0 {
+		t.Errorf("health factor at the stored index: derived %s, contract says %s", storedHF, contractHF)
+	} else {
+		t.Logf("%-14s %s (matches healthFactor)", "health factor", storedHF)
+	}
+
+	// And the figure the API actually reports is the pessimistic one: debt
+	// with the pending interest counted, which is what a liquidator's own
+	// transaction would compute after calling accrue().
+	if health.Debt.Cmp(health.DebtAtStoredIndex) < 0 {
+		t.Fatalf("reported debt %s is below the stored %s", health.Debt, health.DebtAtStoredIndex)
+	}
+	if health.HealthFactor.Cmp(storedHF) > 0 {
+		t.Fatalf("the reported health factor %s is more optimistic than the contract view %s",
+			health.HealthFactor, storedHF)
+	}
+	// `_borrow` accrues before it checks the LTV ceiling too, so the borrowing
+	// room the view reports is money the contract would refuse to lend. A UI
+	// that offered "borrow max" from `maxBorrowable()` would build a
+	// transaction that reverts.
+	if health.MaxBorrowable.Cmp(storedRoom) > 0 {
+		t.Fatalf("the reported room %s exceeds the view's %s", health.MaxBorrowable, storedRoom)
+	}
+
+	t.Logf("%-14s %s pending", "interest", health.PendingInterest)
+	t.Logf("%-14s reported %s, view says %s", "health factor", health.HealthFactor, storedHF)
+	t.Logf("%-14s reported %s, view says %s", "room", health.MaxBorrowable, storedRoom)
+}
+
+// The market's immutables have to be read, not assumed: the entry cutoff
+// decides when the stake button closes, and a value the API believes and the
+// contract does not is a button that lies.
+func TestMarketParamsComeFromTheContract(t *testing.T) {
+	rpcURL := os.Getenv("LIVE_RPC_URL")
+	vault, pool := os.Getenv("VAULT_ADDRESS"), os.Getenv("POOL_ADDRESS")
+	market := os.Getenv("MARKET_ADDRESS")
+	if rpcURL == "" || vault == "" || pool == "" || market == "" {
+		t.Skip("needs LIVE_RPC_URL, VAULT_ADDRESS, POOL_ADDRESS, MARKET_ADDRESS")
+	}
+
+	ctx := context.Background()
+	client, err := chain.Dial(ctx, rpcURL, 31337)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	reader, err := protocol.New(client, vault, pool, market)
+	if err != nil {
+		t.Fatalf("reader: %v", err)
+	}
+
+	params, err := reader.MarketParams(ctx)
+	if err != nil {
+		t.Fatalf("market params: %v", err)
+	}
+	if params.EntryCutoff <= 0 {
+		t.Fatalf("entry cutoff %d — entry would never close", params.EntryCutoff)
+	}
+	if params.Rake == nil || params.Rake.Cmp(finance.MulDiv(finance.WAD, big.NewInt(10), big.NewInt(100))) > 0 {
+		t.Fatalf("rake %v is above the contract's 10%% ceiling", params.Rake)
+	}
+	if params.MinSidePool == nil || params.MinSidePool.Sign() == 0 {
+		t.Fatal("minSidePool is zero, which would let a one-sided round resolve")
+	}
+	t.Logf("entry cutoff %ds  rake %s  min side pool %s",
+		params.EntryCutoff, params.Rake, params.MinSidePool)
+}
