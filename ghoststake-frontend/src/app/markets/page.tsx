@@ -9,6 +9,7 @@ import { Card } from "@/components/Card";
 import { RoundCard } from "@/components/RoundCard";
 import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
+import { useMarkets } from "@/hooks/useMarkets";
 import { useMarketParams, useRounds, type MarketRound } from "@/hooks/useRounds";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
@@ -18,9 +19,18 @@ import {
   parimutuelRoundAbi,
 } from "@/lib/abis";
 import { env } from "@/lib/env";
-import { markets, marketsConfigured, type Market } from "@/lib/markets";
+import { anyMarketConfigured, type Market } from "@/lib/markets";
+import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
-import { Phase, Side, type PhaseValue, type SideValue } from "@/lib/rounds";
+import {
+  Phase,
+  Side,
+  entryClosesAt,
+  formatCountdown,
+  multipleFor,
+  type PhaseValue,
+  type SideValue,
+} from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
 
 export default function RoundsPage() {
@@ -28,7 +38,7 @@ export default function RoundsPage() {
 
   return (
     <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
-      {!marketsConfigured ? (
+      {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : connection.status !== "connected" ? (
         <NeedsWallet what="Positions are tied to your address, so a wallet is needed to see or open one." />
@@ -39,41 +49,107 @@ export default function RoundsPage() {
   );
 }
 
+/**
+ * The browsing surface: what there is to have a view on, then the rounds of
+ * whichever one you picked.
+ *
+ * A list, not a single market, because a list is what makes someone open the
+ * app when they hold no position. One market is a page you visit when you
+ * already know what you want.
+ */
 function RoundsScreen({ address }: { address: `0x${string}` }) {
   const now = useNow();
-  const params = useMarketParams();
-  const feeds = useMarketFeeds();
-  const { rounds, isLoading, isError, refetch } = useRounds();
+  const { markets, listed, isLoading: marketsLoading, isError: marketsError } = useMarkets();
+  const params = useMarketParams(markets);
+  const feeds = useMarketFeeds(markets);
+  const { rounds, isLoading, isError, refetch } = useRounds(markets);
   const position = useVaultPosition();
 
-  // Which round, in which market. Round ids restart at 1 in every market, so
-  // the id alone would open the form on two cards at once.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [taking, setTaking] = useState<{ key: string; id: bigint; side: SideValue } | null>(null);
 
-  if (isError) {
+  if (isError || marketsError) {
     return (
       <Card>
         <p className="text-sm text-ink-muted">
-          Rounds could not be read. The chain is unreachable right now — nothing about your
+          Markets could not be read. The chain is unreachable right now — nothing about your
           positions has changed.
         </p>
       </Card>
     );
   }
 
-  if (isLoading || params.byMarket.size === 0 || position.decimals === undefined) {
-    return <Card><div className="h-24 animate-pulse rounded bg-raised" /></Card>;
+  if (marketsLoading || isLoading || position.decimals === undefined) {
+    return (
+      <Card>
+        <div className="h-24 animate-pulse rounded bg-raised" />
+      </Card>
+    );
   }
 
+  if (markets.length === 0) {
+    return (
+      <Card>
+        <p className="text-sm text-ink-muted">
+          The registry lists no markets yet. Adding one is a transaction, not a redeploy.
+        </p>
+      </Card>
+    );
+  }
+
+  // A market a user holds a position in is always shown, even if the owner
+  // has delisted it. Delisting hides a market from browsing; it does not
+  // settle anyone's stake, and hiding it from the holder would.
+  const holdings = new Set(
+    rounds.filter((r) => (r.up ?? 0n) + (r.down ?? 0n) > 0n).map((r) => r.market.key),
+  );
+  const visible = markets.filter((m) => m.enabled || holdings.has(m.key));
+
+  const summaries = visible
+    .map((market) => summarise(market, rounds, params.byMarket.get(market.key)))
+    .sort(byActivity);
+
+  const selected =
+    summaries.find((s) => s.market.key === selectedKey) ?? summaries[0] ?? undefined;
+
   return (
-    <div className="flex flex-col gap-10">
-      {markets.map((market) => (
+    <div className="flex flex-col gap-8">
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">Markets</h2>
+          <span className="h-px flex-1 bg-border" />
+          {listed.length !== visible.length && (
+            <span className="text-[11px] text-ink-faint">
+              includes {visible.length - listed.length} delisted you hold
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {summaries.map((summary) => (
+            <MarketRow
+              key={summary.market.key}
+              summary={summary}
+              feed={feeds.byMarket.get(summary.market.key)}
+              selected={summary.market.key === selected?.market.key}
+              decimals={position.decimals!}
+              symbol={position.symbol}
+              now={now}
+              onSelect={() => {
+                setSelectedKey(summary.market.key);
+                setTaking(null);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      {selected && selected.params && (
         <MarketBlock
-          key={market.key}
-          market={market}
-          params={params.byMarket.get(market.key)}
-          feed={feeds.byMarket.get(market.key)}
-          rounds={rounds.filter((r) => r.market.key === market.key)}
+          market={selected.market}
+          params={selected.params}
+          feed={feeds.byMarket.get(selected.market.key)}
+          rounds={rounds.filter((r) => r.market.key === selected.market.key)}
           address={address}
           position={position}
           now={now}
@@ -81,21 +157,131 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
           setTaking={setTaking}
           refetch={refetch}
         />
-      ))}
+      )}
     </div>
   );
 }
 
-/**
- * One market and its rounds, under a header that says where its price comes
- * from.
- *
- * The header is not decoration. Two markets running the same contracts differ
- * in exactly one way that matters to someone about to stake — who decides the
- * settlement price — and that is the thing this says, on every market, in the
- * same place. A demo market that looked like the real one would be the single
- * most misleading screen in the product.
- */
+/** One market in the list: what it prices, on what cadence, and what is at stake. */
+function MarketRow({
+  summary,
+  feed,
+  selected,
+  decimals,
+  symbol,
+  now,
+  onSelect,
+}: {
+  summary: Summary;
+  feed: MarketFeed | undefined;
+  selected: boolean;
+  decimals: number;
+  symbol: string;
+  now: bigint | undefined;
+  onSelect: () => void;
+}) {
+  const { market, params, live } = summary;
+  const demo = market.kindHint === "demo" || feed?.isDemo === true;
+  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
+
+  const upMultiple = live && params ? multipleFor(live.round, Side.Up, params.rake) : null;
+  const downMultiple = live && params ? multipleFor(live.round, Side.Down, params.rake) : null;
+
+  const closesIn =
+    live && params && now !== undefined && live.phase === Phase.Open
+      ? entryClosesAt(live.round, params.entryCutoff) - now
+      : undefined;
+
+  return (
+    <button
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`cursor-pointer rounded-card border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none ${
+        selected ? "border-accent bg-raised/60" : "border-border bg-surface hover:border-border-strong"
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-sm font-medium text-ink">{label}</span>
+          {demo && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warning uppercase">
+              Demo feed
+            </span>
+          )}
+          {!market.enabled && (
+            <span className="rounded-full bg-raised px-2 py-0.5 text-[11px] text-ink-faint">
+              delisted — you hold a position
+            </span>
+          )}
+          {market.horizon !== undefined && (
+            <span className="text-[11px] text-ink-faint">
+              {formatHorizon(market.horizon)} rounds
+            </span>
+          )}
+        </div>
+
+        {closesIn !== undefined && (
+          <span className="text-[11px] text-ink-faint">
+            entry closes in{" "}
+            <span className="tabular text-ink">{formatCountdown(closesIn)}</span>
+          </span>
+        )}
+      </div>
+
+      {live ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <SideSummary
+            name="Up"
+            pool={live.round.upPool}
+            multiple={upMultiple}
+            decimals={decimals}
+            symbol={symbol}
+          />
+          <SideSummary
+            name="Down"
+            pool={live.round.downPool}
+            multiple={downMultiple}
+            decimals={decimals}
+            symbol={symbol}
+          />
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-ink-faint">No round open right now.</p>
+      )}
+    </button>
+  );
+}
+
+function SideSummary({
+  name,
+  pool,
+  multiple,
+  decimals,
+  symbol,
+}: {
+  name: string;
+  pool: bigint;
+  multiple: bigint | null;
+  decimals: number;
+  symbol: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 rounded-lg bg-raised/40 px-3 py-2">
+      <span className="text-xs text-ink-muted">{name}</span>
+      <span className="flex items-baseline gap-2">
+        <span className="tabular text-xs text-ink-faint">
+          {formatAmount(pool, decimals, 0)} {symbol}
+        </span>
+        {/* A live quote, not a promise: it moves with every entry, and an
+            empty side has no multiple at all rather than an infinite one. */}
+        <span className="tabular text-sm text-ink">
+          {multiple === null ? "—" : `${formatAmount(multiple, 18, 2)}×`}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function MarketBlock({
   market,
   params,
@@ -207,13 +393,16 @@ function MarketHeader({ market, feed }: { market: Market; feed: MarketFeed | und
   // towards the demo label costs a Chainlink market a badge for a second,
   // while erring the other way tells someone a hand-set price is a Chainlink
   // one.
-  const demo = market.kind === "demo" || feed?.isDemo === true;
+  const demo = market.kindHint === "demo" || feed?.isDemo === true;
   const knownFeed = feed !== undefined;
 
   // The feed's own description — "ETH / USD" on a Chainlink aggregator. The
   // demo feed prefixes its label with a shout, which the badge already says,
   // so only the asset half is kept here.
-  const label = feed ? (feed.description.split(" - ").pop() ?? market.label) : market.label;
+  // The feed's own description — "ETH / USD" on a Chainlink aggregator. There
+  // is no fallback label to fall back to: the registry deliberately stores
+  // none, so an unread feed is "reading", not a guess.
+  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
 
   return (
     <div

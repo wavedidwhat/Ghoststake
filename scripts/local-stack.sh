@@ -67,6 +67,7 @@ VAULT=$(addr_of "CollateralVault")
 DEMO_FEED=$(addr_of "DemoPriceFeed" || true)
 DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound" || true)
 DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr" || true)
+REGISTRY=$(addr_of "MarketRegistry" || true)
 MARKET=$(addr_of "ParimutuelRound")
 ROUTER=$(addr_of "BorrowToPositionRtr")
 ORACLE=$(addr_of "ChainlinkRoundOracle")
@@ -78,10 +79,44 @@ if [ -z "$VAULT" ] || [ -z "$POOL" ] || [ -z "$MARKET" ]; then
 fi
 
 # ----------------------------------------------------------------- seed ----
+#
+# Mine first, so the seed simulates against a current clock.
+#
+# forge simulates against the latest block, and anvil only mines when asked —
+# so a chain that has been idle reports a stale timestamp. The seed opens a
+# round at that timestamp, the next block jumps the clock forward to real
+# time, and `openRound` rejects an open time that is now in the past. It
+# surfaces as a bare `InvalidSchedule` with the script's output swallowed by
+# the `sed` below, which is a miserable half hour to debug.
+cast rpc evm_mine --rpc-url "$RPC_URL" >/dev/null
+
 log "seeding activity"
-ASSET_ADDRESS="$ASSET" POOL_ADDRESS="$POOL" VAULT_ADDRESS="$VAULT" MARKET_ADDRESS="$MARKET" \
-  forge script script/Seed.s.sol:Seed --rpc-url "$RPC_URL" --broadcast 2>&1 |
-  sed -n '/=== seeded ===/,/^  bob/p'
+export ASSET_ADDRESS="$ASSET" POOL_ADDRESS="$POOL" VAULT_ADDRESS="$VAULT" MARKET_ADDRESS="$MARKET"
+
+# Captured, not piped straight into `sed`: a failing forge script under
+# `pipefail` takes the whole script down, and with its output consumed by the
+# range pattern there is nothing left to say why. That happened twice.
+if ! SEED_OUT="$(forge script script/Seed.s.sol:Seed --rpc-url "$RPC_URL" --broadcast 2>&1)"; then
+  echo "$SEED_OUT" >&2
+  exit 1
+fi
+echo "$SEED_OUT" | sed -n '/=== seeded ===/,/^  bob/p'
+
+# The round is opened with a lead and staked in a second pass, because
+# `openRound` refuses a start in the past and `takePosition` refuses one
+# before entry opens — a window narrower than the gap between simulating a
+# transaction and mining it. Warping between the two is what makes it fit.
+SEED_ROUND="$(echo "$SEED_OUT" | grep -oE 'SEED_ROUND=[0-9]+' | head -1 | cut -d= -f2)"
+if [ -n "$SEED_ROUND" ]; then
+  cast rpc evm_increaseTime 130 --rpc-url "$RPC_URL" >/dev/null
+  cast rpc evm_mine --rpc-url "$RPC_URL" >/dev/null
+  if ! STAKE_OUT="$(SEED_ROUND="$SEED_ROUND" forge script script/Seed.s.sol:Seed --sig 'stakeRound()' \
+      --rpc-url "$RPC_URL" --broadcast 2>&1)"; then
+    echo "$STAKE_OUT" >&2
+    exit 1
+  fi
+  echo "$STAKE_OUT" | sed -n '/=== staked ===/,/round #/p'
+fi
 
 # ------------------------------------------------------------ env files ----
 # Written rather than printed. Copying six addresses by hand is how a local
@@ -99,6 +134,9 @@ NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
 NEXT_PUBLIC_DEMO_MARKET_ADDRESS=$DEMO_MARKET_ADDR
 NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=$DEMO_ROUTER
 NEXT_PUBLIC_DEMO_FEED_ADDRESS=$DEMO_FEED
+# With this set, the four addresses above are ignored and the market list is
+# read from the chain instead (GHO-34).
+NEXT_PUBLIC_REGISTRY_ADDRESS=$REGISTRY
 ENV
 
 log "writing ghoststake-backend/.env.local"
@@ -129,6 +167,7 @@ cat <<SUMMARY
   DemoPriceFeed         ${DEMO_FEED:-(none)}
   Demo ParimutuelRound  ${DEMO_MARKET_ADDR:-(none)}
   Demo router           ${DEMO_ROUTER:-(none)}
+  MarketRegistry        ${REGISTRY:-(none)}
 
   Frontend    cd ghoststake-frontend && pnpm dev      → http://localhost:3000
   Backend     cd ghoststake-backend  && make run-local

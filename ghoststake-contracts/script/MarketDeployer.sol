@@ -10,6 +10,7 @@ import { ParimutuelRound, IRoundOracle } from "../src/ParimutuelRound.sol";
 import { BorrowToPositionRouter } from "../src/BorrowToPositionRouter.sol";
 import { AggregatorV3Interface } from "../src/interfaces/AggregatorV3Interface.sol";
 import { DemoPriceFeed } from "../src/demo/DemoPriceFeed.sol";
+import { MarketRegistry } from "../src/MarketRegistry.sol";
 
 /// @notice How a market is deployed, shared by every script that deploys one.
 ///
@@ -30,6 +31,17 @@ abstract contract MarketDeployer is Script {
     address internal demoFeed;
     address internal demoMarket;
     address internal demoRouter;
+
+    /// @dev Listing a market where a registry exists, and doing nothing where
+    /// one does not. Passing `address(0)` is the normal case for a deployment
+    /// that predates the registry, not an error — the frontend falls back to
+    /// its environment there.
+    function listIfPossible(address registry, ParimutuelRound market, BorrowToPositionRouter router, uint64 horizon)
+        internal
+    {
+        if (registry == address(0)) return;
+        MarketRegistry(registry).list(market, router, horizon);
+    }
 
     /// @dev The second market, on a feed the deployer publishes into on cue.
     ///
