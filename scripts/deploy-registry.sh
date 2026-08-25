@@ -30,7 +30,17 @@ log() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 
 ENV_FILE="$ROOT/ghoststake-frontend/.env.local"
 [ -f "$ENV_FILE" ] || { echo "no $ENV_FILE — deploy first, or set the addresses by hand" >&2; exit 1; }
-get() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2; }
+# Reads one key, and tolerates it being absent.
+#
+# The `|| true` is load-bearing under `set -o pipefail`: a key that is not in
+# the file makes `grep` exit non-zero, which fails the command substitution,
+# which kills the script at the assignment — with no output, because the
+# output is what was being captured. That has now cost three debugging
+# sessions in two days, so it is fixed in the helper rather than at each call.
+#
+# `tail -1` because the deploy scripts have historically written a key twice;
+# the last one is the one they meant.
+get() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2 || true; }
 
 # The env file has to describe the network being deployed to.
 #
@@ -39,7 +49,7 @@ get() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2; }
 # use them there. The reads would revert on an address with no code, but the
 # failure would be a confusing one, and the same pattern one script over reads
 # a vault address where a wrong-but-existing one would be worse.
-ENV_CHAIN="$(grep -E '^NEXT_PUBLIC_CHAIN_ID=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
+ENV_CHAIN="$(get NEXT_PUBLIC_CHAIN_ID)"
 if [ -n "$ENV_CHAIN" ] && [ "$ENV_CHAIN" != "$CHAIN_ID" ]; then
   echo "$ENV_FILE describes chain $ENV_CHAIN, but NETWORK=$NETWORK is chain $CHAIN_ID." >&2
   echo "It was last written by a deploy to a different network. Pass the addresses" >&2
@@ -60,12 +70,7 @@ if [ -z "$MARKET_ADDRESS" ] || [ -z "$ROUTER_ADDRESS" ]; then
   exit 1
 fi
 
-# `tail -1` so a file that already holds the key twice does not produce a
-# two-line "address". That is not hypothetical: the deploy scripts write the
-# key empty, and appending a second one here is what this function then read.
-get_last() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2; }
-
-EXISTING="$(get_last NEXT_PUBLIC_REGISTRY_ADDRESS)"
+EXISTING="$(get NEXT_PUBLIC_REGISTRY_ADDRESS)"
 if [ -n "$EXISTING" ]; then
   # Refused rather than replaced: a second registry orphans whatever the first
   # one listed, and only a human knows whether that is intended.
