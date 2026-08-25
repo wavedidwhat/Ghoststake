@@ -26,8 +26,14 @@ const WANTED = {
   ParimutuelRound: [
     "rounds", "roundCount", "phaseOf", "claimableOf", "stakeOf", "claimed",
     "entryCutoff", "minSidePool", "rake", "stakeAsset", "oracle",
+    "lockWindow", "resolveDeadline", "entryIsOpen", "owner",
     // writes
     "takePosition", "claim",
+    // the operator console (GHO-28). `lockRound`, `resolveRound` and
+    // `voidUnlockedRound` are permissionless by design; `openRound` and
+    // `voidUnsettledRound` are owner-only, and the page says which is which
+    // rather than hiding the ones a visitor may call.
+    "openRound", "lockRound", "resolveRound", "voidUnsettledRound", "voidUnlockedRound",
   ],
   // The testnet stand-in asset. `mint` is open by design on a disposable
   // chain, which is what lets the UI offer test tokens without a CLI.
@@ -41,8 +47,11 @@ const WANTED = {
   // `oracle.feed()`, then `feed.description()`. The UI walks that chain so it
   // can say where a market's settlement price actually comes from instead of
   // trusting which env var the address arrived in (GHO-29).
-  ChainlinkRoundOracle: ["feed", "maxStaleness"],
-  AggregatorV3Interface: ["description", "decimals"],
+  ChainlinkRoundOracle: ["feed", "maxStaleness", "readAt", "readLatest"],
+  AggregatorV3Interface: ["description", "decimals", "getRoundData", "latestRoundData"],
+  // The operator-driven feed behind a demo market (GHO-29). Only reachable
+  // where such a market is deployed; the console hides it otherwise.
+  DemoPriceFeed: ["push", "pushAt", "latestRoundId", "owner", "description", "decimals"],
   BorrowLiquidityPool: [
     "balanceOfDebt", "balanceOfSupply", "utilization",
     "borrowRatePerSecond", "availableLiquidity", "totalBorrowed", "totalSupplied",
