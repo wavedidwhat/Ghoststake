@@ -38,7 +38,17 @@ pass() { printf '\033[1;32m  ✓\033[0m %s\n' "$*"; }
 ENV_FILE="$ROOT/ghoststake-frontend/.env.local"
 [ -f "$ENV_FILE" ] || { echo "no $ENV_FILE — run a deploy script first" >&2; exit 1; }
 
-get() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2; }
+# Reads one key, and tolerates it being absent.
+#
+# The `|| true` is load-bearing under `set -o pipefail`: a key that is not in
+# the file makes `grep` exit non-zero, which fails the command substitution,
+# which kills the script at the assignment — with no output, because the
+# output is what was being captured. That has now cost three debugging
+# sessions in two days, so it is fixed in the helper rather than at each call.
+#
+# `tail -1` because the deploy scripts have historically written a key twice;
+# the last one is the one they meant.
+get() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2 || true; }
 export VAULT_ADDRESS="$(get NEXT_PUBLIC_VAULT_ADDRESS)"
 
 if [ "${MARKET:-primary}" = "demo" ]; then
