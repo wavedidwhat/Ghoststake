@@ -44,10 +44,9 @@ func run() error {
 	}
 	defer st.Close()
 
-	if err := st.Migrate(); err != nil {
+	if err := st.Migrate(cfg.AllowSchemaAhead); err != nil {
 		return err
 	}
-	slog.Info("migrations applied")
 
 	ch, err := chain.Dial(ctx, cfg.RPCURL, cfg.ChainID)
 	if err != nil {
