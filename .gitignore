@@ -15,6 +15,10 @@ tmp/
 .env
 .env.*
 !.env.example
+# The keeper's own file (GHO-24). It holds a private key and is deliberately
+# separate from .env, so its template needs naming separately too — `.env.*`
+# above would otherwise swallow it along with the real thing.
+!.env.keeper.example
 
 # Go
 *.test

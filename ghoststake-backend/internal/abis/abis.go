@@ -28,6 +28,17 @@ const (
 	CollateralVault     = "CollateralVault"
 	BorrowLiquidityPool = "BorrowLiquidityPool"
 	ParimutuelRound     = "ParimutuelRound"
+
+	// The keeper's four (GHO-24). MarketRegistry enumerates the markets to
+	// drive; ChainlinkRoundOracle is dry-run before a settlement is sent;
+	// AggregatorV3Interface is searched for the feed round that settlement
+	// must name; IPausableOracle is the advisory flag that only Robinhood
+	// Chain's Stock Token feeds implement, which is how a market that
+	// follows a trading session is told apart from one that runs 24/7.
+	MarketRegistry        = "MarketRegistry"
+	ChainlinkRoundOracle  = "ChainlinkRoundOracle"
+	AggregatorV3Interface = "AggregatorV3Interface"
+	IPausableOracle       = "IPausableOracle"
 )
 
 var (
