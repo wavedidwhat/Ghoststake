@@ -152,6 +152,15 @@ INDEXER_POLL_INTERVAL=3s
 VAULT_ADDRESS=$VAULT
 POOL_ADDRESS=$POOL
 MARKET_ADDRESS=$MARKET
+# The keeper (GHO-24) drives every market the registry lists, so it needs the
+# registry rather than the single address the indexer reads. The key is
+# anvil's first account, which is also what deployed the markets — openRound
+# is owner-gated, so a keeper on any other key would advance rounds without
+# ever creating one.
+REGISTRY_ADDRESS=$REGISTRY
+KEEPER_PRIVATE_KEY=$PRIVATE_KEY
+KEEPER_POLL_INTERVAL=4s
+KEEPER_LEAD=30
 ENV
 
 cat <<SUMMARY
@@ -171,6 +180,7 @@ cat <<SUMMARY
 
   Frontend    cd ghoststake-frontend && pnpm dev      → http://localhost:3000
   Backend     cd ghoststake-backend  && make run-local
+  Keeper      cd ghoststake-backend  && make run-keeper-local
 
   To see a funded position, import this anvil key into your wallet and
   add a network on chain 31337 at $RPC_URL:

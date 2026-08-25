@@ -3,9 +3,9 @@
 Go API for GhostStake, an on-chain staking product on **Arbitrum**.
 
 Current scope: wallet authentication (SIWE), an append-only chain indexer over
-the vault, the borrow pool and the parimutuel market, and a read API that
-serves rounds, positions and lending health — with a websocket for live round
-updates.
+the vault, the borrow pool and the parimutuel market, a read API that serves
+rounds, positions and lending health — with a websocket for live round updates
+— and a keeper that drives round phase transitions on a timer.
 
 ## Stack
 
@@ -22,6 +22,7 @@ updates.
 
 ```
 cmd/api/           entrypoint: wiring, graceful shutdown
+cmd/keeper/        entrypoint: the round keeper, the only process with a key
 cmd/genabi/        copies contract ABIs out of the forge artifacts
 internal/config/   env config, fails fast on bad values
 internal/auth/     SIWE message, signature recovery, JWT
@@ -29,6 +30,7 @@ internal/abis/     embedded contract ABIs, shared by the indexer and the reader
 internal/ledger/   the append-only domain: entries, round events, projections
 internal/finance/  the money rules: yield, debt, health factor, payouts
 internal/indexer/  log polling, reorg handling, decoding
+internal/keeper/   round lifecycle rules, feed search, market-hours calendar
 internal/protocol/ live contract reads, pinned to one block
 internal/live/     fan-out from the indexer to websocket subscribers
 internal/store/    Postgres: users, nonces, ledger, round events, migrations
@@ -72,6 +74,48 @@ curl localhost:8080/readyz
 ```
 
 Without Docker: point `DATABASE_URL` at a Postgres and `make run`.
+
+Against the local anvil stack (`scripts/local-stack.sh` from the repo root):
+
+```bash
+make run-local            # the API and indexer
+make run-keeper-local     # the keeper, in another terminal
+```
+
+## The keeper
+
+Contracts do not run on a schedule — `ParimutuelRound` only moves when
+somebody sends it a transaction. `cmd/keeper` is a timer that opens rounds,
+locks them at `lockTime`, and resolves them against the feed round pinned to
+`closeTime`. Rounds overlap: the next one opens as the current one's entry
+window closes, so there is always one taking positions.
+
+Three things about it are worth knowing.
+
+**It is a convenience, not a privilege.** `lockRound`, `resolveRound` and
+`voidUnlockedRound` are permissionless in the contract, and the keeper does
+not change that. If it dies, any user can advance their own round from the
+operator console at `/operator`. Only `openRound` and `voidUnsettledRound` are
+owner-gated, and a keeper without the owner key simply declines them.
+
+**It is the only process in this repo that holds a key.** The API, the indexer
+and the protocol reader are strictly read-only, and the keeper is a separate
+binary, a separate image and a separate container so that stays true. Its
+configuration lives in `.env.keeper`, never in `.env` — see
+`.env.keeper.example`.
+
+**Chainlink Automation is the production answer.** A self-hosted keeper is a
+single point of failure. This one exists because the protocol is built so a
+keeper outage costs liveness and not safety, and because knowing the
+difference is worth showing.
+
+It needs no database. Every decision comes from the chain, so it can be
+restarted or moved with nothing to reconcile, and a second instance racing it
+simply loses and logs that the round was already locked.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.keeper.yml up -d
+```
 
 ## Auth flow
 
@@ -152,6 +196,12 @@ See `.env.example`. `JWT_SECRET` is required (min 32 bytes) whenever
 `CHAIN_ID` is checked against the RPC on startup and the service exits on
 mismatch, so a wrong endpoint fails loudly instead of silently reading the
 wrong network. `421614` = Arbitrum Sepolia, `42161` = Arbitrum One.
+
+The keeper reads its own environment (`config.LoadKeeper`), not the API's. It
+requires `KEEPER_PRIVATE_KEY` and either `REGISTRY_ADDRESS` or
+`KEEPER_MARKET_ADDRESSES`, and refuses to start if its poll interval is not
+shorter than a market's lock window — a keeper polling slower than that voids
+every round it is meant to settle.
 
 ## Deployment
 

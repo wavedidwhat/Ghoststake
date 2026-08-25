@@ -1,4 +1,4 @@
-.PHONY: help run run-local test-live build test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
+.PHONY: help run run-local run-keeper-local test-live build build-keeper test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -10,14 +10,23 @@ run-local: ## Run the API against the local anvil stack (scripts/local-stack.sh)
 	@test -f .env.local || (echo "no .env.local — run scripts/local-stack.sh first"; exit 1)
 	set -a && . ./.env && . ./.env.local && set +a && go run ./cmd/api
 
-test-live: ## Prove the indexer and the finance maths against the running anvil stack
+run-keeper-local: ## Run the round keeper against the local anvil stack (scripts/local-stack.sh)
+	@test -f .env.local || (echo "no .env.local — run scripts/local-stack.sh first"; exit 1)
+	set -a && . ./.env.local && set +a && go run ./cmd/keeper
+
+test-live: ## Prove the indexer, the finance maths and the keeper's rules against the running anvil stack
 	set -a && . ./.env.local && set +a && \
 		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/indexer/ -run TestLive -count=1 -v
 	set -a && . ./.env.local && set +a && \
 		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/protocol/ -count=1 -v
+	set -a && . ./.env.local && set +a && \
+		LIVE_RPC_URL="$$ARBITRUM_RPC_URL" go test ./internal/keeper/ -count=1 -v
 
 build: ## Build a static linux binary into bin/
 	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/api ./cmd/api
+
+build-keeper: ## Build the round keeper into bin/
+	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/keeper ./cmd/keeper
 
 test: ## Run unit tests (no database needed)
 	go test ./... -race
@@ -37,15 +46,17 @@ lint: check-go-version ## Vet + formatting check
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || (echo "unformatted files:"; gofmt -l .; exit 1)
 
-check-go-version: ## Assert the Dockerfile's Go matches go.mod's
+check-go-version: ## Assert every Dockerfile's Go matches go.mod's
 	@mod=$$(awk '/^go /{print $$2}' go.mod | cut -d. -f1,2); \
-	img=$$(awk -F= '/^ARG GO_VERSION=/{print $$2}' Dockerfile); \
-	if [ "$$mod" != "$$img" ]; then \
-		echo "go.mod requires Go $$mod but the Dockerfile builds on $$img."; \
-		echo "The image build would silently download a toolchain instead of"; \
-		echo "using its pinned base. Update ARG GO_VERSION in the Dockerfile."; \
-		exit 1; \
-	fi
+	for f in Dockerfile Dockerfile.keeper; do \
+		img=$$(awk -F= '/^ARG GO_VERSION=/{print $$2}' $$f); \
+		if [ "$$mod" != "$$img" ]; then \
+			echo "go.mod requires Go $$mod but $$f builds on $$img."; \
+			echo "The image build would silently download a toolchain instead of"; \
+			echo "using its pinned base. Update ARG GO_VERSION in $$f."; \
+			exit 1; \
+		fi; \
+	done
 
 tidy: ## Tidy modules
 	go mod tidy
