@@ -25,9 +25,9 @@ export default function RoundsPage() {
   const connection = useConnection();
 
   return (
-    <AppShell title="Rounds" subtitle="Take a side on where the price closes">
+    <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
       {!marketConfigured ? (
-        <NotConfigured what="No market is configured for this network. The Sepolia deployment predates the router." />
+        <NotConfigured what="No market is configured for this network." />
       ) : connection.status !== "connected" ? (
         <NeedsWallet what="Positions are tied to your address, so a wallet is needed to see or open one." />
       ) : (
@@ -43,7 +43,7 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
   const { rounds, isLoading, isError, refetch } = useRounds();
   const position = useVaultPosition();
 
-  const [staking, setStaking] = useState<{ id: bigint; side: SideValue } | null>(null);
+  const [taking, setTaking] = useState<{ id: bigint; side: SideValue } | null>(null);
 
   if (isError) {
     return (
@@ -64,7 +64,7 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
     return (
       <Card>
         <p className="text-sm text-ink-muted">
-          No rounds have opened yet. Rounds are scheduled by the keeper (GHO-24); until it runs,
+          No markets are open yet. Rounds are scheduled by the keeper (GHO-24); until it runs,
           the owner opens them by hand.
         </p>
       </Card>
@@ -91,17 +91,17 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
             now={now}
             yourUp={r.up}
             yourDown={r.down}
-            onStake={(side) => setStaking({ id: r.id, side })}
+            onStake={(side) => setTaking({ id: r.id, side })}
           >
-            {staking?.id === r.id && (
-              <StakeForm
+            {taking?.id === r.id && (
+              <PositionForm
                 roundId={r.id}
-                side={staking.side}
+                side={taking.side}
                 address={address}
                 position={position}
-                onClose={() => setStaking(null)}
+                onClose={() => setTaking(null)}
                 onDone={() => {
-                  setStaking(null);
+                  setTaking(null);
                   refetch();
                   position.refetch();
                 }}
@@ -131,7 +131,7 @@ function RoundsScreen({ address }: { address: `0x${string}` }) {
               roundId={r.id}
               claimable={r.claimable}
               claimed={r.isClaimed}
-              staked={(r.up ?? 0n) + (r.down ?? 0n)}
+              positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
               decimals={position.decimals!}
               symbol={position.symbol}
               address={address}
@@ -179,7 +179,7 @@ function Section({
  * between. The health factor preview below is the number that decides whether
  * someone should do it, so it is shown before the button, not after.
  */
-function StakeForm({
+function PositionForm({
   roundId,
   side,
   address,
@@ -303,7 +303,7 @@ function StakeForm({
           disabled={busy}
         />
         <AmountField
-          label="Borrowed against collateral"
+          label="Borrowed against your stake"
           value={borrow}
           onChange={setBorrow}
           max={position.maxBorrowable}
@@ -311,7 +311,7 @@ function StakeForm({
           symbol={position.symbol}
           maxLabel="Capacity"
           disabled={busy}
-          hint="Goes straight from the vault into the round. It never reaches your wallet."
+          hint="Goes straight from your stake into the market. It never reaches your wallet, and your stake keeps earning."
         />
       </div>
 
@@ -340,8 +340,8 @@ function StakeForm({
         {busy
           ? "Working…"
           : needsTokenApproval || needsDelegation
-            ? `Approve and stake ${formatAmount(total, decimals, 2)}`
-            : `Stake ${formatAmount(total, decimals, 2)} ${position.symbol}`}
+            ? `Approve and take position`
+            : `Take position · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
       </button>
 
       <TxStatus state={tx.state} />
@@ -404,8 +404,9 @@ function HealthPreview({
         </span>
       </div>
       <p className="text-xs text-ink-muted">
-        Borrowing {formatAmount(borrowAmount, decimals, 2)} {symbol} against your collateral. If
-        the round loses, the debt stands and is repaid from collateral.
+        Borrowing {formatAmount(borrowAmount, decimals, 2)} {symbol} against your stake, which
+        keeps earning throughout. If the round loses, the debt stands and is settled from your
+        stake.
       </p>
       {band === "danger" && (
         <p className="text-xs text-negative">
@@ -419,14 +420,14 @@ function HealthPreview({
 /**
  * The claim row on a settled round.
  *
- * A win states the amount and offers the claim. A loss states what was staked
- * and stops — no encouragement to try again, and nothing dressed up.
+ * A win states the amount and offers the claim. A loss states the size of
+ * the position and stops — no encouragement to try again, and nothing dressed up.
  */
 function ClaimRow({
   roundId,
   claimable,
   claimed,
-  staked,
+  positionSize,
   decimals,
   symbol,
   address,
@@ -435,7 +436,7 @@ function ClaimRow({
   roundId: bigint;
   claimable: bigint | undefined;
   claimed: boolean | undefined;
-  staked: bigint;
+  positionSize: bigint;
   decimals: number;
   symbol: string;
   address: `0x${string}`;
@@ -444,7 +445,7 @@ function ClaimRow({
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
 
-  if (staked === 0n) return null;
+  if (positionSize === 0n) return null;
 
   if (claimed) {
     return <p className="mt-3 text-xs text-ink-muted">Claimed.</p>;
@@ -453,8 +454,8 @@ function ClaimRow({
   if (claimable === undefined || claimable === 0n) {
     return (
       <p className="mt-3 text-xs text-ink-muted">
-        You staked <span className="tabular">{formatAmount(staked, decimals, 2)}</span> {symbol} on
-        this round.
+        Your position on this round was{" "}
+        <span className="tabular">{formatAmount(positionSize, decimals, 2)}</span> {symbol}.
       </p>
     );
   }
