@@ -32,6 +32,21 @@ ENV_FILE="$ROOT/ghoststake-frontend/.env.local"
 [ -f "$ENV_FILE" ] || { echo "no $ENV_FILE — deploy first, or set the addresses by hand" >&2; exit 1; }
 get() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2; }
 
+# The env file has to describe the network being deployed to.
+#
+# It is rewritten by every local run, so after an afternoon of `local-stack.sh`
+# it holds anvil addresses — and pointing this at a public network would try to
+# use them there. The reads would revert on an address with no code, but the
+# failure would be a confusing one, and the same pattern one script over reads
+# a vault address where a wrong-but-existing one would be worse.
+ENV_CHAIN="$(grep -E '^NEXT_PUBLIC_CHAIN_ID=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
+if [ -n "$ENV_CHAIN" ] && [ "$ENV_CHAIN" != "$CHAIN_ID" ]; then
+  echo "$ENV_FILE describes chain $ENV_CHAIN, but NETWORK=$NETWORK is chain $CHAIN_ID." >&2
+  echo "It was last written by a deploy to a different network. Pass the addresses" >&2
+  echo "explicitly, or re-generate the file for this one." >&2
+  exit 1
+fi
+
 # The markets the app is actually pointed at. Reading them from the same file
 # the frontend reads means the registry lists what is on screen, rather than
 # whatever was in a shell an hour ago.
