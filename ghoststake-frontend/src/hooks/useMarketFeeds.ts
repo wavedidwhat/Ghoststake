@@ -7,7 +7,7 @@ import {
   chainlinkRoundOracleAbi,
   parimutuelRoundAbi,
 } from "@/lib/abis";
-import { markets, marketsConfigured } from "@/lib/markets";
+import type { Market } from "@/lib/markets";
 import { activeChain } from "@/lib/wagmi";
 
 /** A feed self-describes as operator-driven. `DemoPriceFeed` puts this in
@@ -36,10 +36,10 @@ export type MarketFeed = {
  * Immutable all the way down — a market's oracle and an adapter's feed are
  * both constructor immutables — so this is fetched once and never revalidated.
  */
-export function useMarketFeeds() {
+export function useMarketFeeds(markets: Market[]) {
   const oracles = useReadContracts({
     contracts: markets.map(
-      (m) =>
+      (m: Market) =>
         ({
           address: m.address,
           abi: parimutuelRoundAbi,
@@ -47,17 +47,17 @@ export function useMarketFeeds() {
           chainId: activeChain.id,
         }) as const,
     ),
-    query: { enabled: marketsConfigured, staleTime: Infinity },
+    query: { enabled: markets.length > 0, staleTime: Infinity },
   });
 
   const oracleAddresses = useMemo(
-    () => (oracles.data ?? []).map((r) => r.result as `0x${string}` | undefined),
+    () => (oracles.data ?? []).map((r: { result?: unknown }) => r.result as `0x${string}` | undefined),
     [oracles.data],
   );
 
   const feeds = useReadContracts({
     contracts: oracleAddresses.filter(Boolean).map(
-      (address) =>
+      (address: `0x${string}` | undefined) =>
         ({
           address: address!,
           abi: chainlinkRoundOracleAbi,
@@ -69,13 +69,13 @@ export function useMarketFeeds() {
   });
 
   const feedAddresses = useMemo(
-    () => (feeds.data ?? []).map((r) => r.result as `0x${string}` | undefined),
+    () => (feeds.data ?? []).map((r: { result?: unknown }) => r.result as `0x${string}` | undefined),
     [feeds.data],
   );
 
   const descriptions = useReadContracts({
     contracts: feedAddresses.filter(Boolean).map(
-      (address) =>
+      (address: `0x${string}` | undefined) =>
         ({
           address: address!,
           abi: aggregatorV3InterfaceAbi,
@@ -93,7 +93,7 @@ export function useMarketFeeds() {
   const byMarket = useMemo(() => {
     const out = new Map<string, MarketFeed>();
     if (!descriptions.data) return out;
-    if (oracleAddresses.some((a) => !a) || feedAddresses.some((a) => !a)) return out;
+    if (oracleAddresses.some((a: unknown) => !a) || feedAddresses.some((a: unknown) => !a)) return out;
 
     markets.forEach((m, i) => {
       const description = descriptions.data?.[i]?.result as string | undefined;
@@ -104,7 +104,7 @@ export function useMarketFeeds() {
       });
     });
     return out;
-  }, [descriptions.data, oracleAddresses, feedAddresses]);
+  }, [descriptions.data, oracleAddresses, feedAddresses, markets]);
 
   return {
     isLoading: oracles.isLoading || feeds.isLoading || descriptions.isLoading,

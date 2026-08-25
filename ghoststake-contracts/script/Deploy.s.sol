@@ -11,6 +11,7 @@ import { ParimutuelRound } from "../src/ParimutuelRound.sol";
 import { BorrowToPositionRouter } from "../src/BorrowToPositionRouter.sol";
 import { MockUSDC } from "./mocks/MockUSDC.sol";
 import { DemoPriceFeed } from "../src/demo/DemoPriceFeed.sol";
+import { MarketRegistry } from "../src/MarketRegistry.sol";
 import { MarketDeployer } from "./MarketDeployer.sol";
 
 /// @notice Deploys the whole stack to a local chain.
@@ -43,6 +44,8 @@ contract Deploy is MarketDeployer {
     // beats committing a bare 1585489599 that nobody can sanity-check.
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant WAD = 1e18;
+
+    MarketRegistry internal registry;
 
     // `demoFeed`, `demoMarket` and `demoRouter` are inherited from
     // MarketDeployer, and are storage rather than locals because `run`
@@ -116,11 +119,24 @@ contract Deploy is MarketDeployer {
         (ChainlinkRoundOracle oracle, ParimutuelRound market, BorrowToPositionRouter router) =
             deployMarket(asset, vault, feed, sequencerFeed, deployer);
 
+        // The list of markets the app offers, on chain rather than in the
+        // frontend's build args (GHO-34). Listing happens here because the
+        // registry refuses a market whose router is not wired up, and this is
+        // where the wiring is done.
+        registry = new MarketRegistry(deployer);
+        registry.list(market, router, uint64(vm.envOr("MARKET_HORIZON", uint256(1 hours))));
+
         // The demo market, on a feed this deployer can publish into on cue.
         // Only worth deploying where the primary feed is a real one that
         // cannot be hurried: locally the primary feed is already controllable.
         if (vm.envOr("DEMO_MARKET", existingFeed != address(0))) {
             deployDemoMarket(asset, vault, sequencerFeed, deployer);
+            listIfPossible(
+                address(registry),
+                ParimutuelRound(demoMarket),
+                BorrowToPositionRouter(demoRouter),
+                uint64(vm.envOr("DEMO_HORIZON", uint256(5 minutes)))
+            );
         }
 
         vm.stopBroadcast();
@@ -134,6 +150,7 @@ contract Deploy is MarketDeployer {
         console2.log("ChainlinkRoundOracle", address(oracle));
         console2.log("ParimutuelRound     ", address(market));
         console2.log("BorrowToPositionRtr ", address(router));
+        console2.log("MarketRegistry      ", address(registry));
         if (demoMarket != address(0)) {
             console2.log("DemoPriceFeed       ", demoFeed);
             console2.log("DemoParimutuelRound ", demoMarket);
@@ -146,6 +163,7 @@ contract Deploy is MarketDeployer {
         console2.log("NEXT_PUBLIC_POOL_ADDRESS=%s", vm.toString(address(pool)));
         console2.log("NEXT_PUBLIC_MARKET_ADDRESS=%s", vm.toString(address(market)));
         console2.log("NEXT_PUBLIC_ROUTER_ADDRESS=%s", vm.toString(address(router)));
+        console2.log("NEXT_PUBLIC_REGISTRY_ADDRESS=%s", vm.toString(address(registry)));
         if (demoMarket != address(0)) {
             console2.log("NEXT_PUBLIC_DEMO_MARKET_ADDRESS=%s", vm.toString(demoMarket));
             console2.log("NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=%s", vm.toString(demoRouter));

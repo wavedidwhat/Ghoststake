@@ -1308,6 +1308,122 @@ export const demoPriceFeedAbi = [
   }
 ] as const;
 
+export const marketRegistryAbi = [
+  {
+    "type": "function",
+    "name": "all",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]",
+        "internalType": "struct MarketRegistry.Listing[]",
+        "components": [
+          {
+            "name": "market",
+            "type": "address",
+            "internalType": "contract ParimutuelRound"
+          },
+          {
+            "name": "router",
+            "type": "address",
+            "internalType": "contract BorrowToPositionRouter"
+          },
+          {
+            "name": "horizon",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "at",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct MarketRegistry.Listing",
+        "components": [
+          {
+            "name": "market",
+            "type": "address",
+            "internalType": "contract ParimutuelRound"
+          },
+          {
+            "name": "router",
+            "type": "address",
+            "internalType": "contract BorrowToPositionRouter"
+          },
+          {
+            "name": "horizon",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "count",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "find",
+    "inputs": [
+      {
+        "name": "market",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "listed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  }
+] as const;
+
 export const borrowLiquidityPoolAbi = [
   {
     "type": "function",

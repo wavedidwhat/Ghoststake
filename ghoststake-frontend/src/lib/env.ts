@@ -60,6 +60,17 @@ export const env = {
    */
   demoMarketAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_MARKET_ADDRESS),
   demoRouterAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_ROUTER_ADDRESS),
+
+  /**
+   * The market registry (GHO-34). When set, it is the list of markets and the
+   * four addresses above are ignored — adding a market becomes a transaction
+   * rather than a rebuild of this image.
+   *
+   * Still optional, because a deployment can predate the registry: the Sepolia
+   * one does. Where it is absent the env pair is the whole list, which is what
+   * every deployment did until now.
+   */
+  registryAddress: optionalAddress(process.env.NEXT_PUBLIC_REGISTRY_ADDRESS),
 } as const;
 
 export const contractsConfigured = Boolean(env.vaultAddress && env.poolAddress);
