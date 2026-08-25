@@ -36,7 +36,7 @@ func newTestStore(t *testing.T) *store.Store {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if err := st.Migrate(); err != nil {
+	if err := st.Migrate(false); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(st.Close)
