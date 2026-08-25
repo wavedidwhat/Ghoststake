@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import { Script } from "forge-std/Script.sol";
 import { console2 } from "forge-std/console2.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 import { CollateralVault, ILienSource } from "../src/CollateralVault.sol";
 import { ChainlinkRoundOracle } from "../src/ChainlinkRoundOracle.sol";
-import { ParimutuelRound, IRoundOracle } from "../src/ParimutuelRound.sol";
+import { ParimutuelRound } from "../src/ParimutuelRound.sol";
 import { BorrowToPositionRouter } from "../src/BorrowToPositionRouter.sol";
-import { AggregatorV3Interface } from "../src/interfaces/AggregatorV3Interface.sol";
 import { MockUSDC } from "./mocks/MockUSDC.sol";
 import { DemoPriceFeed } from "../src/demo/DemoPriceFeed.sol";
+import { MarketDeployer } from "./MarketDeployer.sol";
 
 /// @notice Deploys the whole stack to a local chain.
 ///
@@ -38,20 +37,16 @@ import { DemoPriceFeed } from "../src/demo/DemoPriceFeed.sol";
 /// runs on a `DemoPriceFeed` of its own and the second one is off by default.
 /// `scripts/local-stack.sh` turns it on anyway with `DEMO_MARKET=true`, so
 /// what is developed against has the same two markets the demo does.
-contract Deploy is Script {
+contract Deploy is MarketDeployer {
     // A year in seconds, for turning APRs into the per-second WAD rates these
     // contracts take. Writing `5% APR` in the config and converting here
     // beats committing a bare 1585489599 that nobody can sanity-check.
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant WAD = 1e18;
 
-    // Storage rather than locals: `run` deploys eleven contracts and the stack
-    // will not hold them all. Solidity's answer to "stack too deep" here is
-    // either via-ir for the whole project or fewer live locals, and a script's
-    // scratch state is the cheaper of the two.
-    address internal demoFeed;
-    address internal demoMarket;
-    address internal demoRouter;
+    // `demoFeed`, `demoMarket` and `demoRouter` are inherited from
+    // MarketDeployer, and are storage rather than locals because `run`
+    // deploys eleven contracts and the stack will not hold them all.
 
     function run() external {
         uint256 deployerKey = vm.envOr("PRIVATE_KEY", uint256(0));
@@ -162,66 +157,6 @@ contract Deploy is Script {
         console2.log("MARKET_ADDRESS=%s", vm.toString(address(market)));
         console2.log("INDEXER_START_BLOCK=%s", vm.toString(block.number));
         console2.log("INDEXER_ENABLED=true");
-    }
-
-    /// @dev The second market, on a feed the deployer publishes into on cue.
-    ///
-    /// Everything about it is the real deployment except the publisher, which
-    /// is the only way the demo proves anything: if the demo market ran
-    /// different code, a round settling there would say nothing about the
-    /// round that has to settle on Chainlink.
-    function deployDemoMarket(IERC20 asset, CollateralVault vault, address sequencerFeed, address owner) internal {
-        DemoPriceFeed feed = new DemoPriceFeed(8, vm.envOr("DEMO_ASSET_LABEL", string("ETH / USD")), owner);
-        // Seeded for the same reason the local feed is: the strike read is
-        // `readLatest`, so the feed has to be publishing before the first
-        // round opens or that round voids at lock for a reason that has
-        // nothing to do with the market.
-        feed.push(2000e8);
-
-        (, ParimutuelRound market, BorrowToPositionRouter router) =
-            deployMarket(asset, vault, address(feed), sequencerFeed, owner);
-
-        demoFeed = address(feed);
-        demoMarket = address(market);
-        demoRouter = address(router);
-    }
-
-    /// @dev One market: the Chainlink adapter over `feed`, the round contract
-    /// on top of it, and the router that lets a borrow become a position in
-    /// one transaction.
-    ///
-    /// Factored out because the demo market is not a variant of the real one —
-    /// it is the same deployment with a different feed underneath, and any
-    /// parameter that drifted between the two would make the demo a
-    /// demonstration of something we do not ship.
-    function deployMarket(IERC20 asset, CollateralVault vault, address feed, address sequencerFeed, address owner)
-        internal
-        returns (ChainlinkRoundOracle oracle, ParimutuelRound market, BorrowToPositionRouter router)
-    {
-        oracle = new ChainlinkRoundOracle(
-            AggregatorV3Interface(feed),
-            // Zero disables the check. Correct on an L1 and on a local chain,
-            // and WRONG on any L2 — on Arbitrum or Robinhood Chain this must
-            // be the real uptime feed or downtime settles rounds against a
-            // market nobody could reach.
-            AggregatorV3Interface(sequencerFeed),
-            vm.envOr("MAX_STALENESS", uint256(1 hours)),
-            vm.envOr("SEQUENCER_GRACE", uint256(30 minutes))
-        );
-
-        market = new ParimutuelRound(
-            asset,
-            IRoundOracle(address(oracle)),
-            0.02e18, // 2% protocol rake
-            ParimutuelRound.Timing({ entryCutoff: 15 seconds, lockWindow: 60 seconds, resolveDeadline: 1 hours }),
-            10e6, // min side pool: 10 mUSDC, at 6 decimals
-            owner
-        );
-
-        // The router is what joins the two halves. Whitelisting it is the
-        // owner's act, so it happens here rather than in the constructor.
-        router = new BorrowToPositionRouter(vault, market);
-        market.setRouter(address(router), true);
     }
 
     /// @dev An APR in whole percent to the per-second WAD rate the contracts
