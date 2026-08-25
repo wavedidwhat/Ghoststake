@@ -2,8 +2,10 @@
 
 Go API for GhostStake, an on-chain staking product on **Arbitrum**.
 
-Current scope: runnable service skeleton + wallet authentication (SIWE).
-Staking domain logic is not built yet.
+Current scope: wallet authentication (SIWE), an append-only chain indexer over
+the vault, the borrow pool and the parimutuel market, and a read API that
+serves rounds, positions and lending health — with a websocket for live round
+updates.
 
 ## Stack
 
@@ -20,13 +22,45 @@ Staking domain logic is not built yet.
 
 ```
 cmd/api/           entrypoint: wiring, graceful shutdown
+cmd/genabi/        copies contract ABIs out of the forge artifacts
 internal/config/   env config, fails fast on bad values
 internal/auth/     SIWE message, signature recovery, JWT
-internal/store/    Postgres: users, nonces, migrations
-internal/chain/    Arbitrum RPC client
+internal/abis/     embedded contract ABIs, shared by the indexer and the reader
+internal/ledger/   the append-only domain: entries, round events, projections
+internal/finance/  the money rules: yield, debt, health factor, payouts
+internal/indexer/  log polling, reorg handling, decoding
+internal/protocol/ live contract reads, pinned to one block
+internal/live/     fan-out from the indexer to websocket subscribers
+internal/store/    Postgres: users, nonces, ledger, round events, migrations
+internal/chain/    Arbitrum RPC client and contract calls
 internal/httpx/    server, routes, middleware, handlers
 migrations/        embedded SQL
 ```
+
+### Where the rules live
+
+`internal/finance` holds every financial rule — accrual, debt scaling, health
+factors, borrowing room, parimutuel payouts — and imports nothing but the
+standard library. No HTTP, no SQL, no chain client. It is a straight
+reimplementation of the contracts' arithmetic, in the same fixed-point maths
+and with the same rounding, so it can be read and tested on its own.
+
+A reimplementation drifts, so it is checked against the original:
+`internal/protocol/live_test.go` calls the deployed contracts' own views and
+asserts this package produces the identical figure for the identical inputs, at
+one pinned block. Run it with `make test-live`.
+
+### Debt is reported larger than the contract's view says
+
+`balanceOfDebt`, `healthFactor` and `maxBorrowable` all read the pool's *stored*
+interest index, which is only current when someone last poked the pool. Every
+mutating path — including `liquidate` and `borrow` — calls `accrue()` first, so
+the numbers those transactions actually use are larger.
+
+The API therefore reports the accrued figures, with the contract's view beside
+them (`debtAtStoredIndex`, `pendingInterest`). Serving the view would tell a
+borrower they are safe at 1.02 while a liquidator finds them at 0.99, and would
+offer a "borrow max" that reverts.
 
 ## Running
 
@@ -71,6 +105,25 @@ Properties this gives you:
 | POST | `/api/v1/auth/nonce` | – | issue login challenge |
 | POST | `/api/v1/auth/verify` | – | verify signature, issue JWT |
 | GET | `/api/v1/me` | Bearer | current wallet |
+| GET | `/api/v1/rounds` | – | recent rounds, pools, odds and phase |
+| GET | `/api/v1/positions/{address}` | – | one wallet's rounds, open and historical |
+| GET | `/api/v1/health/{address}` | – | health factor, collateral, debt, accrued yield |
+| GET | `/api/v1/ws` | – | websocket; live round snapshots |
+
+The read endpoints are unauthenticated: everything they serve is derived from
+public chain state, and requiring a login to read a public blockchain would be
+theatre. They are rate limited per IP (120/min) because each one costs a
+database read or an RPC call. `?limit=` on the two listings is clamped.
+
+Every uint256 crosses the wire as a **decimal string**. JSON numbers are
+doubles, and a balance in wei exceeds their 53 bits of integer precision — a
+raw number would silently lose its low digits in `JSON.parse`.
+
+`/api/v1/ws` accepts an optional `?address=`, and then includes that wallet's
+positions alongside the rounds. It sends whole snapshots rather than deltas, so
+a client that missed a message or reconnected is correct as soon as the next
+one arrives. Its origin check uses `CORS_ORIGINS`: the websocket handshake is
+not subject to CORS, so the browser would not enforce it for us.
 
 ## Configuration
 
@@ -93,6 +146,8 @@ package manager, non-root.
 
 ## Next
 
-1. Staking domain: pools, positions, stake/unstake/claim
-2. Contract bindings via `abigen` once contracts are deployed
-3. Indexer worker to persist chain state instead of reading per request
+1. Point the frontend at these endpoints instead of reading the chain per page
+2. Round-level websocket subscriptions, so a client watching one round is not
+   sent every round
+3. Serve the lending books from the ledger where an event exists for them,
+   rather than calling the chain

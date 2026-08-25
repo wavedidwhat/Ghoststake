@@ -46,8 +46,9 @@ type Config struct {
 type IndexerConfig struct {
 	Enabled bool
 
-	VaultAddress string
-	PoolAddress  string
+	VaultAddress  string
+	PoolAddress   string
+	MarketAddress string
 
 	// StartBlock should be the deployment block. Scanning from genesis on a
 	// public RPC is slow and returns nothing for the whole range.
@@ -87,6 +88,7 @@ func Load() (Config, error) {
 			Enabled:       envBool("INDEXER_ENABLED", false),
 			VaultAddress:  env("VAULT_ADDRESS", ""),
 			PoolAddress:   env("POOL_ADDRESS", ""),
+			MarketAddress: env("MARKET_ADDRESS", ""),
 			StartBlock:    uint64(envInt64("INDEXER_START_BLOCK", 0)),
 			Confirmations: uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
 			BatchSize:     uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
@@ -131,16 +133,17 @@ func Load() (Config, error) {
 	// looks healthy and silently indexes nothing is worse than a refusal to
 	// boot.
 	if c.Indexer.Enabled {
-		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" {
-			return Config{}, fmt.Errorf("VAULT_ADDRESS and POOL_ADDRESS are required when INDEXER_ENABLED=true")
+		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" || c.Indexer.MarketAddress == "" {
+			return Config{}, fmt.Errorf("VAULT_ADDRESS, POOL_ADDRESS and MARKET_ADDRESS are required when INDEXER_ENABLED=true")
 		}
 		// Validated here because nothing downstream will. common.HexToAddress
 		// does not return an error — it left-pads or zero-fills whatever it is
 		// given, so a typo becomes an address with no code and the indexer
 		// polls it forever, reporting healthy and writing nothing.
 		for name, addr := range map[string]string{
-			"VAULT_ADDRESS": c.Indexer.VaultAddress,
-			"POOL_ADDRESS":  c.Indexer.PoolAddress,
+			"VAULT_ADDRESS":  c.Indexer.VaultAddress,
+			"POOL_ADDRESS":   c.Indexer.PoolAddress,
+			"MARKET_ADDRESS": c.Indexer.MarketAddress,
 		} {
 			if err := validateAddress(name, addr); err != nil {
 				return Config{}, err

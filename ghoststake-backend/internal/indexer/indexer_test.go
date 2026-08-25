@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/wavedidwhat/ghoststake/internal/abis"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 )
 
@@ -21,26 +22,40 @@ import (
 // hermetic; the store's own tests cover the SQL.
 type fakeRepo struct {
 	entries []ledger.Entry
+	rounds  []ledger.RoundEvent
 	cursor  *ledger.Cursor
 	seen    map[string]bool
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{seen: map[string]bool{}} }
 
-func (f *fakeRepo) AppendEntries(_ context.Context, entries []ledger.Entry, cursor ledger.Cursor) error {
-	for _, e := range entries {
-		// Mirrors the unique constraint, so a test that double-writes here
-		// fails the same way production would.
-		key := fmt.Sprintf("%d/%s/%d/%d", e.ChainID, e.TxHash, e.LogIndex, e.EntryIndex)
+func (f *fakeRepo) Append(_ context.Context, batch ledger.Batch, cursor ledger.Cursor) error {
+	// Mirrors the unique constraint, so a test that double-writes here fails
+	// the same way production would. The two kinds are keyed separately
+	// because they are two tables with two constraints.
+	for _, e := range batch.Entries {
+		key := "entry/" + provenanceKey(e.Provenance)
 		if f.seen[key] {
 			continue
 		}
 		f.seen[key] = true
 		f.entries = append(f.entries, e)
 	}
+	for _, e := range batch.Rounds {
+		key := "round/" + provenanceKey(e.Provenance)
+		if f.seen[key] {
+			continue
+		}
+		f.seen[key] = true
+		f.rounds = append(f.rounds, e)
+	}
 	c := cursor
 	f.cursor = &c
 	return nil
+}
+
+func provenanceKey(p ledger.Provenance) string {
+	return fmt.Sprintf("%d/%s/%d/%d", p.ChainID, p.TxHash, p.LogIndex, p.RecordIndex)
 }
 
 func (f *fakeRepo) LoadCursor(_ context.Context, _ string) (ledger.Cursor, bool, error) {
@@ -51,17 +66,30 @@ func (f *fakeRepo) LoadCursor(_ context.Context, _ string) (ledger.Cursor, bool,
 }
 
 func (f *fakeRepo) RollbackFrom(_ context.Context, _ int64, _ string, fromBlock uint64) (int64, error) {
-	kept := f.entries[:0]
 	var deleted int64
+
+	kept := f.entries[:0]
 	for _, e := range f.entries {
 		if e.BlockNumber >= fromBlock {
 			deleted++
-			delete(f.seen, fmt.Sprintf("%d/%s/%d/%d", e.ChainID, e.TxHash, e.LogIndex, e.EntryIndex))
+			delete(f.seen, "entry/"+provenanceKey(e.Provenance))
 			continue
 		}
 		kept = append(kept, e)
 	}
 	f.entries = kept
+
+	keptRounds := f.rounds[:0]
+	for _, e := range f.rounds {
+		if e.BlockNumber >= fromBlock {
+			deleted++
+			delete(f.seen, "round/"+provenanceKey(e.Provenance))
+			continue
+		}
+		keptRounds = append(keptRounds, e)
+	}
+	f.rounds = keptRounds
+
 	return deleted, nil
 }
 
@@ -107,8 +135,9 @@ func (f *fakeChain) HeaderByNumber(_ context.Context, number *big.Int) (*types.H
 }
 
 const (
-	vaultAddr = "0x00000000000000000000000000000000000000v1"
-	poolAddr  = "0x00000000000000000000000000000000000000p1"
+	vaultAddr  = "0x00000000000000000000000000000000000000v1"
+	poolAddr   = "0x00000000000000000000000000000000000000p1"
+	marketAddr = "0x00000000000000000000000000000000000000m1"
 )
 
 func newTestIndexer(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg Config) *Indexer {
@@ -118,6 +147,7 @@ func newTestIndexer(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg 
 	}
 	cfg.VaultAddress = common.HexToAddress(vaultAddr).Hex()
 	cfg.PoolAddress = common.HexToAddress(poolAddr).Hex()
+	cfg.MarketAddress = common.HexToAddress(marketAddr).Hex()
 
 	ix, err := New(chain, repo, cfg)
 	if err != nil {
@@ -128,7 +158,7 @@ func newTestIndexer(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg 
 
 func transferLog(t *testing.T, block uint64, txHash string, logIndex uint) types.Log {
 	t.Helper()
-	spec := mustABI(t, "CollateralVault.json")
+	spec := mustABI(t, abis.CollateralVault)
 	log := makeLog(t, spec, "Transfer",
 		[]common.Hash{common.Hash{}, topicAddr(alice)}, wei(100))
 	log.Address = common.HexToAddress(vaultAddr)
@@ -321,7 +351,7 @@ func TestCursorDoesNotAdvanceWhenTheWriteFails(t *testing.T) {
 
 type failingRepo struct{ cursorMoved bool }
 
-func (f *failingRepo) AppendEntries(context.Context, []ledger.Entry, ledger.Cursor) error {
+func (f *failingRepo) Append(context.Context, ledger.Batch, ledger.Cursor) error {
 	return fmt.Errorf("database unavailable")
 }
 func (f *failingRepo) LoadCursor(context.Context, string) (ledger.Cursor, bool, error) {

@@ -13,6 +13,8 @@ import (
 	"github.com/wavedidwhat/ghoststake/internal/config"
 	"github.com/wavedidwhat/ghoststake/internal/httpx"
 	"github.com/wavedidwhat/ghoststake/internal/indexer"
+	"github.com/wavedidwhat/ghoststake/internal/live"
+	"github.com/wavedidwhat/ghoststake/internal/protocol"
 	"github.com/wavedidwhat/ghoststake/internal/store"
 )
 
@@ -56,11 +58,12 @@ func run() error {
 
 	go sweepNonces(ctx, st)
 
-	if err := startIndexer(ctx, cfg, st, ch); err != nil {
+	deps, err := startIndexer(ctx, cfg, st, ch)
+	if err != nil {
 		return err
 	}
 
-	srv := httpx.NewServer(cfg, st, ch)
+	srv := httpx.NewServer(cfg, st, ch, deps)
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Start() }()
@@ -99,30 +102,52 @@ func setupLogger(cfg config.Config) {
 	slog.SetDefault(slog.New(h))
 }
 
-// startIndexer wires the event indexer if it is enabled.
+// startIndexer wires the event indexer, the contract reader and the live
+// broker, if the contract addresses are configured.
 //
 // It runs in-process rather than as a second binary. One deployable, one
 // database connection pool, one set of migrations — and the indexer is a
 // polling loop with no inbound surface, so it costs the API nothing to
 // carry. Splitting it out is a scaling decision to take when there is
 // something to scale.
-func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *chain.Client) error {
+//
+// The broker is created only when the indexer runs, because it is the
+// indexer that publishes to it: a websocket subscribed to a broker nothing
+// writes to would connect, send its opening snapshot, and then sit silent
+// forever, which looks exactly like a working connection.
+func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *chain.Client) (httpx.Deps, error) {
 	if !cfg.Indexer.Enabled {
 		slog.Info("indexer disabled", "hint", "set INDEXER_ENABLED=true once contracts are deployed")
-		return nil
+		return httpx.Deps{}, nil
 	}
+
+	reader, err := protocol.New(ch, cfg.Indexer.VaultAddress, cfg.Indexer.PoolAddress, cfg.Indexer.MarketAddress)
+	if err != nil {
+		return httpx.Deps{}, err
+	}
+	broker := live.NewBroker()
 
 	ix, err := indexer.New(ch, st, indexer.Config{
 		ChainID:       cfg.ChainID,
 		VaultAddress:  cfg.Indexer.VaultAddress,
 		PoolAddress:   cfg.Indexer.PoolAddress,
+		MarketAddress: cfg.Indexer.MarketAddress,
 		StartBlock:    cfg.Indexer.StartBlock,
 		Confirmations: cfg.Indexer.Confirmations,
 		BatchSize:     cfg.Indexer.BatchSize,
 		PollInterval:  cfg.Indexer.PollInterval,
+		Publisher:     broker,
 	})
 	if err != nil {
-		return err
+		return httpx.Deps{}, err
+	}
+
+	// Synchronously, before the loop starts: a cursor built from a different
+	// contract set is a configuration error, and the API refusing to boot is
+	// how config errors are reported here. Backgrounding it would leave the
+	// API serving empty rounds and positions as if they were the answer.
+	if err := ix.Preflight(ctx); err != nil {
+		return httpx.Deps{}, err
 	}
 
 	go func() {
@@ -130,7 +155,7 @@ func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *c
 			slog.Error("indexer stopped", "err", err)
 		}
 	}()
-	return nil
+	return httpx.Deps{Reader: reader, Broker: broker}, nil
 }
 
 // sweepNonces periodically clears spent and expired login challenges so the
