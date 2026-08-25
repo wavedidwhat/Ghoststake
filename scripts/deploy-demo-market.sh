@@ -41,14 +41,17 @@ if [ -z "${VAULT_ADDRESS:-}" ]; then
   # run, so after an afternoon of `local-stack.sh` it holds anvil addresses —
   # and a demo market attached to a vault that does not exist here is a market
   # whose every position reverts.
-  ENV_CHAIN="$(grep -E '^NEXT_PUBLIC_CHAIN_ID=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
+  # `|| true` for the same reason as everywhere else in these scripts: a key
+  # that is absent makes `grep` fail the substitution and `set -e` exits with
+  # nothing printed.
+  ENV_CHAIN="$(grep -E '^NEXT_PUBLIC_CHAIN_ID=' "$ENV_FILE" | tail -1 | cut -d= -f2 || true)"
   if [ -n "$ENV_CHAIN" ] && [ "$ENV_CHAIN" != "$CHAIN_ID" ]; then
     echo "$ENV_FILE describes chain $ENV_CHAIN, but NETWORK=$NETWORK is chain $CHAIN_ID." >&2
     echo "Pass VAULT_ADDRESS explicitly, or re-generate the file for this network." >&2
     exit 1
   fi
 
-  VAULT_ADDRESS="$(grep -E '^NEXT_PUBLIC_VAULT_ADDRESS=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
+  VAULT_ADDRESS="$(grep -E '^NEXT_PUBLIC_VAULT_ADDRESS=' "$ENV_FILE" | tail -1 | cut -d= -f2 || true)"
 fi
 [ -n "$VAULT_ADDRESS" ] || { echo "VAULT_ADDRESS is empty" >&2; exit 1; }
 export VAULT_ADDRESS
