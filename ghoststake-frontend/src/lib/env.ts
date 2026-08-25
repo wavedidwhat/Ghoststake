@@ -47,15 +47,25 @@ export const env = {
   /** The parimutuel market and the borrow-to-position router. */
   marketAddress: optionalAddress(process.env.NEXT_PUBLIC_MARKET_ADDRESS),
   routerAddress: optionalAddress(process.env.NEXT_PUBLIC_ROUTER_ADDRESS),
+
+  /**
+   * The demo market (GHO-29): the same contracts over a price feed the
+   * operator publishes into by hand, so a round can be shown settling without
+   * waiting on a real feed's heartbeat.
+   *
+   * Optional and separate from the pair above rather than folded into a list,
+   * because the two are not interchangeable — one settles against Chainlink
+   * and one settles against whatever the operator typed, and every surface
+   * that shows them has to keep saying which is which.
+   */
+  demoMarketAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_MARKET_ADDRESS),
+  demoRouterAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_ROUTER_ADDRESS),
 } as const;
 
 export const contractsConfigured = Boolean(env.vaultAddress && env.poolAddress);
 
-/**
- * The market half is tracked separately from the lending half on purpose.
- *
- * A deployment can legitimately have one and not the other — the Sepolia
- * deploy predates the router — and collapsing both into one flag would black
- * out a working dashboard because rounds are missing.
- */
-export const marketConfigured = Boolean(env.marketAddress && env.routerAddress);
+// The market half is tracked separately from the lending half on purpose: a
+// deployment can legitimately have one and not the other — the Sepolia deploy
+// predates the router — and collapsing both into one flag would black out a
+// working dashboard because rounds are missing. That flag now lives in
+// `markets.ts` as `marketsConfigured`, since there can be more than one.

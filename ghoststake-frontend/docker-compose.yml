@@ -23,6 +23,11 @@ services:
         NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0xd5655ac906e54b2fe5175126aee0c96dbb5f1dc4}
         NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0xd95fc2f28a74087b81d6c915c639c864f3d55c63}
         NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0xd811bb51427e7d6f399dcc0587707ddd588a7735}
+        # No default: until the demo market (GHO-29) is deployed to this
+        # network, the app should show one market rather than a second one
+        # pointing at an address that holds no contract.
+        NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-}
+        NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.

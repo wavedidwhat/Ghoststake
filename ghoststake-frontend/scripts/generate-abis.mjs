@@ -25,7 +25,7 @@ const WANTED = {
   ],
   ParimutuelRound: [
     "rounds", "roundCount", "phaseOf", "claimableOf", "stakeOf", "claimed",
-    "entryCutoff", "minSidePool", "rake", "stakeAsset",
+    "entryCutoff", "minSidePool", "rake", "stakeAsset", "oracle",
     // writes
     "takePosition", "claim",
   ],
@@ -37,6 +37,12 @@ const WANTED = {
     // writes
     "openPosition",
   ],
+  // Two hops from a market to the feed behind it — `market.oracle()`, then
+  // `oracle.feed()`, then `feed.description()`. The UI walks that chain so it
+  // can say where a market's settlement price actually comes from instead of
+  // trusting which env var the address arrived in (GHO-29).
+  ChainlinkRoundOracle: ["feed", "maxStaleness"],
+  AggregatorV3Interface: ["description", "decimals"],
   BorrowLiquidityPool: [
     "balanceOfDebt", "balanceOfSupply", "utilization",
     "borrowRatePerSecond", "availableLiquidity", "totalBorrowed", "totalSupplied",

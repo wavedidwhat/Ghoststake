@@ -25,6 +25,12 @@ export ARBISCAN_API_KEY="${ARBISCAN_API_KEY:-}"
 # local chain always uses the local account, whatever .env holds.
 export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
+# Both markets locally, even though anvil's clock can be warped and the local
+# feed is already operator-driven. What is being developed against is a
+# deployment with two markets in it, and a UI that only ever sees one is a UI
+# whose market labelling nobody looks at until it is in front of an audience.
+export DEMO_MARKET="${DEMO_MARKET:-true}"
+
 log() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 
 # ---------------------------------------------------------------- anvil ----
@@ -54,6 +60,8 @@ addr_of() { echo "$DEPLOY_OUT" | grep -E "^\s+$1\s+0x" | awk '{print $NF}'; }
 ASSET=$(addr_of "Asset")
 POOL=$(addr_of "BorrowLiquidityPool")
 VAULT=$(addr_of "CollateralVault")
+DEMO_FEED=$(addr_of "DemoPriceFeed"); DEMO_MARKET_ADDR=$(addr_of "DemoParimutuelRound")
+DEMO_ROUTER=$(addr_of "DemoBorrowToPosRtr")
 MARKET=$(addr_of "ParimutuelRound")
 ROUTER=$(addr_of "BorrowToPositionRtr")
 ORACLE=$(addr_of "ChainlinkRoundOracle")
@@ -83,6 +91,9 @@ NEXT_PUBLIC_VAULT_ADDRESS=$VAULT
 NEXT_PUBLIC_POOL_ADDRESS=$POOL
 NEXT_PUBLIC_MARKET_ADDRESS=$MARKET
 NEXT_PUBLIC_ROUTER_ADDRESS=$ROUTER
+NEXT_PUBLIC_DEMO_MARKET_ADDRESS=$DEMO_MARKET_ADDR
+NEXT_PUBLIC_DEMO_ROUTER_ADDRESS=$DEMO_ROUTER
+NEXT_PUBLIC_DEMO_FEED_ADDRESS=$DEMO_FEED
 ENV
 
 log "writing ghoststake-backend/.env.local"
@@ -110,6 +121,9 @@ cat <<SUMMARY
   ChainlinkRoundOracle  $ORACLE
   ParimutuelRound       $MARKET
   BorrowToPositionRtr   $ROUTER
+  DemoPriceFeed         ${DEMO_FEED:-(none)}
+  Demo ParimutuelRound  ${DEMO_MARKET_ADDR:-(none)}
+  Demo router           ${DEMO_ROUTER:-(none)}
 
   Frontend    cd ghoststake-frontend && pnpm dev      → http://localhost:3000
   Backend     cd ghoststake-backend  && make run-local
