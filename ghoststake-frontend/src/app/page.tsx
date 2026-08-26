@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useConnection } from "wagmi";
 import { Card, Stat } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
@@ -175,6 +176,14 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
           Lending pool
         </h2>
         <span className="h-px flex-1 bg-border" />
+        {/* The way in. These figures described a pool nobody outside the seed
+            script could join until GHO-39. */}
+        <Link
+          href="/lend"
+          className="text-xs text-ink-faint transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+        >
+          Supply into it →
+        </Link>
       </div>
 
       {pool.isError ? (
@@ -182,7 +191,7 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
           <p className="text-sm text-ink-muted">Pool figures are unavailable right now.</p>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Stat label="Total supplied" hint="lender deposits">
             <PendingFigure value={amount(pool.totalSupplied)} unit={symbol} />
           </Stat>
@@ -203,6 +212,20 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
                   : formatApr(pool.borrowRatePerSecond)
               }
               unit=""
+            />
+          </Stat>
+          {/* Lower than the borrow rate by two effects at once: only the
+              borrowed fraction earns anything, and the protocol keeps a
+              reserve cut of what it does earn. */}
+          <Stat label="Supply rate" hint="what lenders earn">
+            <PendingFigure
+              value={
+                pool.supplyRatePerSecond === undefined
+                  ? undefined
+                  : formatApr(pool.supplyRatePerSecond)
+              }
+              unit=""
+              tone="positive"
             />
           </Stat>
         </div>
