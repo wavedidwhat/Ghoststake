@@ -12,32 +12,45 @@ import (
 	_ "time/tzdata"
 )
 
-// Session is a trading calendar: when a feed's market is actually open.
+// Session is a trading calendar: when a feed's market is expected to be open.
 //
-// # Why the keeper needs one at all
+// # What this is for, and what it is no longer for
 //
-// Robinhood Chain's Stock Token feeds follow US equity market hours. Crypto
-// feeds do not — they publish continuously. A round scheduled across a
-// closing bell settles against a feed that stopped moving partway through it,
-// which resolves as a tie and voids, or finds no round published after the
-// close and cannot resolve at all. Either way the market shows a user nothing
-// happening, and the cause is invisible from the app.
+// It used to be the whole gate: a stock-feed round was opened only when the
+// NYSE session was open now and stayed open through `closeTime`. That put a
+// hand-written list in charge of whether a market ran, and the list was both
+// disputed (Robinhood's docs describe Stock Token feeds as 24/5 *and* as
+// following market hours, which are different calendars) and finite.
 //
-// So the gate is on *opening*: a stock-feed round is only opened when the
-// session is open now and will still be open at `closeTime`. Crypto-feed
-// markets skip this entirely.
+// GHO-48 moved the "is it publishing now" half to the feed itself, where the
+// answer is observable rather than asserted — see Liveness. What is left here
+// is the half no observation can cover: **will it still be publishing at
+// `closeTime`?** A round whose observation window runs past the closing bell
+// settles against a feed that stopped moving partway through it, and finds no
+// round published after the close to settle against at all.
 //
-// # The calendar is hardcoded, and refuses to guess
+// So this is now a forward-looking check, consulted by `forwardCheck` and
+// nothing else.
+//
+// # The calendar can be wrong, and says so
+//
+// Because the feed is watched independently, the calendar's claim is now
+// falsifiable. A feed seen publishing well outside the session it supposedly
+// keeps is a feed this calendar does not describe, and `forwardCheck` drops
+// it for that market rather than idling something demonstrably working. That
+// is how the 24/5 question resolves itself in production without anyone
+// having to resolve it here.
+//
+// # The list is finite, and that is now survivable
 //
 // Holidays are a list, not a rule — the NYSE observes ten of them, moves them
 // when they fall at a weekend, and closes early on a handful of afternoons.
-// Deriving that is more code than the buildathon needs, so the dates are
-// written down.
+// The dates are written down through 2027.
 //
-// The important consequence is what happens past the end of the list:
-// `OpenThroughout` reports closed, not open. A calendar that ran out and
-// defaulted to "open" would silently resume the exact failure it exists to
-// prevent, on a date nobody was looking at.
+// Past that, `Covers` reports false and the gate degrades to a short-round
+// bound against a feed it has just confirmed is publishing, rather than the
+// previous behaviour of reading every date as closed. An expired list should
+// not be a dead man's switch on the product.
 type Session struct {
 	loc *time.Location
 
@@ -145,6 +158,44 @@ func (s *Session) OpenThroughout(from, to time.Time) bool {
 
 // OpenAt reports whether the session is open at a single instant.
 func (s *Session) OpenAt(t time.Time) bool { return s.OpenThroughout(t, t) }
+
+// Covers reports whether the holiday and early-close lists are known good for
+// `t`. False past the last written-down year.
+//
+// Separate from OpenThroughout because "closed that day" and "I have no idea
+// about that day" want different handling, and conflating them is what made
+// an expired list take the market down with it.
+func (s *Session) Covers(t time.Time) bool {
+	if s == nil {
+		return true
+	}
+	return t.In(s.loc).Year() <= s.lastCoveredYear
+}
+
+// WellOutside reports whether `t` falls more than `margin` outside any session
+// on its own calendar day — evidence that this feed is not keeping the hours
+// this calendar describes.
+//
+// The margin exists so a closing-auction print landing a little after the bell
+// does not discredit an otherwise correct calendar. What it is meant to catch
+// is a feed publishing in the middle of the night or over a weekend, which is
+// not an edge case but a different schedule entirely.
+//
+// A date the calendar does not cover is not evidence of anything, so it
+// reports false: we cannot say a feed is off-schedule using a schedule we do
+// not have.
+func (s *Session) WellOutside(t time.Time, margin time.Duration) bool {
+	if s == nil || !s.Covers(t) {
+		return false
+	}
+	opensAt, closesAt, ok := s.boundsFor(t)
+	if !ok {
+		// A weekend or a holiday. Any publication at all is outside, and no
+		// margin applies — there is no bell to have printed just after.
+		return true
+	}
+	return t.Before(opensAt.Add(-margin)) || t.After(closesAt.Add(margin))
+}
 
 // boundsFor returns the session on `t`'s local calendar day. ok is false on a
 // weekend, a holiday, or a date the calendar does not cover.

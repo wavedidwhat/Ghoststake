@@ -40,7 +40,7 @@ func TestKeeperRulesAgreeWithTheContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	markets, err := keeper.Discover(ctx, client, registry, nil, nyse)
+	markets, err := keeper.Discover(ctx, client, registry, nil, nyse, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestLocalMarketsAreNotSessionGated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	markets, err := keeper.Discover(ctx, client, registry, nil, nyse)
+	markets, err := keeper.Discover(ctx, client, registry, nil, nyse, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
