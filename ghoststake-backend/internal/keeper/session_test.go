@@ -147,3 +147,79 @@ func TestTheSessionHoldsAcrossDaylightSaving(t *testing.T) {
 		}
 	}
 }
+
+// The calendar now knows where it ends, and that is a different answer from
+// "closed". Conflating the two is what made an expired holiday list take a
+// market down with it.
+func TestTheCalendarKnowsWhereItEnds(t *testing.T) {
+	s := nyse(t)
+
+	if !s.Covers(ny(t, "2027-12-31 12:00")) {
+		t.Fatal("2027 is written down")
+	}
+	if s.Covers(ny(t, "2028-01-01 12:00")) {
+		t.Fatal("2028 is not")
+	}
+	// A market with no calendar at all covers everything, because there is
+	// nothing to run out of.
+	if !keeper.AlwaysOpen().Covers(ny(t, "2099-01-01 12:00")) {
+		t.Fatal("an ungated market has no calendar to expire")
+	}
+}
+
+// The falsifiability test, and the reason the "24/5 versus a closing bell"
+// argument no longer has to be won.
+//
+// If a feed is seen publishing in the middle of the night or over a weekend,
+// then whatever the docs say, this feed does not keep these hours — and the
+// keeper believes the feed rather than the list.
+func TestAFeedPublishingOvernightDiscreditsTheCalendar(t *testing.T) {
+	s := nyse(t)
+	margin := 30 * time.Minute
+
+	// 02:00 on a Wednesday. If Stock Token feeds really are 24/5, this is
+	// exactly what their history looks like.
+	if !s.WellOutside(ny(t, "2026-08-26 02:00"), margin) {
+		t.Fatal("a publication at 2am is not this session's")
+	}
+	// A Saturday. No session at all, so any publication is outside it.
+	if !s.WellOutside(ny(t, "2026-08-29 12:00"), margin) {
+		t.Fatal("a publication on a Saturday is not this session's")
+	}
+	// A holiday, same reasoning.
+	if !s.WellOutside(ny(t, "2026-09-07 12:00"), margin) {
+		t.Fatal("a publication on Labor Day is not this session's")
+	}
+}
+
+// The margin, which stops a correct calendar being thrown away over an edge
+// print. A closing auction lands a little after the bell and that is normal;
+// it is not evidence the feed runs all night.
+func TestAnEdgePrintDoesNotDiscreditTheCalendar(t *testing.T) {
+	s := nyse(t)
+	margin := 30 * time.Minute
+
+	for _, at := range []string{
+		"2026-08-26 09:30", // the open
+		"2026-08-26 09:05", // pre-open, inside the margin
+		"2026-08-26 16:00", // the bell
+		"2026-08-26 16:25", // a late print, inside the margin
+	} {
+		if s.WellOutside(ny(t, at), margin) {
+			t.Fatalf("%s is within the margin and must not discredit the calendar", at)
+		}
+	}
+	// Well past it, though, is a different schedule.
+	if !s.WellOutside(ny(t, "2026-08-26 17:30"), margin) {
+		t.Fatal("ninety minutes after the bell is outside the margin")
+	}
+}
+
+// A date the calendar does not cover proves nothing about the feed. Judging a
+// feed off-schedule needs a schedule to judge it against.
+func TestAnUncoveredDateIsNotEvidence(t *testing.T) {
+	s := nyse(t)
+	if s.WellOutside(ny(t, "2028-08-26 02:00"), 30*time.Minute) {
+		t.Fatal("we have no calendar for 2028, so we cannot say this is off-schedule")
+	}
+}

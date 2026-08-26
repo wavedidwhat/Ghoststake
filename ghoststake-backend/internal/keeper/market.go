@@ -29,9 +29,30 @@ type Market struct {
 
 	Timing Timing
 
-	// Session is the trading calendar this market's feed follows, or nil for
-	// a feed that never stops. See Session.
+	// Session is the trading calendar this market's feed is expected to
+	// follow, or nil for a feed with no schedule. Consulted only for the
+	// forward-looking half of the open gate — see forwardCheck.
 	Session *Session
+
+	// calendarDisqualified is set once this feed has been observed
+	// publishing well outside the session above. From then on the calendar is
+	// not applied to this market: a feed that publishes at three in the
+	// morning is not keeping market hours, whatever a list says.
+	//
+	// One-way and never reset. Evidence that the calendar is wrong about this
+	// feed does not expire, and a flag that flapped would have the market
+	// opening rounds on alternate ticks.
+	calendarDisqualified bool
+
+	// Liveness is the feed's measured publication cadence, read once at
+	// startup. Only Heartbeat and Known are meaningful here — LastPublished
+	// is filled in per check, because it is the part that goes stale.
+	Liveness Liveness
+
+	// status is the venue's own market-status feed, if one was configured.
+	// Authoritative when present: a venue publishing its own state beats
+	// anything inferred from a calendar or a cadence.
+	status *chain.Contract
 
 	// Horizon is the round length the registry says this market is meant to
 	// run at. Advisory — nothing on chain enforces it — and zero for a market
@@ -58,7 +79,7 @@ func (m *Market) String() string {
 // `immutable` in Solidity, so a per-tick re-read would be the same request
 // returning the same answer forever. A redeploy is a new address and a
 // restart.
-func LoadMarket(ctx context.Context, client *chain.Client, address string, horizon uint64, nyse *Session) (*Market, error) {
+func LoadMarket(ctx context.Context, client *chain.Client, address string, horizon uint64, nyse *Session, statusFeed string) (*Market, error) {
 	round, err := client.Bind(abis.ParimutuelRound, address)
 	if err != nil {
 		return nil, err
@@ -115,7 +136,48 @@ func LoadMarket(ctx context.Context, client *chain.Client, address string, horiz
 	} else {
 		m.Session = AlwaysOpen()
 	}
+
+	// Measured once. The cadence is a property of the feed and does not move;
+	// how long ago it last published is read per check, where it matters.
+	latestID, err := m.LatestFeedRoundID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if m.Liveness, err = Observe(ctx, m.ReadFeedRound, latestID); err != nil {
+		return nil, err
+	}
+
+	if statusFeed != "" {
+		if m.status, err = client.Bind(abis.AggregatorV3Interface, statusFeed); err != nil {
+			return nil, err
+		}
+		// Read once at startup rather than trusted at first use. A status
+		// feed pointed at the wrong address answers nothing, and the gate
+		// would then either refuse every round or error on every tick — both
+		// discovered hours later, in production, at the moment it mattered.
+		if _, err := m.VenueOpen(ctx); err != nil {
+			return nil, fmt.Errorf("keeper: %s's market status feed at %s does not answer: %w",
+				m.Address.Hex(), statusFeed, err)
+		}
+	}
 	return m, nil
+}
+
+// VenueOpen reads the configured market-status feed.
+//
+// The convention these feeds use is an ordinary AggregatorV3Interface whose
+// answer is a flag rather than a price: non-zero is open. Read through the
+// same interface as any other feed, because that is what it is.
+func (m *Market) VenueOpen(ctx context.Context) (bool, error) {
+	values, err := m.status.CallAt(ctx, nil, "latestRoundData")
+	if err != nil {
+		return false, err
+	}
+	answer, ok := values[1].(*big.Int)
+	if !ok {
+		return false, fmt.Errorf("keeper: market status feed returned %T for answer, want *big.Int", values[1])
+	}
+	return answer.Sign() != 0, nil
 }
 
 // followsTradingSession decides whether this feed's market has opening hours.
@@ -177,20 +239,38 @@ func (m *Market) Owner(ctx context.Context) (common.Address, error) {
 
 // LatestFeedRoundID is the feed's current round id, the ceiling for a search.
 func (m *Market) LatestFeedRoundID(ctx context.Context) (*big.Int, error) {
+	id, _, err := m.LatestFeedRound(ctx)
+	return id, err
+}
+
+// LatestFeedRound is the feed's newest round: its id, for bounding a search,
+// and when it landed, for deciding whether the feed is still alive.
+//
+// Both come from one `latestRoundData` call because they always want to be
+// consistent with each other — an id from one block paired with a timestamp
+// from another describes a round that never existed.
+func (m *Market) LatestFeedRound(ctx context.Context) (*big.Int, *FeedRound, error) {
 	values, err := m.feed.CallAt(ctx, nil, "latestRoundData")
 	if err != nil {
 		if chain.IsRevert(err) {
 			// A feed that has never published. Real on the demo feed before
 			// anyone pushes a price, and not an error.
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	id, ok := values[0].(*big.Int)
 	if !ok {
-		return nil, fmt.Errorf("keeper: latestRoundData returned %T for roundId, want *big.Int", values[0])
+		return nil, nil, fmt.Errorf("keeper: latestRoundData returned %T for roundId, want *big.Int", values[0])
 	}
-	return id, nil
+	updatedAt, ok := values[3].(*big.Int)
+	if !ok {
+		return nil, nil, fmt.Errorf("keeper: latestRoundData returned %T for updatedAt, want *big.Int", values[3])
+	}
+	if updatedAt.Sign() == 0 {
+		return id, nil, nil
+	}
+	return id, &FeedRound{UpdatedAt: updatedAt.Uint64()}, nil
 }
 
 // ReadFeedRound is the RoundReader FindCloseRound searches with.
