@@ -40,6 +40,14 @@ type KeeperConfig struct {
 	EntryWindow uint64
 	Horizon     uint64
 
+	// StatusFeeds maps a market address (lowercased) to the venue
+	// market-status feed that speaks for it. Optional and usually empty.
+	StatusFeeds map[string]string
+
+	// MaxUncalendaredRound bounds round length on dates the trading calendar
+	// does not cover.
+	MaxUncalendaredRound time.Duration
+
 	MinGasBalanceWei *big.Int
 }
 
@@ -59,7 +67,15 @@ func LoadKeeper() (KeeperConfig, error) {
 		Lead:            uint64(envInt64("KEEPER_LEAD", 45)),
 		EntryWindow:     uint64(envInt64("KEEPER_ENTRY_WINDOW", 0)),
 		Horizon:         uint64(envInt64("KEEPER_HORIZON", 3600)),
+
+		MaxUncalendaredRound: envDuration("KEEPER_MAX_UNCALENDARED_ROUND", 15*time.Minute),
 	}
+
+	statusFeeds, err := parseStatusFeeds(env("KEEPER_MARKET_STATUS_FEEDS", ""))
+	if err != nil {
+		return KeeperConfig{}, err
+	}
+	c.StatusFeeds = statusFeeds
 
 	if c.PrivateKey == "" {
 		return KeeperConfig{}, fmt.Errorf("KEEPER_PRIVATE_KEY is required")
@@ -92,6 +108,10 @@ func LoadKeeper() (KeeperConfig, error) {
 		return KeeperConfig{}, fmt.Errorf("KEEPER_LEAD must be non-zero when KEEPER_OPEN_ROUNDS=true")
 	}
 
+	if c.MaxUncalendaredRound <= 0 {
+		return KeeperConfig{}, fmt.Errorf("KEEPER_MAX_UNCALENDARED_ROUND must be positive")
+	}
+
 	balance, ok := new(big.Int).SetString(strings.TrimSpace(env("KEEPER_MIN_GAS_BALANCE_WEI", "10000000000000000")), 10)
 	if !ok {
 		return KeeperConfig{}, fmt.Errorf("KEEPER_MIN_GAS_BALANCE_WEI is not a base-10 integer")
@@ -99,4 +119,43 @@ func LoadKeeper() (KeeperConfig, error) {
 	c.MinGasBalanceWei = balance
 
 	return c, nil
+}
+
+// parseStatusFeeds reads `market=statusFeed` pairs.
+//
+//	KEEPER_MARKET_STATUS_FEEDS=0xMarket=0xStatus,0xOther=0xOtherStatus
+//
+// Per market rather than one global address, because a status feed speaks for
+// one venue and a deployment can list markets on several. Keyed lowercase so a
+// checksummed address in one variable and a lowercase one in another still
+// name the same market.
+//
+// Both halves are validated here for the reason every other address in this
+// package is: `common.HexToAddress` pads whatever it is handed, so a typo
+// becomes an address with no code, and a status feed with no code would fail
+// the gate closed on every tick — a market that silently stops opening rounds.
+func parseStatusFeeds(raw string) (map[string]string, error) {
+	out := map[string]string{}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		market, status, found := strings.Cut(pair, "=")
+		if !found {
+			return nil, fmt.Errorf("KEEPER_MARKET_STATUS_FEEDS entry %q is not market=statusFeed", pair)
+		}
+		market, status = strings.TrimSpace(market), strings.TrimSpace(status)
+		if err := validateAddress("KEEPER_MARKET_STATUS_FEEDS market", market); err != nil {
+			return nil, err
+		}
+		if err := validateAddress("KEEPER_MARKET_STATUS_FEEDS status feed", status); err != nil {
+			return nil, err
+		}
+		out[strings.ToLower(market)] = status
+	}
+	return out, nil
 }
