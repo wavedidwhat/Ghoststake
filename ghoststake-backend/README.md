@@ -109,6 +109,24 @@ single point of failure. This one exists because the protocol is built so a
 keeper outage costs liveness and not safety, and because knowing the
 difference is worth showing.
 
+### When it will not open a round
+
+The keeper refuses to create a round it expects cannot settle, and says why
+once rather than every tick. Three checks, in order:
+
+1. **Is the feed publishing?** Measured from the feed's own recent rounds — no
+   configuration, and it covers every reason a feed goes quiet at once:
+   weekend, holiday, half-day, corporate action, outage. A feed with too few
+   rounds to measure is not gated, which is why a fresh `DemoPriceFeed` still
+   works. Push a price and the market resumes within a tick.
+2. **Does the venue say it is open?** Only when `KEEPER_MARKET_STATUS_FEEDS`
+   names a status feed for that market, and authoritative when it does.
+3. **Will it still be publishing at `closeTime`?** The one question
+   observation cannot answer, and all the trading calendar is now used for.
+   The calendar is falsifiable: a feed seen publishing well outside the
+   session it supposedly keeps is a feed the calendar does not describe, and
+   the keeper drops it for that market and logs that it did.
+
 It needs no database. Every decision comes from the chain, so it can be
 restarted or moved with nothing to reconcile, and a second instance racing it
 simply loses and logs that the round was already locked.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -38,14 +39,14 @@ type listing struct {
 // falls out of the design rather than needing a rule: an unlisted market is
 // not in this set at all, and the console is where anyone finishes off its
 // last round.
-func Discover(ctx context.Context, client *chain.Client, registryAddress string, marketAddresses []string, nyse *Session) ([]*Market, error) {
+func Discover(ctx context.Context, client *chain.Client, registryAddress string, marketAddresses []string, nyse *Session, statusFeeds map[string]string) ([]*Market, error) {
 	if registryAddress != "" {
-		return discoverFromRegistry(ctx, client, registryAddress, nyse)
+		return discoverFromRegistry(ctx, client, registryAddress, nyse, statusFeeds)
 	}
 
 	out := make([]*Market, 0, len(marketAddresses))
 	for _, address := range marketAddresses {
-		m, err := LoadMarket(ctx, client, address, 0, nyse)
+		m, err := LoadMarket(ctx, client, address, 0, nyse, statusFeedFor(statusFeeds, address))
 		if err != nil {
 			return nil, err
 		}
@@ -54,7 +55,16 @@ func Discover(ctx context.Context, client *chain.Client, registryAddress string,
 	return out, nil
 }
 
-func discoverFromRegistry(ctx context.Context, client *chain.Client, registryAddress string, nyse *Session) ([]*Market, error) {
+// statusFeedFor looks a market's venue status feed up by address.
+//
+// Case-insensitively, because an address is the same address whether or not
+// somebody pasted it checksummed — and a status feed that silently did not
+// apply because of a capital letter would be a gate quietly missing.
+func statusFeedFor(statusFeeds map[string]string, market string) string {
+	return statusFeeds[strings.ToLower(market)]
+}
+
+func discoverFromRegistry(ctx context.Context, client *chain.Client, registryAddress string, nyse *Session, statusFeeds map[string]string) ([]*Market, error) {
 	registry, err := client.Bind(abis.MarketRegistry, registryAddress)
 	if err != nil {
 		return nil, err
@@ -79,7 +89,7 @@ func discoverFromRegistry(ctx context.Context, client *chain.Client, registryAdd
 			slog.Info("skipping delisted market", "id", id, "market", l.Market.Hex())
 			continue
 		}
-		m, err := LoadMarket(ctx, client, l.Market.Hex(), l.Horizon, nyse)
+		m, err := LoadMarket(ctx, client, l.Market.Hex(), l.Horizon, nyse, statusFeedFor(statusFeeds, l.Market.Hex()))
 		if err != nil {
 			return nil, fmt.Errorf("keeper: load listed market %d (%s): %w", id, l.Market.Hex(), err)
 		}

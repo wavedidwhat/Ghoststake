@@ -74,7 +74,7 @@ func run() error {
 		return err
 	}
 
-	markets, err := keeper.Discover(ctx, client, cfg.RegistryAddress, cfg.MarketAddresses, nyse)
+	markets, err := keeper.Discover(ctx, client, cfg.RegistryAddress, cfg.MarketAddresses, nyse, cfg.StatusFeeds)
 	if err != nil {
 		return err
 	}
@@ -85,16 +85,18 @@ func run() error {
 			"entry_cutoff_s", m.Timing.EntryCutoff,
 			"lock_window_s", m.Timing.LockWindow,
 			"resolve_deadline_s", m.Timing.ResolveDeadline,
-			"session", sessionLabel(m))
+			"session", sessionLabel(m),
+			"feed_heartbeat", heartbeatLabel(m))
 	}
 
 	k, err := keeper.New(client, signer, markets, keeper.Config{
-		PollInterval:  cfg.PollInterval,
-		OpenRounds:    cfg.OpenRounds,
-		Lead:          cfg.Lead,
-		EntryWindow:   cfg.EntryWindow,
-		Horizon:       cfg.Horizon,
-		MinGasBalance: cfg.MinGasBalanceWei,
+		PollInterval:         cfg.PollInterval,
+		OpenRounds:           cfg.OpenRounds,
+		Lead:                 cfg.Lead,
+		EntryWindow:          cfg.EntryWindow,
+		Horizon:              cfg.Horizon,
+		MaxUncalendaredRound: cfg.MaxUncalendaredRound,
+		MinGasBalance:        cfg.MinGasBalanceWei,
 	})
 	if err != nil {
 		return err
@@ -109,6 +111,17 @@ func sessionLabel(m *keeper.Market) string {
 		return "24/7"
 	}
 	return "US market hours"
+}
+
+// heartbeatLabel reports the feed's measured cadence, which is now what
+// decides whether a market opens rounds at all. Worth a startup line: "not
+// measured" explains a market that never gates, and a heartbeat wildly unlike
+// the feed's documented one explains a market that gates too often.
+func heartbeatLabel(m *keeper.Market) string {
+	if !m.Liveness.Known {
+		return "not measured (too few rounds)"
+	}
+	return m.Liveness.Heartbeat.String()
 }
 
 func setupKeeperLogger(cfg config.KeeperConfig) {

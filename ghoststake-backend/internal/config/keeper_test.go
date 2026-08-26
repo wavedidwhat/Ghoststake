@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/wavedidwhat/ghoststake/internal/config"
@@ -114,5 +115,57 @@ func TestKeeperRefusesAZeroLeadWhenItOpensRounds(t *testing.T) {
 	t.Setenv("KEEPER_OPEN_ROUNDS", "false")
 	if _, err := config.LoadKeeper(); err != nil {
 		t.Fatalf("a keeper that only advances rounds needs no lead: %v", err)
+	}
+}
+
+// Status feeds are per market, because a status feed speaks for one venue and
+// a deployment can list markets on several.
+func TestKeeperParsesPerMarketStatusFeeds(t *testing.T) {
+	const status = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+	keeperBase(t)
+	t.Setenv("KEEPER_MARKET_STATUS_FEEDS", testRegistry+"="+status)
+
+	cfg, err := config.LoadKeeper()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keyed lowercase, so a checksummed address in one variable and a
+	// lowercase one in another still name the same market.
+	got := cfg.StatusFeeds[strings.ToLower(testRegistry)]
+	if got != status {
+		t.Fatalf("got %q, want %q", got, status)
+	}
+}
+
+// Unset is the normal case and must not be an error: nothing depends on a
+// venue publishing its status.
+func TestKeeperStatusFeedsAreOptional(t *testing.T) {
+	keeperBase(t)
+	cfg, err := config.LoadKeeper()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.StatusFeeds) != 0 {
+		t.Fatalf("got %v, want none", cfg.StatusFeeds)
+	}
+}
+
+// A malformed pair is refused rather than skipped. A status feed that
+// silently did not apply is a gate quietly missing, which is worse than one
+// that never existed — the operator believes it is there.
+func TestKeeperRejectsMalformedStatusFeeds(t *testing.T) {
+	for _, tc := range []struct{ name, value string }{
+		{"no equals", testRegistry},
+		{"bad market", "0xnope=" + testRegistry},
+		{"bad feed", testRegistry + "=0xnope"},
+		{"zero feed", testRegistry + "=0x0000000000000000000000000000000000000000"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			keeperBase(t)
+			t.Setenv("KEEPER_MARKET_STATUS_FEEDS", tc.value)
+			if _, err := config.LoadKeeper(); err == nil {
+				t.Fatalf("%q was accepted", tc.value)
+			}
+		})
 	}
 }

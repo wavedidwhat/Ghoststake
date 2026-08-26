@@ -39,6 +39,11 @@ type Config struct {
 	// horizon for.
 	Horizon uint64
 
+	// MaxUncalendaredRound bounds how long a round may be when it settles on
+	// a date the trading calendar does not cover. See forwardCheck: an
+	// expired holiday list degrades to this rather than stopping the market.
+	MaxUncalendaredRound time.Duration
+
 	// MinGasBalance is the balance below which the keeper starts warning on
 	// every tick. It never stops working over this — a keeper that refused to
 	// try is indistinguishable from one that is out of gas, and the one that
@@ -65,6 +70,11 @@ type Keeper struct {
 	// notOwner remembers which markets we have already said we cannot open
 	// rounds on, so that stays one log line rather than one per tick.
 	notOwner map[common.Address]bool
+
+	// refusal is the last reason each market was refused a new round, so a
+	// standing condition logs once when it starts and once when it clears
+	// rather than every tick.
+	refusal map[common.Address]string
 
 	// maxBackoff is derived from the tightest deadline any of these markets
 	// imposes; see New.
@@ -112,6 +122,7 @@ func New(client *chain.Client, signer *chain.Signer, markets []*Market, cfg Conf
 		cursor:     map[common.Address]uint64{},
 		retry:      map[string]*attempt{},
 		notOwner:   map[common.Address]bool{},
+		refusal:    map[common.Address]string{},
 		maxBackoff: backoffLimit(markets),
 	}, nil
 }
@@ -416,16 +427,27 @@ func (k *Keeper) openRound(ctx context.Context, m *Market, now uint64) error {
 		return fmt.Errorf("refusing to open a round: %s", problem)
 	}
 
-	// The session gate. Both ends matter: opening inside a session that closes
-	// before `closeTime` is the straddles-the-bell case, where the feed stops
-	// publishing partway through the round and there is nothing to settle it
-	// against.
-	openAt := time.Unix(int64(schedule.OpenTime), 0)
-	closeAt := time.Unix(int64(schedule.CloseTime), 0)
-	if !m.Session.OpenThroughout(openAt, closeAt) {
-		slog.Debug("keeper: market session is closed for this window, not opening a round",
-			"market", m.String(), "open", openAt.UTC(), "close", closeAt.UTC())
+	// The open gate: is the feed publishing, does the venue say it is open,
+	// and will it still be publishing at closeTime. See gate.go.
+	decision, err := k.canOpen(ctx, m, schedule, now)
+	if err != nil {
+		return err
+	}
+	if !decision.ok {
+		// Logged at info rather than debug, and once per condition rather
+		// than once per tick. "Why is this market not doing anything" has to
+		// be answerable from the log without turning debug on — and it has to
+		// not drown everything else while a market sits closed over a
+		// weekend. Keyed on the code, never the reason: see gateDecision.
+		if k.refusal[m.Address] != decision.code {
+			k.refusal[m.Address] = decision.code
+			slog.Info("keeper: not opening rounds", "market", m.String(), "because", decision.reason)
+		}
 		return nil
+	}
+	if previous, refused := k.refusal[m.Address]; refused {
+		delete(k.refusal, m.Address)
+		slog.Info("keeper: opening rounds again", "market", m.String(), "previously", previous)
 	}
 
 	// Keyed on round 0, which is not a round: "the next one" has no id yet,
