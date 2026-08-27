@@ -127,15 +127,16 @@ func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *c
 	broker := live.NewBroker()
 
 	ix, err := indexer.New(ch, st, indexer.Config{
-		ChainID:         cfg.ChainID,
-		VaultAddress:    cfg.Indexer.VaultAddress,
-		PoolAddress:     cfg.Indexer.PoolAddress,
-		MarketAddresses: cfg.Indexer.MarketAddresses,
-		StartBlock:      cfg.Indexer.StartBlock,
-		Confirmations:   cfg.Indexer.Confirmations,
-		BatchSize:       cfg.Indexer.BatchSize,
-		PollInterval:    cfg.Indexer.PollInterval,
-		Publisher:       broker,
+		ChainID:           cfg.ChainID,
+		VaultAddress:      cfg.Indexer.VaultAddress,
+		PoolAddress:       cfg.Indexer.PoolAddress,
+		MarketAddresses:   cfg.Indexer.MarketAddresses,
+		StartBlock:        cfg.Indexer.StartBlock,
+		Confirmations:     cfg.Indexer.Confirmations,
+		SkipDecoderReplay: cfg.Indexer.SkipDecoderReplay,
+		BatchSize:         cfg.Indexer.BatchSize,
+		PollInterval:      cfg.Indexer.PollInterval,
+		Publisher:         broker,
 	})
 	if err != nil {
 		return httpx.Deps{}, err

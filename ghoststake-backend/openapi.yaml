@@ -250,6 +250,59 @@ paths:
                         items: { $ref: "#/components/schemas/Position" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /api/v1/activity/{address}:
+    get:
+      tags: [market]
+      summary: Everything one address has done, newest first
+      description: |
+        One merged, paginated feed over both halves of the protocol: the
+        lending ledger and the round history. They are merged here rather than
+        client-side because the two interleave — a user borrows and then stakes
+        what they borrowed, and those rows belong next to each other — and
+        because merging two independently-limited lists gets the page boundary
+        wrong in a way nothing surfaces.
+
+        Every amount is nominal, as emitted at the time. Index-scaled balance
+        entries are excluded at the query: a scaled amount is what makes a
+        balance summable and exactly what makes it wrong as history, because
+        rendering it means either showing a number the user never saw or
+        converting it with today's index — a completed transaction whose
+        figure changes on every reload.
+
+        Paged on the log's own coordinates rather than an offset. The indexer
+        writes to the head continuously, so an offset page shifts under a
+        reader mid-scroll. Pass `nextCursor` back as `?cursor=`; `null` means
+        this was the last page.
+
+        Rate limited to 120 requests per minute per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AddressPath"
+        - $ref: "#/components/parameters/ActivityLimit"
+        - $ref: "#/components/parameters/ActivityCursor"
+      responses:
+        "200":
+          description: Activity.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/IndexedEnvelope"
+                  - type: object
+                    properties:
+                      address: { $ref: "#/components/schemas/Address" }
+                      events:
+                        type: array
+                        items: { $ref: "#/components/schemas/ActivityEvent" }
+                      nextCursor:
+                        type: string
+                        nullable: true
+                        description: |
+                          Pass back as `?cursor=` for the next page. Null on
+                          the last page.
+                        example: "9421133-4-0"
+        "400": { $ref: "#/components/responses/BadRequest" }
+
   /api/v1/health/{address}:
     get:
       tags: [lending]
@@ -362,6 +415,37 @@ components:
         being ignored — ignoring it would widen the answer rather than narrow
         it, and the caller has no way to tell.
       schema: { $ref: "#/components/schemas/Address" }
+    ActivityLimit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        Activity rows to return. Defaults to 50, clamped to 200. Higher than
+        the round limit because a row here is one already-decoded database row
+        rather than a whole round projected and priced. Unparseable or
+        non-positive values fall back to the default rather than erroring.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ActivityCursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        A position in the feed, as `<blockNumber>-<logIndex>-<recordIndex>`.
+        Take it from the previous response's `nextCursor` and pass it
+        unchanged; omit for the first page.
+
+        The log's coordinates rather than an offset, because the indexer
+        writes to the head while a client is reading: an offset page shifts
+        under it and repeats or drops rows at the boundary. A malformed cursor
+        is a 400, not a silent first page — answering a request for page four
+        with page one reads as a list that never ends.
+      schema:
+        type: string
+        example: "9421133-4-0"
     Limit:
       name: limit
       in: query
@@ -528,6 +612,88 @@ components:
             Opened with borrowed funds through the router, so settlement routes
             back through it to repay the debt rather than paying the user.
         openedAt: { type: string, format: date-time }
+
+    ActivityEvent:
+      type: object
+      description: |
+        One thing an address did. Rows come from two tables — the lending
+        ledger and the round history — and are indistinguishable here on
+        purpose: the feed is what the user did, in order, not a tour of the
+        storage behind it.
+      properties:
+        id:
+          type: string
+          description: |
+            The log's coordinates, `<blockNumber>-<logIndex>-<recordIndex>`.
+            Unique across both tables, so it is a stable list key, and it is
+            the same string the cursor uses.
+          example: "9421133-4-0"
+        type:
+          type: string
+          description: |
+            What happened, in one vocabulary. Mapped server-side rather than
+            passed through as the contract's event name, because the raw names
+            collide: the vault and the pool both emit `Withdrawn` and they mean
+            different things.
+
+            An unrecognised event falls back to its raw name rather than to
+            "unknown", so something new is visible as itself instead of
+            looking like corrupt data.
+          enum:
+            - deposit
+            - vault_withdraw
+            - supply
+            - pool_withdraw
+            - borrow
+            - repay
+            - yield
+            - lien_settled
+            - liquidation
+            - share_transfer_in
+            - share_transfer_out
+            - position
+            - claim
+        eventName:
+          type: string
+          description: The contract's own event name, for tracing a row back.
+          example: Deposited
+        contract:
+          type: string
+          description: Which contract emitted it.
+          example: CollateralVault
+        amount:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            Nominal, as emitted at the time, and never index-scaled. Absolute:
+            direction is carried by `type`, not by a sign a reader has to
+            notice.
+        asset:
+          type: string
+          enum: [asset, shares]
+          description: |
+            What `amount` is counted in — the underlying token, or vault
+            shares. Not inferable from the number.
+        counterparty:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: |
+            The other party where the event named one: a repayer, a
+            liquidator, the other side of a share transfer.
+        market:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: Set on betting rows. Round ids restart per market.
+        roundId: { type: integer }
+        side: { type: string, enum: [up, down] }
+        data:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Whatever else the event carried — a funder, a payout recipient.
+            A funder differing from the account is how a leveraged stake is
+            told from a cash one after the fact.
+        blockNumber: { type: integer }
+        blockTime: { type: string, format: date-time }
+        txHash: { type: string }
+        logIndex: { type: integer }
 
     Health:
       type: object

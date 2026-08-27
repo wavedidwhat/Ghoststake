@@ -84,17 +84,23 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 		}
 	}
 
+	// The decoder version is written here, in the same transaction that
+	// advances the position — which is what makes a replay happen exactly
+	// once. Stamping it separately, before or after, would leave a window
+	// where a crash means either replaying forever or never replaying at all.
 	const upsertCursor = `
-		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, contracts, updated_at)
-		VALUES ($1, $2, $3, $4, $5, now())
+		INSERT INTO indexer_cursor (stream, chain_id, last_block, last_block_hash, contracts, decoders, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, now())
 		ON CONFLICT (stream) DO UPDATE
 		SET last_block = EXCLUDED.last_block,
 		    last_block_hash = EXCLUDED.last_block_hash,
 		    chain_id = EXCLUDED.chain_id,
 		    contracts = EXCLUDED.contracts,
+		    decoders = EXCLUDED.decoders,
 		    updated_at = now()`
 	if _, err := tx.Exec(ctx, upsertCursor,
-		cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash, cursor.Contracts); err != nil {
+		cursor.Stream, cursor.ChainID, cursor.LastBlock, cursor.LastHash,
+		cursor.Contracts, cursor.Decoders); err != nil {
 		return fmt.Errorf("upsert cursor: %w", err)
 	}
 
@@ -104,12 +110,12 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 // LoadCursor returns the stream's position, or ok=false if it has never run.
 func (s *Store) LoadCursor(ctx context.Context, stream string) (ledger.Cursor, bool, error) {
 	const q = `
-		SELECT stream, chain_id, last_block, last_block_hash, contracts
+		SELECT stream, chain_id, last_block, last_block_hash, contracts, decoders
 		FROM indexer_cursor WHERE stream = $1`
 
 	var c ledger.Cursor
 	err := s.pool.QueryRow(ctx, q, stream).
-		Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash, &c.Contracts)
+		Scan(&c.Stream, &c.ChainID, &c.LastBlock, &c.LastHash, &c.Contracts, &c.Decoders)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ledger.Cursor{}, false, nil
 	}
@@ -164,6 +170,37 @@ func (s *Store) RollbackFrom(ctx context.Context, chainID int64, stream string, 
 		return 0, err
 	}
 	return tag.RowsAffected() + roundTag.RowsAffected(), nil
+}
+
+// ReplayFrom rewinds a cursor without deleting a single row.
+//
+// The counterpart to RollbackFrom, and the difference is what the rows mean.
+// A reorg says they were never history: they have to go. A decoder change
+// says they are correct but incomplete — the new records are ones the old
+// decoder derived and discarded — so deleting them would destroy good data in
+// order to re-derive it from an RPC that may not serve those logs any more.
+//
+// Re-reading over them is safe because every insert is idempotent on
+// (chain, tx, log index, record index): what exists is a no-op, what is new
+// is written.
+//
+// The block hash is cleared for the same reason the rollback clears it: the
+// cursor no longer sits where that hash was taken, and a stale one would make
+// the next reorg check compare against the wrong block and see a false match.
+func (s *Store) ReplayFrom(ctx context.Context, stream string, fromBlock uint64) error {
+	if fromBlock == 0 {
+		// `fromBlock - 1` is unsigned: zero would wrap the cursor to the top
+		// of uint64 rather than rewinding it, and the indexer would then sit
+		// forever waiting for a block height that will never arrive.
+		return fmt.Errorf("replay: fromBlock must be greater than zero")
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE indexer_cursor SET last_block = $2, last_block_hash = '', updated_at = now()
+		 WHERE stream = $1`, stream, fromBlock-1)
+	if err != nil {
+		return fmt.Errorf("replay from %d: %w", fromBlock, err)
+	}
+	return nil
 }
 
 // nullable maps an empty string to SQL NULL, so an absent counterparty,

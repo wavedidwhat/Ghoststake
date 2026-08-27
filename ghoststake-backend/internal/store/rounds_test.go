@@ -35,9 +35,13 @@ func ref(id uint64) ledger.RoundRef {
 }
 
 func roundEvent(id uint64, name string, block uint64, tx string, logIndex uint, recordIndex int) ledger.RoundEvent {
+	return roundEventOn(testChainID, id, name, block, tx, logIndex, recordIndex)
+}
+
+func roundEventOn(chainID int64, id uint64, name string, block uint64, tx string, logIndex uint, recordIndex int) ledger.RoundEvent {
 	return ledger.RoundEvent{
 		Provenance: ledger.Provenance{
-			ChainID: testChainID, BlockNumber: block, BlockHash: "0xblock",
+			ChainID: chainID, BlockNumber: block, BlockHash: "0xblock",
 			BlockTime: time.Unix(1700000000, 0).UTC(),
 			TxHash:    tx, LogIndex: logIndex, RecordIndex: recordIndex,
 			Contract: "ParimutuelRound", EventName: name,
@@ -130,19 +134,23 @@ func TestRollbackRemovesRoundEventsToo(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	id := roundID(t, 1)
+	// Its own chain. A rollback deletes by block across every account and
+	// every round, so on the shared chain this quietly took rows other tests
+	// had written above block 150. See chainOf.
+	chainID := chainOf(t)
 
-	kept := roundEvent(id, ledger.PositionTaken, 100, "0xrb1", 0, 0)
+	kept := roundEventOn(chainID, id, ledger.PositionTaken, 100, "0xrb1", 0, 0)
 	kept.Account, kept.Side, kept.Amount = "0xAlice", ledger.SideUp, big.NewInt(100)
 
-	resolved := roundEvent(id, ledger.RoundResolved, 200, "0xrb2", 0, 0)
+	resolved := roundEventOn(chainID, id, ledger.RoundResolved, 200, "0xrb2", 0, 0)
 	resolved.Data = map[string]string{"closePrice": "2600", "winner": "up", "rakeTaken": "0"}
 
 	if err := st.Append(ctx, ledger.Batch{Rounds: []ledger.RoundEvent{kept, resolved}},
-		cursorAt(200, "0xh200")); err != nil {
+		cursorOn(t, chainID, 200)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	deleted, err := st.RollbackFrom(ctx, testChainID, "test", 150)
+	deleted, err := st.RollbackFrom(ctx, chainID, t.Name(), 150)
 	if err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
@@ -150,7 +158,7 @@ func TestRollbackRemovesRoundEventsToo(t *testing.T) {
 		t.Fatalf("rollback deleted %d rows, want at least the resolution", deleted)
 	}
 
-	events, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(id)})
+	events, err := st.RoundEventsByRefs(ctx, chainID, []ledger.RoundRef{ref(id)})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
