@@ -6,6 +6,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { EntryPausable } from "./EntryPausable.sol";
 
 /// @notice Shared lending liquidity for GhostStake. Suppliers deposit here,
 /// borrowers draw against the pooled un-borrowed balance, and borrowers'
@@ -60,7 +61,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 /// without a cumulative product, which is what the index *is*. Aave and
 /// Compound both live with the same residue. `test_accrueCadenceEffectIsNegligible`
 /// pins the magnitude so a future change can't quietly widen it.
-contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
+contract BorrowLiquidityPool is Ownable, ReentrancyGuard, EntryPausable {
     using SafeERC20 for IERC20;
 
     /// @dev Index precision. Higher than WAD because indices compound and
@@ -164,8 +165,9 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
         uint256 slope2PerSecond_,
         uint256 kink_,
         uint256 reserveFactor_,
-        address initialOwner
-    ) Ownable(initialOwner) {
+        address initialOwner,
+        address pauseGuardian_
+    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) {
         if (kink_ == 0 || kink_ >= WAD || reserveFactor_ >= WAD) revert InvalidCurve();
 
         asset = asset_;
@@ -295,7 +297,10 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     // Supply side
     // ------------------------------------------------------------------
 
-    function supply(uint256 amount) external nonReentrant {
+    /// @dev An entry: this is new value arriving. `withdraw` below carries no
+    /// guard and must never grow one — a pool that can stop you leaving is a
+    /// different product from one that can stop you arriving.
+    function supply(uint256 amount) external nonReentrant whenEntriesOpen {
         if (amount == 0) revert ZeroAmount();
         accrue();
 
@@ -351,7 +356,13 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     /// already cleared. The vault's own guard is free at that point, so a
     /// borrow could be attempted against a position that momentarily reads as
     /// debt-free. This guard is what makes that inner call revert.
-    function borrow(uint256 amount, address onBehalfOf) external nonReentrant onlyBorrowModule {
+    /// @dev Guarded here as well as at the vault, and the redundancy is
+    /// deliberate. `borrowModule` is set once and is the vault today, so this
+    /// looks like a second lock on the same door — but the two contracts pause
+    /// independently, and the pool is the one holding the liquidity. An
+    /// operator halting the pool should not have to know which module happens
+    /// to be pointed at it to be sure nothing new is drawn.
+    function borrow(uint256 amount, address onBehalfOf) external nonReentrant onlyBorrowModule whenEntriesOpen {
         if (amount == 0) revert ZeroAmount();
         accrue();
 

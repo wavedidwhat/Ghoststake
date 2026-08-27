@@ -34,7 +34,7 @@ contract MarketRegistryTest is Test {
     function setUp() public {
         token = new ERC20Mock();
         pool = new BorrowLiquidityPool(
-            IERC20(address(token)), 0, uint256(4e16) / YEAR, uint256(75e16) / YEAR, 8e17, 1e17, owner
+            IERC20(address(token)), 0, uint256(4e16) / YEAR, uint256(75e16) / YEAR, 8e17, 1e17, owner, owner
         );
         vault = new CollateralVault(
             IERC20(address(token)),
@@ -45,7 +45,8 @@ contract MarketRegistryTest is Test {
                 liquidationThreshold: 65e16,
                 liquidationBonus: 5e16,
                 closeFactor: 5e17
-            })
+            }),
+            address(this)
         );
         vm.prank(owner);
         pool.setBorrowModule(address(vault));
@@ -61,6 +62,7 @@ contract MarketRegistryTest is Test {
             2e16,
             ParimutuelRound.Timing({ entryCutoff: 15, lockWindow: 60, resolveDeadline: 1 hours }),
             1 ether,
+            owner,
             owner
         );
         router = new BorrowToPositionRouter(vault, market);
@@ -131,6 +133,7 @@ contract MarketRegistryTest is Test {
             2e16,
             ParimutuelRound.Timing({ entryCutoff: 15, lockWindow: 60, resolveDeadline: 1 hours }),
             1 ether,
+            owner,
             owner
         );
         BorrowToPositionRouter router = new BorrowToPositionRouter(vault, market);

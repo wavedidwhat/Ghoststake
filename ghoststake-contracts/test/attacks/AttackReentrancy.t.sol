@@ -107,6 +107,7 @@ contract AttackReentrancyTest is Test {
             uint256(100e16) / YEAR,
             0.8e18,
             0.1e18,
+            owner,
             owner
         );
         vault = new CollateralVault(
@@ -118,7 +119,8 @@ contract AttackReentrancyTest is Test {
                 liquidationThreshold: 65e16,
                 liquidationBonus: 5e16,
                 closeFactor: 5e17
-            })
+            }),
+            address(this)
         );
         vm.prank(owner);
         pool.setBorrowModule(address(vault));
