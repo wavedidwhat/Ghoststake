@@ -43,6 +43,7 @@ abstract contract AttackHarness is Test {
             uint256(100e16) / YEAR, // slope2
             0.8e18, // kink
             0.1e18, // reserve factor
+            owner,
             owner
         );
 
@@ -55,7 +56,8 @@ abstract contract AttackHarness is Test {
                 liquidationThreshold: LIQ_THRESHOLD,
                 liquidationBonus: LIQ_BONUS,
                 closeFactor: CLOSE_FACTOR
-            })
+            }),
+            address(this)
         );
 
         vm.prank(owner);
