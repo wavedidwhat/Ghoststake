@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -93,6 +94,24 @@ func (f *fakeRepo) AttributeRoundEvents(_ context.Context, chainID int64, market
 	return n, nil
 }
 
+// RecordsInRange counts what the fake already holds, so the pruned-RPC guard
+// is exercised against real row counts rather than a stub that always says
+// zero — a fake returning zero would make the guard untestably inert.
+func (f *fakeRepo) RecordsInRange(_ context.Context, chainID int64, from, to uint64) (int64, error) {
+	var n int64
+	for _, e := range f.entries {
+		if e.ChainID == chainID && e.BlockNumber >= from && e.BlockNumber <= to {
+			n++
+		}
+	}
+	for _, e := range f.rounds {
+		if e.ChainID == chainID && e.BlockNumber >= from && e.BlockNumber <= to {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // ReplayFrom rewinds without deleting, which is the whole distinction from
 // RollbackFrom — so the fake keeps its `seen` map intact. A fake that cleared
 // it would let a replay re-insert every row, and the test would then prove
@@ -141,6 +160,11 @@ type fakeChain struct {
 	logs    []types.Log
 	ranges  [][2]uint64 // every FilterLogs range asked for
 	headers int
+	// pruneBelow reproduces what a public endpoint does to old blocks: the
+	// header is still served, the logs behind it are not, and the omission
+	// comes back as an empty result rather than an error. Zero means the node
+	// serves everything.
+	pruneBelow uint64
 }
 
 func newFakeChain(head uint64) *fakeChain {
@@ -155,6 +179,9 @@ func (f *fakeChain) FilterLogs(_ context.Context, q ethereum.FilterQuery) ([]typ
 
 	var out []types.Log
 	for _, l := range f.logs {
+		if l.BlockNumber < f.pruneBelow {
+			continue
+		}
 		if l.BlockNumber >= from && l.BlockNumber <= to {
 			out = append(out, l)
 		}
@@ -425,6 +452,9 @@ func (f *failingRepo) AttributeRoundEvents(context.Context, int64, string) (int6
 	return 0, nil
 }
 func (f *failingRepo) ReplayFrom(context.Context, string, uint64) error { return nil }
+func (f *failingRepo) RecordsInRange(context.Context, int64, uint64, uint64) (int64, error) {
+	return 0, nil
+}
 func (f *failingRepo) RollbackFrom(context.Context, int64, string, uint64) (int64, error) {
 	return 0, nil
 }
@@ -471,5 +501,155 @@ func TestBlockTimestampsAreFetchedOncePerBlock(t *testing.T) {
 func TestIndexerRequiresContractAddresses(t *testing.T) {
 	if _, err := New(newFakeChain(1), newFakeRepo(), Config{ChainID: 1}); err == nil {
 		t.Fatal("want an error when addresses are missing")
+	}
+}
+
+// A rollback against an RPC that has pruned the range must refuse rather than
+// delete. This is GHO-50: the destructive half of the re-read paths, on the
+// infrastructure the deployment actually runs against.
+func TestReorgRefusesToDeleteWhatTheRPCNoLongerServes(t *testing.T) {
+	chain := newFakeChain(100)
+	chain.hashes[95] = "original"
+	chain.logs = []types.Log{
+		transferLog(t, 20, "0x01", 0),
+		transferLog(t, 90, "0x02", 0),
+	}
+	repo := newFakeRepo()
+	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 1, Confirmations: 5, BatchSize: 1000})
+
+	if err := ix.Step(context.Background()); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(repo.entries) != 2 {
+		t.Fatalf("want 2 entries indexed, got %d", len(repo.entries))
+	}
+	before := *repo.cursor
+
+	// The node prunes its log index behind us, and the chain reorganises. The
+	// first is what makes the second unrecoverable.
+	chain.pruneBelow = 96
+	chain.hashes[95] = "reorged"
+
+	err := ix.Step(context.Background())
+	if err == nil {
+		t.Fatal("want a refusal when the range to be deleted can no longer be re-read, got none")
+	}
+	if !strings.Contains(err.Error(), "not serving what it served before") {
+		t.Fatalf("error does not name the cause: %v", err)
+	}
+
+	// The whole point: the rows are still here.
+	if len(repo.entries) != 2 {
+		t.Fatalf("refusing to roll back still lost entries: have %d, want 2", len(repo.entries))
+	}
+	if *repo.cursor != before {
+		t.Fatalf("cursor moved on a refused rollback: %+v -> %+v", before, *repo.cursor)
+	}
+}
+
+// The guard must not fire on a range that is simply quiet. A rewind over
+// blocks we hold nothing for tells us nothing about the RPC, and refusing
+// there would stall every indexer whose reorg landed in an empty stretch.
+func TestReorgProceedsWhenTheRewoundRangeHoldsNothing(t *testing.T) {
+	chain := newFakeChain(100)
+	chain.hashes[95] = "original"
+	// Well below the rewind point, so blocks 90-95 hold nothing.
+	chain.logs = []types.Log{transferLog(t, 20, "0x01", 0)}
+	repo := newFakeRepo()
+	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 1, Confirmations: 5, BatchSize: 1000})
+
+	if err := ix.Step(context.Background()); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	chain.pruneBelow = 96 // would trip the guard if it looked at logs alone
+	chain.hashes[95] = "reorged"
+
+	if err := ix.Step(context.Background()); err != nil {
+		t.Fatalf("quiet range refused a rollback it had no evidence against: %v", err)
+	}
+	if len(repo.entries) != 1 {
+		t.Fatalf("want the block 20 entry kept, got %d entries", len(repo.entries))
+	}
+}
+
+// The replay path is not destructive, but a replay that recovers nothing is
+// worse than none: the cursor stamps the new decoder version on its way back
+// up, so the gap is recorded as handled and never retried. Refusing at
+// preflight leaves it unstamped and retryable.
+func TestDecoderReplayRefusesAgainstAPrunedRPC(t *testing.T) {
+	chain := newFakeChain(100)
+	chain.logs = []types.Log{transferLog(t, 20, "0x01", 0)}
+	repo := newFakeRepo()
+	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 1, Confirmations: 5, BatchSize: 1000})
+
+	if err := ix.Step(context.Background()); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	// A decoder bump, against a node that has since pruned the indexed range.
+	repo.cursor.Decoders = "older-decoders"
+	chain.pruneBelow = 96
+
+	err := ix.Preflight(context.Background())
+	if err == nil {
+		t.Fatal("want preflight to refuse a replay that would recover nothing, got none")
+	}
+	if !strings.Contains(err.Error(), "decoder replay") {
+		t.Fatalf("error does not name the path: %v", err)
+	}
+	if len(repo.replayedFrom) != 0 {
+		t.Fatalf("rewound the cursor for a replay it had already refused: %v", repo.replayedFrom)
+	}
+	if repo.cursor.Decoders == ledger.DecoderVersion {
+		t.Fatal("stamped the new decoder version without replaying: the gap is now recorded as handled")
+	}
+}
+
+// The replay path hands the guard the entire indexed history, which on the
+// deployment is tens of thousands of blocks. Probing that in one eth_getLogs
+// is the request width BatchSize exists to avoid, and a public RPC rejecting
+// it would refuse the boot of a perfectly healthy indexer.
+//
+// It also has to probe the OLDEST range it holds rows in, not the newest:
+// pruning takes old blocks first, so a check that looked at recent history
+// would be served happily and pass while the range it is about to re-read is
+// gone.
+func TestPrunedRPCGuardProbesTheOldestWindowInBatchSizedRequests(t *testing.T) {
+	const batch = 1000
+	chain := newFakeChain(5010)
+	chain.logs = []types.Log{
+		transferLog(t, 20, "0x01", 0),   // oldest, and the one that gets pruned
+		transferLog(t, 4500, "0x02", 0), // recent, still served
+	}
+	repo := newFakeRepo()
+	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 1, Confirmations: 5, BatchSize: batch})
+
+	for i := 0; i < 10; i++ {
+		if err := ix.Step(context.Background()); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+	if len(repo.entries) != 2 {
+		t.Fatalf("want both entries indexed, got %d", len(repo.entries))
+	}
+
+	// The node has pruned everything below block 1000. Block 4500 is still
+	// served, so a guard looking at recent history would see nothing wrong.
+	chain.pruneBelow = 1000
+	repo.cursor.Decoders = "older-decoders"
+	chain.ranges = nil
+
+	err := ix.Preflight(context.Background())
+	if err == nil {
+		t.Fatal("want a refusal: the oldest indexed range is no longer served")
+	}
+	if !strings.Contains(err.Error(), "blocks 1-1000") {
+		t.Fatalf("guard did not report the oldest window as the pruned one: %v", err)
+	}
+
+	for _, r := range chain.ranges {
+		if width := r[1] - r[0] + 1; width > batch {
+			t.Fatalf("asked for %d blocks in one eth_getLogs, over the %d batch size: %v",
+				width, batch, chain.ranges)
+		}
 	}
 }

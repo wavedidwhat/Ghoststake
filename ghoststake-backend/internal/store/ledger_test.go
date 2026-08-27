@@ -313,3 +313,56 @@ func TestCursorRoundTrips(t *testing.T) {
 		t.Fatalf("cursor round trip failed: %+v", cursor)
 	}
 }
+
+// RecordsInRange is the number the pruned-RPC guard weighs an empty
+// eth_getLogs result against, so it has to count both derived tables and it
+// has to be inclusive at both ends — the range it is compared against is the
+// one handed to eth_getLogs, and an off-by-one here would read as pruning.
+func TestRecordsInRangeCountsBothTablesInclusively(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	acct := account(t, "")
+	chainID := chainOf(t)
+
+	if err := st.Append(ctx, ledger.Batch{
+		Entries: []ledger.Entry{
+			entryOn(chainID, acct, ledger.Deposits, 1, 10, "0xrr1", 0, 0),
+			entryOn(chainID, acct, ledger.Deposits, 2, 15, "0xrr2", 0, 0),
+			entryOn(chainID, acct, ledger.Deposits, 3, 20, "0xrr3", 0, 0),
+			entryOn(chainID, acct, ledger.Deposits, 4, 25, "0xrr4", 0, 0),
+		},
+		Rounds: []ledger.RoundEvent{
+			roundEventOn(chainID, 1, "RoundOpened", 15, "0xrr5", 0, 0),
+		},
+	}, cursorOn(t, chainID, 25)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	// Three entries at 10, 15, 20 plus the round event at 15.
+	n, err := st.RecordsInRange(ctx, chainID, 10, 20)
+	if err != nil {
+		t.Fatalf("records in range: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("want 4 records in blocks 10-20 across both tables, got %d", n)
+	}
+
+	// A genuinely empty stretch must count zero, or the guard would refuse
+	// every rewind that landed in one.
+	n, err = st.RecordsInRange(ctx, chainID, 11, 14)
+	if err != nil {
+		t.Fatalf("records in empty range: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("want 0 records in the gap between blocks, got %d", n)
+	}
+
+	// Another chain's rows are not ours to reason about.
+	n, err = st.RecordsInRange(ctx, chainID+1, 10, 20)
+	if err != nil {
+		t.Fatalf("records in range on another chain: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("counted another chain's records: got %d", n)
+	}
+}
