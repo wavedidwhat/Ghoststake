@@ -201,6 +201,7 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/MarketQuery"
       responses:
         "200":
           description: Rounds, newest first.
@@ -211,12 +212,6 @@ paths:
                   - $ref: "#/components/schemas/IndexedEnvelope"
                   - type: object
                     properties:
-                      rake:
-                        allOf: [{ $ref: "#/components/schemas/Uint256" }]
-                        description: Protocol cut of a resolved round, WAD-scaled.
-                      entryCutoffSeconds:
-                        type: integer
-                        description: Entry closes this many seconds before lockTime.
                       rounds:
                         type: array
                         items: { $ref: "#/components/schemas/Round" }
@@ -235,6 +230,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/AddressPath"
         - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/MarketQuery"
       responses:
         "200":
           description: Positions.
@@ -352,6 +348,20 @@ components:
       required: true
       description: Ethereum address. Case-insensitive; normalised to EIP-55.
       schema: { $ref: "#/components/schemas/Address" }
+    MarketQuery:
+      name: market
+      in: query
+      required: false
+      description: |
+        Narrow to one market, by its ParimutuelRound address. Omit for every
+        indexed market.
+
+        Rounds from different markets are unrelated: ids restart at 1 in each
+        one, so `id` is not an identity across a mixed listing and `market`
+        is the other half of it. A malformed address is a 400 rather than
+        being ignored — ignoring it would widen the answer rather than narrow
+        it, and the caller has no way to tell.
+      schema: { $ref: "#/components/schemas/Address" }
     Limit:
       name: limit
       in: query
@@ -430,6 +440,15 @@ components:
     Round:
       type: object
       properties:
+        market:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: |
+            The ParimutuelRound this round belongs to.
+
+            Round ids restart at 1 in every market, so `id` alone does not
+            identify a round — a client keying a list on it merges two
+            markets' rounds into one row. The pair `(market, id)` is the
+            identity.
         id: { type: integer }
         status:
           type: string

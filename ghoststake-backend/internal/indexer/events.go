@@ -20,6 +20,10 @@ type contractSpec struct {
 	address common.Address
 	abi     abi.ABI
 	decode  func(name string, f *fields, log types.Log) ledger.Batch
+	// market is set on the ParimutuelRound specs and empty on the others.
+	// There is one spec per deployed market, so this is what tells two
+	// otherwise identical decoders apart.
+	market string
 }
 
 // decodeLog turns one log into zero or more ledger records.
@@ -85,6 +89,11 @@ func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Tim
 	for i := range batch.Rounds {
 		batch.Rounds[i].Provenance = stamp
 		batch.Rounds[i].RecordIndex = i
+		// Stamped from the spec that decoded it, which is bound to one
+		// deployed address — so it cannot disagree with where the log came
+		// from. `Contract` above is the ABI's *name* ("ParimutuelRound"),
+		// which is identical for every market and cannot serve as this.
+		batch.Rounds[i].Market = c.market
 	}
 	return batch, nil
 }

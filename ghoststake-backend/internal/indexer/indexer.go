@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,9 +28,17 @@ type EthClient interface {
 type Config struct {
 	ChainID int64
 
-	VaultAddress  string
-	PoolAddress   string
-	MarketAddress string
+	VaultAddress string
+	PoolAddress  string
+
+	// MarketAddresses is every ParimutuelRound to index, in any order.
+	//
+	// A list rather than one address because there have been two markets on
+	// Sepolia since GHO-29, and the registry from GHO-34 makes a third a
+	// transaction away. Watching one of them meant the API was confidently
+	// blind to the rest: a user with a demo-market position asking for their
+	// positions was told they had none.
+	MarketAddresses []string
 
 	// StartBlock is where a fresh cursor begins. Set it to the deployment
 	// block: scanning from genesis on a public RPC is slow and pointless.
@@ -70,8 +80,8 @@ type Indexer struct {
 }
 
 func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error) {
-	if cfg.VaultAddress == "" || cfg.PoolAddress == "" || cfg.MarketAddress == "" {
-		return nil, fmt.Errorf("indexer: vault, pool and market addresses are required")
+	if cfg.VaultAddress == "" || cfg.PoolAddress == "" || len(cfg.MarketAddresses) == 0 {
+		return nil, fmt.Errorf("indexer: vault, pool and at least one market address are required")
 	}
 	if cfg.BatchSize == 0 {
 		cfg.BatchSize = 2000
@@ -97,20 +107,43 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 	}{
 		{abis.CollateralVault, cfg.VaultAddress, entriesOnly(decodeVault)},
 		{abis.BorrowLiquidityPool, cfg.PoolAddress, entriesOnly(decodePool)},
-		{abis.ParimutuelRound, cfg.MarketAddress, decodeRound},
+	}
+	// One spec per market, all on the same stream. Separate streams per market
+	// would need a cursor each and would let a borrow and the position it
+	// funded become visible at different times, which is the thing this loop
+	// was built as one stream to prevent.
+	for _, market := range cfg.MarketAddresses {
+		specs = append(specs, struct {
+			name    string
+			address string
+			decode  func(string, *fields, types.Log) ledger.Batch
+		}{abis.ParimutuelRound, market, decodeRound})
 	}
 
+	seen := map[common.Address]bool{}
 	contracts := make([]contractSpec, 0, len(specs))
 	for _, spec := range specs {
 		parsed, err := abis.Load(spec.name)
 		if err != nil {
 			return nil, err
 		}
+		address := common.HexToAddress(spec.address)
+		// A duplicate would decode every one of its logs twice. The insert is
+		// idempotent so nothing would be written twice, but the fingerprint
+		// and the log lines would both describe a set that does not exist —
+		// and a market listed twice is a copy-paste in an env var, which is
+		// exactly the mistake worth naming rather than absorbing.
+		if seen[address] {
+			return nil, fmt.Errorf("indexer: %s is listed more than once", address.Hex())
+		}
+		seen[address] = true
+
 		contracts = append(contracts, contractSpec{
 			name:    spec.name,
-			address: common.HexToAddress(spec.address),
+			address: address,
 			abi:     parsed,
 			decode:  spec.decode,
+			market:  marketOf(spec.name, address),
 		})
 	}
 	addresses := make([]common.Address, 0, len(contracts))
@@ -157,6 +190,18 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 // Called before the loop rather than inside it, so the answer is a refusal to
 // boot instead of a warning repeating every poll interval.
 func (ix *Indexer) Preflight(ctx context.Context) error {
+	if err := ix.checkCursorContracts(ctx); err != nil {
+		return err
+	}
+	// Not inside the check above, which returns early for a stream that has
+	// never run and for a cursor predating the fingerprint. Attribution is
+	// about rows, not about the cursor: a database whose `indexer_cursor` was
+	// cleared but whose `round_events` was not has no cursor to check and
+	// every reason to still need its markets filled in.
+	return ix.attributeExistingRounds(ctx)
+}
+
+func (ix *Indexer) checkCursorContracts(ctx context.Context) error {
 	cursor, found, err := ix.repo.LoadCursor(ctx, ix.stream)
 	if err != nil {
 		return err
@@ -185,6 +230,80 @@ func (ix *Indexer) Preflight(ctx context.Context) error {
 			ix.stream, cursor.Contracts, ix.fingerprint, cursor.LastBlock, ix.cfg.StartBlock)
 	}
 	return nil
+}
+
+// attributeExistingRounds fills in the market on rows indexed before there was
+// a column for it.
+//
+// Migration 0005 added the column and could not populate it — SQL has no
+// access to which market this process was configured to watch. So the repair
+// lands here, where the configured list is in scope and the answer can be
+// checked instead of assumed.
+//
+// One market configured: those rows were written by a process watching exactly
+// that one, so the attribution is a fact. More than one: refuse. The rows
+// could belong to any of them, the ids collide across markets by construction,
+// and a wrong attribution is invisible forever after — it does not fail, it
+// just files someone's position under the wrong market and sums it into the
+// wrong pool.
+func (ix *Indexer) attributeExistingRounds(ctx context.Context) error {
+	pending, err := ix.repo.UnattributedRoundEvents(ctx, ix.cfg.ChainID)
+	if err != nil {
+		return err
+	}
+	if pending == 0 {
+		return nil
+	}
+
+	markets := ix.marketAddresses()
+	if len(markets) != 1 {
+		return fmt.Errorf(
+			"indexer: %d round events were indexed before markets were distinguished and carry no market, "+
+				"but this process watches %d of them (%s) — so which market those rows belong to cannot be "+
+				"established here. Attribute them by hand if you know, or reset the derived index to re-read "+
+				"them from the chain:\n"+
+				"  DELETE FROM ledger_entries; DELETE FROM round_events; DELETE FROM indexer_cursor;",
+			pending, len(markets), strings.Join(markets, ", "))
+	}
+
+	updated, err := ix.repo.AttributeRoundEvents(ctx, ix.cfg.ChainID, markets[0])
+	if err != nil {
+		return err
+	}
+	// Logged rather than silent: this is the one write the indexer makes that
+	// is an inference about history rather than a decoding of a log, and the
+	// record of having made it is what a later "why is this position in that
+	// market" question is answered from.
+	slog.Info("attributed round events indexed before markets were distinguished",
+		"chain_id", ix.cfg.ChainID, "market", markets[0], "rows", updated)
+	return nil
+}
+
+// marketAddresses lists the watched markets, checksummed and in a stable
+// order, from the specs rather than from the config — so it describes what is
+// actually being filtered on.
+func (ix *Indexer) marketAddresses() []string {
+	var out []string
+	for _, c := range ix.contracts {
+		if c.market != "" {
+			out = append(out, c.market)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// marketOf returns the address a round event should be attributed to, and ""
+// for the contracts that do not emit round events.
+//
+// Checksummed, because that is the spelling every other address in the ledger
+// carries — the account column included — and a market written one way and
+// queried another matches nothing while looking entirely plausible.
+func marketOf(name string, address common.Address) string {
+	if name != abis.ParimutuelRound {
+		return ""
+	}
+	return address.Hex()
 }
 
 func (ix *Indexer) Run(ctx context.Context) error {

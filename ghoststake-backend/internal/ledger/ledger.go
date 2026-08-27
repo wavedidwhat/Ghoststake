@@ -166,4 +166,15 @@ type Repository interface {
 	// RollbackFrom deletes every record at or above a block and rewinds the
 	// cursor below it, returning how many records went.
 	RollbackFrom(ctx context.Context, chainID int64, stream string, fromBlock uint64) (int64, error)
+
+	// UnattributedRoundEvents counts round events carrying no market.
+	//
+	// Only ever non-zero on the first boot after the market column was added
+	// (migration 0005), which could not fill it: the address is in the
+	// process's configuration, not in SQL.
+	UnattributedRoundEvents(ctx context.Context, chainID int64) (int64, error)
+
+	// AttributeRoundEvents assigns a market to every round event that has
+	// none, returning how many rows it touched.
+	AttributeRoundEvents(ctx context.Context, chainID int64, market string) (int64, error)
 }

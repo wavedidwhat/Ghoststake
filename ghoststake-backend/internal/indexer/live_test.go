@@ -50,11 +50,11 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 	defer client.Close()
 
 	ix, err := indexer.New(client, st, indexer.Config{
-		ChainID:       31337,
-		VaultAddress:  vault,
-		PoolAddress:   pool,
-		MarketAddress: market,
-		StartBlock:    1,
+		ChainID:         31337,
+		VaultAddress:    vault,
+		PoolAddress:     pool,
+		MarketAddresses: []string{market},
+		StartBlock:      1,
 		// anvil mines on demand and does not reorg, so nothing is gained by
 		// staying behind the head.
 		Confirmations: 0,
@@ -137,11 +137,11 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 	}
 	t.Logf("indexed %d round events", roundEvents)
 
-	ids, err := st.RecentRoundIDs(ctx, 31337, 10)
+	refs, err := st.RecentRounds(ctx, 31337, "", 10)
 	if err != nil {
 		t.Fatalf("recent rounds: %v", err)
 	}
-	events, err := st.RoundEventsByIDs(ctx, 31337, ids)
+	events, err := st.RoundEventsByRefs(ctx, 31337, refs)
 	if err != nil {
 		t.Fatalf("round events: %v", err)
 	}

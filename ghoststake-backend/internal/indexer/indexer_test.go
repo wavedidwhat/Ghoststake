@@ -65,6 +65,31 @@ func (f *fakeRepo) LoadCursor(_ context.Context, _ string) (ledger.Cursor, bool,
 	return *f.cursor, true, nil
 }
 
+// UnattributedRoundEvents and AttributeRoundEvents back the preflight repair
+// for rows indexed before the market column existed. The fake counts and
+// rewrites its own slice, so the test exercises the decision rather than the
+// SQL.
+func (f *fakeRepo) UnattributedRoundEvents(_ context.Context, chainID int64) (int64, error) {
+	var n int64
+	for _, e := range f.rounds {
+		if e.ChainID == chainID && e.Market == "" {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeRepo) AttributeRoundEvents(_ context.Context, chainID int64, market string) (int64, error) {
+	var n int64
+	for i := range f.rounds {
+		if f.rounds[i].ChainID == chainID && f.rounds[i].Market == "" {
+			f.rounds[i].Market = market
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeRepo) RollbackFrom(_ context.Context, _ int64, _ string, fromBlock uint64) (int64, error) {
 	var deleted int64
 
@@ -135,9 +160,16 @@ func (f *fakeChain) HeaderByNumber(_ context.Context, number *big.Int) (*types.H
 }
 
 const (
-	vaultAddr  = "0x00000000000000000000000000000000000000v1"
-	poolAddr   = "0x00000000000000000000000000000000000000p1"
-	marketAddr = "0x00000000000000000000000000000000000000m1"
+	// Valid hex, and distinct.
+	//
+	// These read "v1", "p1", "m1" until GHO-43 — which are not hex digits, so
+	// common.HexToAddress silently returned the zero address for all three and
+	// every log in every test here routed to whichever spec was registered
+	// first. The mnemonics survive in hex: 0f for the vault, 900 for the pool,
+	// 3a for the market.
+	vaultAddr  = "0x000000000000000000000000000000000000000f"
+	poolAddr   = "0x0000000000000000000000000000000000000900"
+	marketAddr = "0x000000000000000000000000000000000000003a"
 )
 
 func newTestIndexer(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg Config) *Indexer {
@@ -147,7 +179,20 @@ func newTestIndexer(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg 
 	}
 	cfg.VaultAddress = common.HexToAddress(vaultAddr).Hex()
 	cfg.PoolAddress = common.HexToAddress(poolAddr).Hex()
-	cfg.MarketAddress = common.HexToAddress(marketAddr).Hex()
+	return newTestIndexerWithMarkets(t, chain, repo, cfg,
+		[]string{common.HexToAddress(marketAddr).Hex()})
+}
+
+// newTestIndexerWithMarkets is newTestIndexer with the market list named, for
+// the tests that are about there being more than one.
+func newTestIndexerWithMarkets(t *testing.T, chain *fakeChain, repo ledger.Repository, cfg Config, markets []string) *Indexer {
+	t.Helper()
+	if cfg.ChainID == 0 {
+		cfg.ChainID = 421614
+	}
+	cfg.VaultAddress = common.HexToAddress(vaultAddr).Hex()
+	cfg.PoolAddress = common.HexToAddress(poolAddr).Hex()
+	cfg.MarketAddresses = markets
 
 	ix, err := New(chain, repo, cfg)
 	if err != nil {
@@ -356,6 +401,12 @@ func (f *failingRepo) Append(context.Context, ledger.Batch, ledger.Cursor) error
 }
 func (f *failingRepo) LoadCursor(context.Context, string) (ledger.Cursor, bool, error) {
 	return ledger.Cursor{}, false, nil
+}
+func (f *failingRepo) UnattributedRoundEvents(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+func (f *failingRepo) AttributeRoundEvents(context.Context, int64, string) (int64, error) {
+	return 0, nil
 }
 func (f *failingRepo) RollbackFrom(context.Context, int64, string, uint64) (int64, error) {
 	return 0, nil

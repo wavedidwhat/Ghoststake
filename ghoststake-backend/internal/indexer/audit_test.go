@@ -87,11 +87,11 @@ func TestDecodeSurfacesAFieldMismatch(t *testing.T) {
 // range came out of an overflow rather than a decision.
 func TestStartBlockZeroIsRejected(t *testing.T) {
 	_, err := New(newFakeChain(10), newFakeRepo(), Config{
-		ChainID:       421614,
-		VaultAddress:  common.HexToAddress(vaultAddr).Hex(),
-		PoolAddress:   common.HexToAddress(poolAddr).Hex(),
-		MarketAddress: common.HexToAddress(marketAddr).Hex(),
-		StartBlock:    0,
+		ChainID:         421614,
+		VaultAddress:    common.HexToAddress(vaultAddr).Hex(),
+		PoolAddress:     common.HexToAddress(poolAddr).Hex(),
+		MarketAddresses: []string{common.HexToAddress(marketAddr).Hex()},
+		StartBlock:      0,
 	})
 	if err == nil {
 		t.Fatal("StartBlock 0 was accepted")
