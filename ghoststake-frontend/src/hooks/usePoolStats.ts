@@ -25,11 +25,16 @@ export function usePoolStats() {
       { ...pool, functionName: "totalBorrowed" },
       { ...pool, functionName: "utilization" },
       { ...pool, functionName: "borrowRatePerSecond" },
+      // The lender's half of the same curve. Shown beside the borrow rate
+      // rather than on the lend page alone: the gap between the two is the
+      // reserve factor, and a dashboard that shows only what borrowers pay
+      // describes a one-sided market (GHO-39).
+      { ...pool, functionName: "supplyRatePerSecond" },
     ],
     query: { enabled: contractsConfigured, refetchInterval: 12_000 },
   });
 
-  const [supplied, borrowed, utilization, borrowRate] = query.data ?? [];
+  const [supplied, borrowed, utilization, borrowRate, supplyRate] = query.data ?? [];
 
   return {
     isLoading: query.isLoading,
@@ -38,5 +43,6 @@ export function usePoolStats() {
     totalBorrowed: borrowed?.result as bigint | undefined,
     utilization: utilization?.result as bigint | undefined,
     borrowRatePerSecond: borrowRate?.result as bigint | undefined,
+    supplyRatePerSecond: supplyRate?.result as bigint | undefined,
   };
 }

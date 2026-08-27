@@ -16,16 +16,30 @@ import { usePathname } from "next/navigation";
  * A side of a market is a "position". The two are opposite ends of the
  * pipeline and the app used the same word for both, which quietly erased the
  * half the product is named after.
+ *
+ * Lend sits under its own heading rather than as a fourth pipeline step,
+ * because it is not one. A lender is on the other side of the borrow: they
+ * fund it, they are paid by it, and they never stake or take a view. Listing
+ * it inline would have read as "and then you lend", which is the wrong story
+ * about a two-sided market — but leaving it out of the nav is what left the
+ * supply side unreachable in the first place (GHO-39).
  */
 const NAV = [
   { href: "/", label: "Overview", ready: true },
+
+  { section: "Take a view" },
   { href: "/stake", label: "Stake", ready: true, note: "earn" },
   { href: "/borrow", label: "Borrow", ready: true, note: "against it" },
   { href: "/markets", label: "Markets", ready: true, note: "take a view" },
   { href: "/history", label: "History", ready: false, note: "GHO-17" },
+
+  { section: "Fund it" },
+  { href: "/lend", label: "Lend", ready: true, note: "earn the spread" },
+
   // Last, and separated by what it is rather than by a permission check: the
   // page is reachable by anyone because half of what it does is
   // permissionless, and the contracts say so louder than a hidden link would.
+  { section: "Run it" },
   { href: "/operator", label: "Operator", ready: true, note: "run rounds" },
 ] as const;
 
@@ -48,7 +62,14 @@ export function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-0.5 p-3">
         {NAV.map((item) =>
-          item.ready ? (
+          "section" in item ? (
+            <p
+              key={item.section}
+              className="mt-3 px-3 pb-1 text-[10px] font-medium tracking-wider text-ink-faint uppercase first:mt-0"
+            >
+              {item.section}
+            </p>
+          ) : item.ready ? (
             <Link
               key={item.href}
               href={item.href}
