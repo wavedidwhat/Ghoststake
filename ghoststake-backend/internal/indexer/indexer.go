@@ -263,6 +263,20 @@ func (ix *Indexer) replayForNewDecoders(ctx context.Context) error {
 		"from_block", ix.cfg.StartBlock, "to_block", cursor.LastBlock,
 		"note", "nothing is deleted; existing rows are left untouched")
 
+	// A replay against a pruned RPC is not a slow replay, it is a silent
+	// no-op: GHO-49's rewound 22,192 blocks, produced zero rows and logged
+	// zero "indexed" lines, and the cursor stamped the new decoder version on
+	// its way back up — so it was recorded as handled and never ran again.
+	// The gap it was supposed to close became permanent and invisible.
+	//
+	// Refusing at preflight is what makes that retryable. Nothing is stamped,
+	// because nothing boots; once the endpoint can serve the range, the same
+	// replay runs on the next start. INDEXER_SKIP_DECODER_REPLAY remains the
+	// way to boot anyway and keep the gap knowingly.
+	if err := ix.assertLogsStillServed(ctx, ix.cfg.StartBlock, cursor.LastBlock, "decoder replay"); err != nil {
+		return err
+	}
+
 	return ix.repo.ReplayFrom(ctx, ix.stream, ix.cfg.StartBlock)
 }
 
@@ -487,6 +501,98 @@ func (ix *Indexer) Step(ctx context.Context) error {
 	return nil
 }
 
+// assertLogsStillServed refuses to re-read a range the RPC can no longer
+// serve.
+//
+// The failure it catches, found on the Sepolia deployment: the configured
+// endpoint keeps block headers for old blocks but has pruned the log index and
+// the receipts behind them. `eth_getLogs` over a range it served three days
+// ago now returns `{"result":[]}` — an empty result, not an error. Every
+// caller sees a quiet stretch of blocks and proceeds.
+//
+// For the replay path that is a gap: rows that were never added. For the
+// rollback path it is destruction, because RollbackFrom deletes before
+// anything is re-read — a reorg deeper than Confirmations would delete
+// indexed history, re-read nothing, advance the cursor and report healthy.
+// The data is still on the chain and no longer in the database, with nothing
+// anywhere saying so.
+//
+// The check is the one comparison available that has no false positives:
+// **if a re-read returns zero logs while our own tables already hold rows in
+// that range, the node is provably not serving what it served before.** Both
+// numbers are ours. It cannot be fooled by a genuinely quiet range, because a
+// quiet range has no rows either.
+//
+// What it deliberately does not distinguish is a reorg so deep that every one
+// of our logs in the range was legitimately reorged away — which produces the
+// same two numbers. That is treated as pruning and refused, because the two
+// outcomes are not symmetric: refusing a genuine deep reorg stalls an indexer
+// that is shouting about it, and proceeding on a pruned RPC silently destroys
+// history. A reorg that deep on any chain we run against is also rarer than
+// the pruning we have already measured.
+func (ix *Indexer) assertLogsStillServed(ctx context.Context, from, to uint64, path string) error {
+	if from > to {
+		return nil // an empty range; nothing to verify
+	}
+
+	// Probed one BatchSize window at a time rather than in a single query
+	// over the whole range. The replay path hands this the entire indexed
+	// history — 22,192 blocks on the Sepolia deployment — and a range that
+	// wide is exactly what BatchSize exists because public RPCs reject. A
+	// rejection here would come back as an error and refuse the boot, which
+	// is a false refusal on a perfectly healthy endpoint.
+	//
+	// Walking upward from the start, and stopping at the first window that
+	// holds records, is deliberate: pruning takes the oldest blocks first, so
+	// the oldest window we have rows in is where it shows. Probing the newest
+	// instead would sail past the pruned range and pass.
+	for start := from; start <= to; start += ix.cfg.BatchSize {
+		end := start + ix.cfg.BatchSize - 1
+		if end > to || end < start { // end < start catches the uint64 wrap
+			end = to
+		}
+
+		held, err := ix.repo.RecordsInRange(ctx, ix.cfg.ChainID, start, end)
+		if err != nil {
+			return err
+		}
+		if held == 0 {
+			// Nothing here to contradict. A window we hold nothing for tells
+			// us nothing about the RPC, and this must not become a general
+			// "are there logs" check — most windows are legitimately empty.
+			continue
+		}
+
+		logs, err := ix.client.FilterLogs(ctx, ethereum.FilterQuery{
+			FromBlock: new(big.Int).SetUint64(start),
+			ToBlock:   new(big.Int).SetUint64(end),
+			Addresses: ix.addresses,
+		})
+		if err != nil {
+			return fmt.Errorf("%s: verifying blocks %d-%d are still served: %w", path, start, end, err)
+		}
+		if len(logs) > 0 {
+			// The oldest window we hold anything in still comes back with
+			// logs, so the node is serving its history. One window is the
+			// whole check: this is a question about the endpoint, not an
+			// audit of every row.
+			return nil
+		}
+
+		return fmt.Errorf(
+			"indexer: %s wants to re-read blocks %d-%d, but eth_getLogs returns no logs for blocks %d-%d, "+
+				"a range this database already holds %d records in. The RPC is not serving what it served "+
+				"before — it has almost certainly pruned its log index, which public endpoints do for old "+
+				"blocks. Re-reading would recover nothing. Point RPC_URL at an archive-capable endpoint "+
+				"(Alchemy and Infura serve these ranges on their free tiers) and start again",
+			path, from, to, start, end, held)
+	}
+
+	// Every window empty: we hold nothing across the whole range, so there is
+	// nothing the RPC could be failing to serve back to us.
+	return nil
+}
+
 // checkReorg re-reads the block the cursor stopped on. A hash that no longer
 // matches means the chain reorganised deeper than Confirmations, so
 // everything from that height is discarded and re-read.
@@ -511,6 +617,16 @@ func (ix *Indexer) checkReorg(ctx context.Context, cursor *ledger.Cursor) error 
 		rewindTo -= ix.cfg.Confirmations
 	} else {
 		rewindTo = ix.cfg.StartBlock
+	}
+
+	// Before deleting, not after. RollbackFrom removes the rows and only then
+	// is the range re-read, so an RPC that cannot serve it again turns a
+	// rewind into permanent loss of history the chain still has. Refusing
+	// here fails the cycle: nothing is deleted, the cursor does not move, and
+	// Run retries on the next tick — so the indexer stalls loudly on the same
+	// block instead of quietly emptying its tables.
+	if err := ix.assertLogsStillServed(ctx, rewindTo, cursor.LastBlock, "reorg rollback"); err != nil {
+		return err
 	}
 
 	deleted, err := ix.repo.RollbackFrom(ctx, ix.cfg.ChainID, ix.stream, rewindTo)
