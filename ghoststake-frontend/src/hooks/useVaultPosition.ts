@@ -37,6 +37,10 @@ function useUnderlyingAsset() {
     decimals: decimals?.result as number | undefined,
     symbol: (symbol?.result as string | undefined) ?? "",
     isLoading: asset.isLoading || token.isLoading,
+    // Surfaced for the same reason the position's own errors are: `decimals`
+    // gates every figure on the page, so a failed read here is a skeleton
+    // that never resolves rather than an error a user can retry.
+    isError: asset.isError || token.isError || token.data?.some((r) => r.status === "failure"),
   };
 }
 
@@ -93,7 +97,7 @@ export function useVaultPosition() {
     isLoading: query.isLoading || asset.isLoading,
     // Surfaced so callers render an error rather than zero: an empty position
     // and an unreadable one look identical but mean opposite things.
-    isError: query.isError || query.data?.some((r) => r.status === "failure"),
+    isError: asset.isError || query.isError || query.data?.some((r) => r.status === "failure"),
     refetch: query.refetch,
     assetAddress: asset.address,
     decimals: asset.decimals,

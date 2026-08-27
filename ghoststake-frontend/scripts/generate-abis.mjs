@@ -56,8 +56,18 @@ const WANTED = {
   // the alternative is a request per market and a list that trickles in.
   MarketRegistry: ["all", "count", "at", "find"],
   BorrowLiquidityPool: [
+    // `asset` is read rather than assumed to be the vault's: the pool takes
+    // its own asset in the constructor and nothing forces the two to match.
+    "asset",
     "balanceOfDebt", "balanceOfSupply", "utilization",
-    "borrowRatePerSecond", "availableLiquidity", "totalBorrowed", "totalSupplied",
+    "borrowRatePerSecond", "supplyRatePerSecond",
+    "availableLiquidity", "totalBorrowed", "totalSupplied",
+    // The curve's target, so the lender surface can say *why* a rate is high
+    // instead of showing a number with no scale behind it (GHO-39).
+    "kink",
+    // writes — the supply side, which had no way into the app at all until
+    // GHO-39. Every borrow drew from a pool only `Seed.s.sol` could fill.
+    "supply", "withdraw",
   ],
 };
 

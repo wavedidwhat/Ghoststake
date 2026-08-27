@@ -75,6 +75,14 @@ export const env = {
 
 export const contractsConfigured = Boolean(env.vaultAddress && env.poolAddress);
 
+/**
+ * The lending pool on its own. Tracked separately from `contractsConfigured`
+ * because the supply side (GHO-39) needs only the pool: a lender never
+ * touches the vault, and blacking out a working lending pool because no
+ * stake vault is configured would be a lie about which contract is missing.
+ */
+export const poolConfigured = Boolean(env.poolAddress);
+
 // The market half is tracked separately from the lending half on purpose: a
 // deployment can legitimately have one and not the other — the Sepolia deploy
 // predates the router — and collapsing both into one flag would black out a
