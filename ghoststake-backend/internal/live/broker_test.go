@@ -9,18 +9,31 @@ import (
 	"github.com/wavedidwhat/ghoststake/internal/live"
 )
 
-const alice = "0x000000000000000000000000000000000000a11c"
+const (
+	alice      = "0x000000000000000000000000000000000000a11c"
+	btcMarket  = "0x00000000000000000000000000000000000B7C00"
+	demoMarket = "0x00000000000000000000000000000000000De300"
+)
 
 func batch(roundID uint64, account string) ledger.Batch {
+	return marketBatch(btcMarket, roundID, account)
+}
+
+func marketBatch(market string, roundID uint64, account string) ledger.Batch {
 	return ledger.Batch{
 		Rounds: []ledger.RoundEvent{{
 			Provenance: ledger.Provenance{ChainID: 31337, BlockNumber: 42, EventName: ledger.PositionTaken},
+			Market:     market,
 			RoundID:    roundID,
 			Account:    account,
 			Amount:     big.NewInt(100),
 			Data:       map[string]string{},
 		}},
 	}
+}
+
+func ref(market string, id uint64) ledger.RoundRef {
+	return ledger.RoundRef{Market: market, RoundID: id}
 }
 
 func cursor(block uint64) ledger.Cursor {
@@ -50,7 +63,7 @@ func TestEverySubscriberGetsTheUpdate(t *testing.T) {
 
 	for i, ch := range []<-chan live.Update{first, second} {
 		update := recv(t, ch)
-		if !update.Touched(7) {
+		if !update.Touched(ref(btcMarket, 7)) {
 			t.Fatalf("subscriber %d: round 7 not named: %+v", i, update)
 		}
 		if !update.TouchedAccount(alice) {
@@ -140,7 +153,7 @@ func TestLendingEntriesNameTheirAccounts(t *testing.T) {
 	}}}, cursor(42))
 
 	update := recv(t, ch)
-	if len(update.RoundIDs) != 0 {
+	if len(update.Rounds) != 0 {
 		t.Fatalf("a lending entry named a round: %+v", update)
 	}
 	if !update.TouchedAccount(alice) {
@@ -162,7 +175,44 @@ func TestAccountsAndRoundsAreDeduplicated(t *testing.T) {
 	broker.Publish(twice, cursor(42))
 
 	update := recv(t, ch)
-	if len(update.RoundIDs) != 1 || len(update.Accounts) != 1 {
+	if len(update.Rounds) != 1 || len(update.Accounts) != 1 {
 		t.Fatalf("not deduplicated: %+v", update)
+	}
+}
+
+// Round ids restart at 1 in every market, so a bare id is not a round. An
+// update about the BTC market's round 7 must not report the demo market's
+// round 7 as touched — a subscriber watching the second would re-read on
+// every entry into the first, for as many markets as are deployed.
+func TestAnUpdateIsScopedToItsOwnMarket(t *testing.T) {
+	broker := live.NewBroker()
+	ch, stop := broker.Subscribe(4)
+	defer stop()
+
+	broker.Publish(marketBatch(btcMarket, 7, alice), cursor(42))
+	update := recv(t, ch)
+
+	if !update.Touched(ref(btcMarket, 7)) {
+		t.Fatalf("the market that moved was not named: %+v", update)
+	}
+	if update.Touched(ref(demoMarket, 7)) {
+		t.Fatal("a different market's round 7 reported as touched")
+	}
+}
+
+// And two markets moving in one range are two rounds, not one deduplicated by
+// id — which is what a map keyed on the id alone would have produced.
+func TestTwoMarketsInOneRangeAreTwoRounds(t *testing.T) {
+	broker := live.NewBroker()
+	ch, stop := broker.Subscribe(4)
+	defer stop()
+
+	both := marketBatch(btcMarket, 7, alice)
+	both.Rounds = append(both.Rounds, marketBatch(demoMarket, 7, alice).Rounds...)
+	broker.Publish(both, cursor(42))
+
+	update := recv(t, ch)
+	if len(update.Rounds) != 2 {
+		t.Fatalf("want both markets' round 7, got %+v", update.Rounds)
 	}
 }

@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/wavedidwhat/ghoststake/internal/abis"
 	"github.com/wavedidwhat/ghoststake/internal/chain"
 	"github.com/wavedidwhat/ghoststake/internal/finance"
@@ -30,11 +32,16 @@ type Reader struct {
 	client *chain.Client
 	vault  *chain.Contract
 	pool   *chain.Contract
-	market *chain.Contract
+	// market is the primary market — the first configured — and is what
+	// MarketParams answers for. Kept so callers with no market in hand still
+	// have a default; anything rendering a specific round asks for that
+	// round's market instead.
+	market  *chain.Contract
+	markets map[string]*chain.Contract
 
 	mu     sync.Mutex
 	vaultP *finance.VaultParams
-	mktP   *MarketParams
+	mktP   map[string]MarketParams
 }
 
 // MarketParams are the market's immutables.
@@ -49,7 +56,7 @@ type MarketParams struct {
 	MinSidePool *big.Int
 }
 
-func New(client *chain.Client, vaultAddress, poolAddress, marketAddress string) (*Reader, error) {
+func New(client *chain.Client, vaultAddress, poolAddress string, marketAddresses []string) (*Reader, error) {
 	vault, err := client.Bind(abis.CollateralVault, vaultAddress)
 	if err != nil {
 		return nil, err
@@ -58,11 +65,31 @@ func New(client *chain.Client, vaultAddress, poolAddress, marketAddress string) 
 	if err != nil {
 		return nil, err
 	}
-	market, err := client.Bind(abis.ParimutuelRound, marketAddress)
+	if len(marketAddresses) == 0 {
+		return nil, fmt.Errorf("protocol: at least one market address is required")
+	}
+
+	// Keyed by checksummed address, which is the spelling the indexer stamps
+	// onto every round event — so a market read out of the database finds its
+	// parameters without anyone normalising at the call site.
+	markets := make(map[string]*chain.Contract, len(marketAddresses))
+	for _, address := range marketAddresses {
+		bound, err := client.Bind(abis.ParimutuelRound, address)
+		if err != nil {
+			return nil, err
+		}
+		markets[common.HexToAddress(address).Hex()] = bound
+	}
+	primary, err := client.Bind(abis.ParimutuelRound, marketAddresses[0])
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{client: client, vault: vault, pool: pool, market: market}, nil
+
+	return &Reader{
+		client: client, vault: vault, pool: pool,
+		market: primary, markets: markets,
+		mktP: map[string]MarketParams{},
+	}, nil
 }
 
 // Snapshot is the block a set of reads was pinned to.
@@ -120,16 +147,44 @@ func (r *Reader) VaultParams(ctx context.Context) (finance.VaultParams, error) {
 	return params, nil
 }
 
-// MarketParams reads and caches the market's immutables.
+// MarketParams reads the primary market's immutables.
 func (r *Reader) MarketParams(ctx context.Context) (MarketParams, error) {
+	return r.marketParams(ctx, "", r.market)
+}
+
+// MarketParamsFor reads one named market's immutables.
+//
+// Per market rather than one cached set, because they are per market in the
+// contracts: rake, entry cutoff and minimum side pool are constructor
+// arguments, and the demo market is deliberately configured differently from
+// the Chainlink-settled one. Rendering every round's odds with the primary
+// market's rake would be a plausible wrong number on every row of the other
+// market's history.
+//
+// An unknown address is an error rather than a fallback to the primary. A
+// fallback is how the wrong rake gets applied silently, which is the bug this
+// method exists to prevent.
+func (r *Reader) MarketParamsFor(ctx context.Context, market string) (MarketParams, error) {
+	if market == "" {
+		return r.MarketParams(ctx)
+	}
+	key := common.HexToAddress(market).Hex()
+	bound, ok := r.markets[key]
+	if !ok {
+		return MarketParams{}, fmt.Errorf("protocol: %s is not a configured market", key)
+	}
+	return r.marketParams(ctx, key, bound)
+}
+
+func (r *Reader) marketParams(ctx context.Context, key string, market *chain.Contract) (MarketParams, error) {
 	r.mu.Lock()
-	cached := r.mktP
+	cached, ok := r.mktP[key]
 	r.mu.Unlock()
-	if cached != nil {
-		return *cached, nil
+	if ok {
+		return cached, nil
 	}
 
-	values, err := r.market.CallAt(ctx, nil, "entryCutoff")
+	values, err := market.CallAt(ctx, nil, "entryCutoff")
 	if err != nil {
 		return MarketParams{}, err
 	}
@@ -137,18 +192,18 @@ func (r *Reader) MarketParams(ctx context.Context) (MarketParams, error) {
 	if !ok {
 		return MarketParams{}, fmt.Errorf("protocol: entryCutoff returned %T", values[0])
 	}
-	rake, err := r.market.CallBig(ctx, nil, "rake")
+	rake, err := market.CallBig(ctx, nil, "rake")
 	if err != nil {
 		return MarketParams{}, err
 	}
-	minSide, err := r.market.CallBig(ctx, nil, "minSidePool")
+	minSide, err := market.CallBig(ctx, nil, "minSidePool")
 	if err != nil {
 		return MarketParams{}, err
 	}
 	params := MarketParams{EntryCutoff: int64(cutoff), Rake: rake, MinSidePool: minSide}
 
 	r.mu.Lock()
-	r.mktP = &params
+	r.mktP[key] = params
 	r.mu.Unlock()
 	return params, nil
 }

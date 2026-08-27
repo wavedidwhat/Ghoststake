@@ -23,6 +23,17 @@ func roundID(t *testing.T, n uint64) uint64 {
 	return (hash%1_000_000)*1_000 + n
 }
 
+// The market every helper here writes under, unless a test names another.
+// Checksummed, matching what the indexer stamps.
+const (
+	testMarket  = "0x00000000000000000000000000000000000B7C00"
+	otherMarket = "0x00000000000000000000000000000000000De300"
+)
+
+func ref(id uint64) ledger.RoundRef {
+	return ledger.RoundRef{Market: testMarket, RoundID: id}
+}
+
 func roundEvent(id uint64, name string, block uint64, tx string, logIndex uint, recordIndex int) ledger.RoundEvent {
 	return ledger.RoundEvent{
 		Provenance: ledger.Provenance{
@@ -31,6 +42,7 @@ func roundEvent(id uint64, name string, block uint64, tx string, logIndex uint, 
 			TxHash:    tx, LogIndex: logIndex, RecordIndex: recordIndex,
 			Contract: "ParimutuelRound", EventName: name,
 		},
+		Market:  testMarket,
 		RoundID: id,
 		Data:    map[string]string{},
 	}
@@ -55,7 +67,7 @@ func TestRoundEventsRoundTripThroughPostgres(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	events, err := st.RoundEventsByIDs(ctx, testChainID, []uint64{id})
+	events, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(id)})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -99,7 +111,7 @@ func TestReplayingRoundEventsIsANoOp(t *testing.T) {
 		}
 	}
 
-	events, err := st.RoundEventsByIDs(ctx, testChainID, []uint64{id})
+	events, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(id)})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -138,7 +150,7 @@ func TestRollbackRemovesRoundEventsToo(t *testing.T) {
 		t.Fatalf("rollback deleted %d rows, want at least the resolution", deleted)
 	}
 
-	events, err := st.RoundEventsByIDs(ctx, testChainID, []uint64{id})
+	events, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(id)})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -177,7 +189,7 @@ func TestRoundListingsSelectWholeRounds(t *testing.T) {
 	// Named ids rather than whatever RecentRoundIDs returns: the table is
 	// shared with every other test in this package, so the newest round in it
 	// belongs to whichever test ran last.
-	got, err := st.RoundEventsByIDs(ctx, testChainID, []uint64{second})
+	got, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(second)})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -190,28 +202,113 @@ func TestRoundListingsSelectWholeRounds(t *testing.T) {
 	}
 }
 
-// The listing orders newest first and honours its limit — which is what makes
-// "the most recent N rounds" a page rather than an arbitrary slice.
-func TestRecentRoundIDsAreNewestFirstAndLimited(t *testing.T) {
+// The limit is what makes "the most recent N rounds" a page rather than an
+// arbitrary slice.
+//
+// Ordering is asserted by TestRecentRoundsAreOrderedByRecencyNotByRoundID
+// rather than here. This test reads a table every other test in the package
+// has written to, and since GHO-43 the order is by the block a round was last
+// touched at — which says nothing about the round ids, deliberately. Asserting
+// descending ids here passed only while a single market made the two the same
+// thing.
+func TestRecentRoundsHonourTheirLimit(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 
-	ids, err := st.RecentRoundIDs(ctx, testChainID, 3)
+	refs, err := st.RecentRounds(ctx, testChainID, "", 3)
 	if err != nil {
 		t.Fatalf("recent: %v", err)
 	}
-	if len(ids) > 3 {
-		t.Fatalf("limit ignored: got %d ids", len(ids))
+	if len(refs) > 3 {
+		t.Fatalf("limit ignored: got %d refs", len(refs))
 	}
-	for i := 1; i < len(ids); i++ {
-		if ids[i-1] <= ids[i] {
-			t.Fatalf("not descending: %v", ids)
+}
+
+// The listing spans markets, and narrows to one when asked. This is the whole
+// point of GHO-43: the same round id exists in every market, and before this
+// the table could only hold one market's worth of them.
+func TestRecentRoundsSpanMarketsAndCanBeNarrowed(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	id := roundID(t, 1)
+
+	here := roundEvent(id, ledger.RoundOpened, 500, "0xmm1", 0, 0)
+	there := roundEvent(id, ledger.RoundOpened, 500, "0xmm1", 1, 0)
+	there.Market = otherMarket
+
+	if err := st.Append(ctx, ledger.Batch{Rounds: []ledger.RoundEvent{here, there}},
+		cursorAt(500, "0xh500")); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	// Same id in two markets is two rounds, not one.
+	all, err := st.RecentRounds(ctx, testChainID, "", 100)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	var seen int
+	for _, r := range all {
+		if r.RoundID == id {
+			seen++
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("want round %d from both markets, saw it %d time(s)", id, seen)
+	}
+
+	narrowed, err := st.RecentRounds(ctx, testChainID, otherMarket, 100)
+	if err != nil {
+		t.Fatalf("recent narrowed: %v", err)
+	}
+	for _, r := range narrowed {
+		if r.Market != otherMarket {
+			t.Fatalf("filter leaked market %s", r.Market)
+		}
+	}
+}
+
+// And the event fetch must not return the cross product. Asking for round 7 of
+// one market and round 9 of another must not also drag in round 9 of the first
+// — those project perfectly well, so the response would simply be longer than
+// asked for with nothing to indicate why.
+func TestRoundEventsByRefsDoesNotReturnTheCrossProduct(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	seven, nine := roundID(t, 7), roundID(t, 9)
+
+	events := []ledger.RoundEvent{
+		roundEvent(seven, ledger.RoundOpened, 600, "0xcp1", 0, 0),
+		roundEvent(nine, ledger.RoundOpened, 600, "0xcp1", 1, 0),
+		roundEvent(seven, ledger.RoundOpened, 600, "0xcp1", 2, 0),
+		roundEvent(nine, ledger.RoundOpened, 600, "0xcp1", 3, 0),
+	}
+	events[2].Market, events[3].Market = otherMarket, otherMarket
+
+	if err := st.Append(ctx, ledger.Batch{Rounds: events}, cursorAt(600, "0xh600")); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	want := []ledger.RoundRef{
+		{Market: testMarket, RoundID: seven},
+		{Market: otherMarket, RoundID: nine},
+	}
+	got, err := st.RoundEventsByRefs(ctx, testChainID, want)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want exactly the two named rounds, got %d events", len(got))
+	}
+	for _, e := range got {
+		pair := ledger.RoundRef{Market: e.Market, RoundID: e.RoundID}
+		if pair != want[0] && pair != want[1] {
+			t.Fatalf("unasked-for round came back: %+v", pair)
 		}
 	}
 }
 
 // The account index has to find the rounds a user is in, and only those.
-func TestRoundIDsForAccountFindsOnlyTheirRounds(t *testing.T) {
+func TestRoundsForAccountFindsOnlyTheirRounds(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	mine, theirs := roundID(t, 1), roundID(t, 2)
@@ -230,12 +327,12 @@ func TestRoundIDsForAccountFindsOnlyTheirRounds(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	ids, err := st.RoundIDsForAccount(ctx, testChainID, me, 10)
+	ids, err := st.RoundsForAccount(ctx, testChainID, me, "", 10)
 	if err != nil {
 		t.Fatalf("account rounds: %v", err)
 	}
-	if len(ids) != 1 || ids[0] != mine {
-		t.Fatalf("got %v, want [%d]", ids, mine)
+	if len(ids) != 1 || ids[0] != ref(mine) {
+		t.Fatalf("got %v, want [%v]", ids, ref(mine))
 	}
 }
 
@@ -267,8 +364,73 @@ func TestBothKindsCommitTogether(t *testing.T) {
 		t.Fatalf("debt %s, want 5000", debt)
 	}
 
-	events, err := st.RoundEventsByIDs(ctx, testChainID, []uint64{id})
+	events, err := st.RoundEventsByRefs(ctx, testChainID, []ledger.RoundRef{ref(id)})
 	if err != nil || len(events) != 1 {
 		t.Fatalf("round events: %d, %v", len(events), err)
+	}
+}
+
+// The listing must not be ordered by round id across markets.
+//
+// The id is a clock within one market and nothing across them. A market
+// deployed in June sits at round 900 while one deployed today is at round 3,
+// so `ORDER BY round_id DESC LIMIT n` fills the page with June's rounds and
+// the new market vanishes — the endpoint answers, every row is real, and a
+// whole market is missing. That is the blindness GHO-43 exists to remove,
+// reintroduced one layer down.
+func TestRecentRoundsAreOrderedByRecencyNotByRoundID(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	// An old market with a high id, touched early.
+	old := roundEvent(roundID(t, 900), ledger.RoundOpened, 700, "0xord1", 0, 0)
+	// A new market with a low id, touched later. This is the one a listing
+	// ordered by id would drop.
+	fresh := roundEvent(roundID(t, 3), ledger.RoundOpened, 701, "0xord2", 0, 0)
+	fresh.Market = otherMarket
+
+	if err := st.Append(ctx, ledger.Batch{Rounds: []ledger.RoundEvent{old, fresh}},
+		cursorAt(701, "0xh701")); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	refs, err := st.RecentRounds(ctx, testChainID, "", 1)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("want one round, got %d", len(refs))
+	}
+	// The newest *block*, not the highest id.
+	if refs[0].Market != otherMarket || refs[0].RoundID != roundID(t, 3) {
+		t.Fatalf("got %+v, want the more recently touched round %d in %s",
+			refs[0], roundID(t, 3), otherMarket)
+	}
+}
+
+// The same for an account's own listing: a position in a freshly deployed
+// market must not be pushed off the page by an older market's higher ids.
+func TestRoundsForAccountAreOrderedByRecencyNotByRoundID(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	me := "0x" + t.Name()
+
+	old := roundEvent(roundID(t, 900), ledger.PositionTaken, 800, "0xord3", 0, 0)
+	old.Account, old.Side, old.Amount = me, ledger.SideUp, big.NewInt(100)
+	fresh := roundEvent(roundID(t, 3), ledger.PositionTaken, 801, "0xord4", 0, 0)
+	fresh.Market = otherMarket
+	fresh.Account, fresh.Side, fresh.Amount = me, ledger.SideUp, big.NewInt(100)
+
+	if err := st.Append(ctx, ledger.Batch{Rounds: []ledger.RoundEvent{old, fresh}},
+		cursorAt(801, "0xh801")); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	refs, err := st.RoundsForAccount(ctx, testChainID, me, "", 1)
+	if err != nil {
+		t.Fatalf("account rounds: %v", err)
+	}
+	if len(refs) != 1 || refs[0].Market != otherMarket {
+		t.Fatalf("got %+v, want the more recently touched round in %s", refs, otherMarket)
 	}
 }

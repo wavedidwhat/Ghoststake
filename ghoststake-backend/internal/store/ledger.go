@@ -43,9 +43,9 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 	const insertRound = `
 		INSERT INTO round_events (
 			chain_id, block_number, block_hash, block_time, tx_hash, log_index,
-			record_index, contract, event_name, round_id, account, side, amount,
-			data
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			record_index, contract, event_name, market, round_id, account, side,
+			amount, data
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		ON CONFLICT (chain_id, tx_hash, log_index, record_index) DO NOTHING`
 
 	queued := &pgx.Batch{}
@@ -67,7 +67,7 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 		}
 		queued.Queue(insertRound,
 			e.ChainID, e.BlockNumber, e.BlockHash, e.BlockTime, e.TxHash, e.LogIndex,
-			e.RecordIndex, e.Contract, e.EventName, e.RoundID, nullable(e.Account),
+			e.RecordIndex, e.Contract, e.EventName, e.Market, e.RoundID, nullable(e.Account),
 			nullable(e.Side), amount, data,
 		)
 	}
