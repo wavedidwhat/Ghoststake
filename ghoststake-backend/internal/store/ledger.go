@@ -172,6 +172,32 @@ func (s *Store) RollbackFrom(ctx context.Context, chainID int64, stream string, 
 	return tag.RowsAffected() + roundTag.RowsAffected(), nil
 }
 
+// RecordsInRange counts what we already hold for a block range, across both
+// derived tables.
+//
+// The one number the indexer cannot get from the chain. A re-read that comes
+// back with no logs looks exactly like a quiet stretch of blocks; the only
+// thing that distinguishes it from an RPC that has pruned its log index is
+// whether we already have rows in that range. See
+// Indexer.assertLogsStillServed for what is done with the answer.
+//
+// Both ends inclusive, matching the eth_getLogs range it is compared against —
+// an off-by-one here would compare two different ranges and call the
+// difference pruning.
+func (s *Store) RecordsInRange(ctx context.Context, chainID int64, fromBlock, toBlock uint64) (int64, error) {
+	const q = `
+		SELECT (SELECT count(*) FROM ledger_entries
+		         WHERE chain_id = $1 AND block_number BETWEEN $2 AND $3)
+		     + (SELECT count(*) FROM round_events
+		         WHERE chain_id = $1 AND block_number BETWEEN $2 AND $3)`
+
+	var n int64
+	if err := s.pool.QueryRow(ctx, q, chainID, fromBlock, toBlock).Scan(&n); err != nil {
+		return 0, fmt.Errorf("records in range %d-%d: %w", fromBlock, toBlock, err)
+	}
+	return n, nil
+}
+
 // ReplayFrom rewinds a cursor without deleting a single row.
 //
 // The counterpart to RollbackFrom, and the difference is what the rows mean.
