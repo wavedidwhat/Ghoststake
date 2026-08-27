@@ -35,7 +35,9 @@ contract LedgerIntegrityTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), _risk());
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), _risk(), address(this)
+        );
 
         token.mint(alice, 1_000_000 ether);
         token.mint(bob, 1_000_000 ether);

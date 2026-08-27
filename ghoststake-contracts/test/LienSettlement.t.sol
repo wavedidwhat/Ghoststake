@@ -42,10 +42,13 @@ contract LienSettlementTest is Test {
             uint256(75e16) / YEAR, // slope2
             8e17, // kink
             1e17, // reserve factor
+            owner,
             owner
         );
 
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk());
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk(), address(this)
+        );
 
         // This test contract stands in for GHO-8's borrow module.
         vm.prank(owner);

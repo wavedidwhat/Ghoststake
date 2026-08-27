@@ -27,7 +27,9 @@ contract YieldAccrualTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), _risk());
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(0)), _risk(), address(this)
+        );
 
         token.mint(alice, 1_000_000 ether);
         vm.prank(alice);
@@ -162,7 +164,8 @@ contract YieldAccrualTest is Test {
         vm.assume(principal > 0);
         uint256 rate = uint256(rateSeed) % 1e12; // keep well under overflow range for the multiply below
 
-        CollateralVault v = new CollateralVault(IERC20(address(token)), rate, ILienSource(address(0)), _risk());
+        CollateralVault v =
+            new CollateralVault(IERC20(address(token)), rate, ILienSource(address(0)), _risk(), address(this));
         token.mint(alice, principal);
         vm.startPrank(alice);
         token.approve(address(v), principal);

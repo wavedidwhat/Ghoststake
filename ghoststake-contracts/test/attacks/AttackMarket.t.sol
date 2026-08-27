@@ -56,6 +56,7 @@ contract AttackMarketTest is Test {
                 resolveDeadline: RESOLVE_DEADLINE
             }),
             MIN_SIDE_POOL,
+            owner,
             owner
         );
 

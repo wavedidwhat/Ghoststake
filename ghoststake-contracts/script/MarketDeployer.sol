@@ -94,7 +94,13 @@ abstract contract MarketDeployer is Script {
             0.02e18, // 2% protocol rake
             ParimutuelRound.Timing({ entryCutoff: 15 seconds, lockWindow: 60 seconds, resolveDeadline: 1 hours }),
             10e6, // min side pool: 10 mUSDC, at 6 decimals
-            owner
+            owner,
+            // The pause guardian (GHO-31), read here rather than threaded
+            // through three call sites. Defaults to the owner, which is what
+            // every caller passes today; the point of the variable is that a
+            // real deployment can separate the hot halting key from the cold
+            // one that moves reserves.
+            vm.envOr("PAUSE_GUARDIAN", owner)
         );
 
         // The router is what joins the two halves. Whitelisting it is the

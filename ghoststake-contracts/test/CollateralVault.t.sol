@@ -23,7 +23,7 @@ contract CollateralVaultTest is Test {
         token = new ERC20Mock();
         // Rate 0: this file tests deposit/withdraw/debt-gate accounting in
         // isolation. Accrual math has its own coverage in YieldAccrual.t.sol.
-        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)), _risk());
+        vault = new CollateralVault(IERC20(address(token)), 0, ILienSource(address(0)), _risk(), address(this));
 
         token.mint(alice, 1_000 ether);
         token.mint(bob, 1_000 ether);

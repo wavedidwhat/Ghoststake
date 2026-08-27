@@ -30,7 +30,7 @@ contract BorrowLiquidityPoolTest is Test {
 
     function setUp() public {
         token = new ERC20Mock();
-        pool = new BorrowLiquidityPool(IERC20(address(token)), BASE, SLOPE1, SLOPE2, KINK, RESERVE_FACTOR, owner);
+        pool = new BorrowLiquidityPool(IERC20(address(token)), BASE, SLOPE1, SLOPE2, KINK, RESERVE_FACTOR, owner, owner);
 
         vm.prank(owner);
         pool.setBorrowModule(module);
@@ -480,7 +480,7 @@ contract BorrowLiquidityPoolTest is Test {
 
     function test_borrowModuleCannotBeZero() public {
         BorrowLiquidityPool fresh =
-            new BorrowLiquidityPool(IERC20(address(token)), BASE, SLOPE1, SLOPE2, KINK, RESERVE_FACTOR, owner);
+            new BorrowLiquidityPool(IERC20(address(token)), BASE, SLOPE1, SLOPE2, KINK, RESERVE_FACTOR, owner, owner);
         vm.prank(owner);
         vm.expectRevert(BorrowLiquidityPool.ZeroAddress.selector);
         fresh.setBorrowModule(address(0));

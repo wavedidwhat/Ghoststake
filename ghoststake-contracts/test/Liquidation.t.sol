@@ -39,10 +39,12 @@ contract LiquidationTest is Test {
         token = new ERC20Mock();
 
         pool = new BorrowLiquidityPool(
-            IERC20(address(token)), 0, uint256(4e16) / YEAR, uint256(75e16) / YEAR, 8e17, 1e17, owner
+            IERC20(address(token)), 0, uint256(4e16) / YEAR, uint256(75e16) / YEAR, 8e17, 1e17, owner, owner
         );
 
-        vault = new CollateralVault(IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk());
+        vault = new CollateralVault(
+            IERC20(address(token)), FIVE_PERCENT_APR, ILienSource(address(pool)), _risk(), address(this)
+        );
 
         vm.prank(owner);
         pool.setBorrowModule(address(vault));

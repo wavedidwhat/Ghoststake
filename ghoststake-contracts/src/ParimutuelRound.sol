@@ -6,6 +6,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { EntryPausable } from "./EntryPausable.sol";
 
 /// @notice The price source a round settles against. Deliberately narrow: it
 /// answers "can this reading be trusted, and what is it," and nothing else.
@@ -118,7 +119,7 @@ interface ISettlementSink {
 /// own payout. Pushing to a list of winners would put an unbounded loop on
 /// the resolution path, which is how prediction markets brick themselves the
 /// moment a round gets popular.
-contract ParimutuelRound is Ownable, ReentrancyGuard {
+contract ParimutuelRound is Ownable, ReentrancyGuard, EntryPausable {
     using SafeERC20 for IERC20;
 
     /// @dev Ratio precision. 1e18 = 100%.
@@ -273,8 +274,9 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         uint256 rake_,
         Timing memory timing,
         uint256 minSidePool_,
-        address initialOwner
-    ) Ownable(initialOwner) {
+        address initialOwner,
+        address pauseGuardian_
+    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) {
         if (address(stakeAsset_) == address(0) || address(oracle_) == address(0)) revert ZeroAddress();
         if (rake_ > MAX_RAKE) revert InvalidParameters();
         // A zero floor would let a round resolve with an empty winning side
@@ -382,7 +384,17 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
     /// @dev Every phase boundary is stored as an absolute timestamp rather
     /// than a duration, so a round's schedule cannot shift under it if the
     /// keeper is late calling the transition.
-    function openRound(uint64 openTime, uint64 lockTime, uint64 closeTime) external onlyOwner returns (uint256) {
+    /// @dev An entry, and the one furthest upstream: a round that never opens
+    /// takes no stakes at all. Rounds already open are untouched — `lockRound`,
+    /// `resolveRound`, `voidUnsettledRound` and `claim` all stay reachable
+    /// while paused, because a halt that stranded an open round would trap
+    /// every stake in it behind an operator's judgement.
+    function openRound(uint64 openTime, uint64 lockTime, uint64 closeTime)
+        external
+        onlyOwner
+        whenEntriesOpen
+        returns (uint256)
+    {
         // The entry window has to outlast the cutoff buffer, or the round
         // opens with entry already closed.
         if (openTime < block.timestamp) revert InvalidSchedule();
@@ -428,6 +440,9 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         _takePosition(roundId, user, side, amount, msg.sender, ISettlementSink(msg.sender));
     }
 
+    /// @dev Guarded here rather than on `takePosition` and `takePositionFor`
+    /// separately: both funnel through this, and the router path is exactly
+    /// the one a pause must not leave open.
     function _takePosition(
         uint256 roundId,
         address user,
@@ -435,7 +450,7 @@ contract ParimutuelRound is Ownable, ReentrancyGuard {
         uint256 amount,
         address payer,
         ISettlementSink sink
-    ) private {
+    ) private whenEntriesOpen {
         if (amount == 0) revert ZeroAmount();
 
         Round storage round = _rounds[roundId];
