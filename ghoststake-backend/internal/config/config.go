@@ -52,9 +52,17 @@ type Config struct {
 type IndexerConfig struct {
 	Enabled bool
 
-	VaultAddress  string
-	PoolAddress   string
-	MarketAddress string
+	VaultAddress string
+	PoolAddress  string
+
+	// MarketAddresses is every ParimutuelRound to index.
+	//
+	// Read from MARKET_ADDRESSES (comma-separated), falling back to the
+	// singular MARKET_ADDRESS. The fallback is kept because every deployed
+	// .env still uses it, and an indexer that silently indexes nothing
+	// because a variable was renamed is the exact failure mode the
+	// fingerprint check exists to catch — no reason to create a new one.
+	MarketAddresses []string
 
 	// StartBlock should be the deployment block. Scanning from genesis on a
 	// public RPC is slow and returns nothing for the whole range.
@@ -92,14 +100,14 @@ func Load() (Config, error) {
 		CORSOrigins:      envList("CORS_ORIGINS", "http://localhost:3000"),
 		AllowSchemaAhead: envBool("ALLOW_SCHEMA_AHEAD", false),
 		Indexer: IndexerConfig{
-			Enabled:       envBool("INDEXER_ENABLED", false),
-			VaultAddress:  env("VAULT_ADDRESS", ""),
-			PoolAddress:   env("POOL_ADDRESS", ""),
-			MarketAddress: env("MARKET_ADDRESS", ""),
-			StartBlock:    uint64(envInt64("INDEXER_START_BLOCK", 0)),
-			Confirmations: uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
-			BatchSize:     uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
-			PollInterval:  envDuration("INDEXER_POLL_INTERVAL", 12*time.Second),
+			Enabled:         envBool("INDEXER_ENABLED", false),
+			VaultAddress:    env("VAULT_ADDRESS", ""),
+			PoolAddress:     env("POOL_ADDRESS", ""),
+			MarketAddresses: envList("MARKET_ADDRESSES", env("MARKET_ADDRESS", "")),
+			StartBlock:      uint64(envInt64("INDEXER_START_BLOCK", 0)),
+			Confirmations:   uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
+			BatchSize:       uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
+			PollInterval:    envDuration("INDEXER_POLL_INTERVAL", 12*time.Second),
 		},
 	}
 
@@ -140,19 +148,26 @@ func Load() (Config, error) {
 	// looks healthy and silently indexes nothing is worse than a refusal to
 	// boot.
 	if c.Indexer.Enabled {
-		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" || c.Indexer.MarketAddress == "" {
-			return Config{}, fmt.Errorf("VAULT_ADDRESS, POOL_ADDRESS and MARKET_ADDRESS are required when INDEXER_ENABLED=true")
+		if c.Indexer.VaultAddress == "" || c.Indexer.PoolAddress == "" || len(c.Indexer.MarketAddresses) == 0 {
+			return Config{}, fmt.Errorf("VAULT_ADDRESS, POOL_ADDRESS and MARKET_ADDRESSES are required when INDEXER_ENABLED=true")
 		}
 		// Validated here because nothing downstream will. common.HexToAddress
 		// does not return an error — it left-pads or zero-fills whatever it is
 		// given, so a typo becomes an address with no code and the indexer
 		// polls it forever, reporting healthy and writing nothing.
 		for name, addr := range map[string]string{
-			"VAULT_ADDRESS":  c.Indexer.VaultAddress,
-			"POOL_ADDRESS":   c.Indexer.PoolAddress,
-			"MARKET_ADDRESS": c.Indexer.MarketAddress,
+			"VAULT_ADDRESS": c.Indexer.VaultAddress,
+			"POOL_ADDRESS":  c.Indexer.PoolAddress,
 		} {
 			if err := validateAddress(name, addr); err != nil {
+				return Config{}, err
+			}
+		}
+		// Each market named individually. A list validated as a whole reports
+		// "MARKET_ADDRESSES is invalid" for a list of four, which is a worse
+		// message than the one it replaces.
+		for i, addr := range c.Indexer.MarketAddresses {
+			if err := validateAddress(fmt.Sprintf("MARKET_ADDRESSES[%d]", i), addr); err != nil {
 				return Config{}, err
 			}
 		}

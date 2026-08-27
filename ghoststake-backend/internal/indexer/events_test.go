@@ -26,7 +26,11 @@ func mustABI(t *testing.T, name string) contractSpec {
 	case abis.ParimutuelRound:
 		decode = decodeRound
 	}
-	return contractSpec{name: name, address: common.HexToAddress("0x1"), abi: parsed, decode: decode}
+	address := common.HexToAddress("0x1")
+	return contractSpec{
+		name: name, address: address, abi: parsed, decode: decode,
+		market: marketOf(name, address),
+	}
 }
 
 // makeLog builds a log the way the chain would: indexed arguments in topics,

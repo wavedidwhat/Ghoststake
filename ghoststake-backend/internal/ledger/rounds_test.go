@@ -245,3 +245,67 @@ func TestSideEnumRejectsUnknownValues(t *testing.T) {
 		t.Fatal("an unknown side was accepted")
 	}
 }
+
+// GHO-43. Round ids restart at 1 in every ParimutuelRound, so the id alone is
+// not an identity — and before the projections were keyed on the pair, two
+// markets' round 7 folded into one round whose pools were the sum of two
+// unrelated bets. A wrong pool total is harder to notice than a missing one,
+// which is why this was worse than the single-market blindness it replaced.
+func TestProjectKeepsMarketsApart(t *testing.T) {
+	const btc, demo = "0x00000000000000000000000000000000000B7C00", "0x00000000000000000000000000000000000De300"
+
+	events := []ledger.RoundEvent{
+		marketPosition(btc, 7, 1, "0xa", ledger.SideUp, 100),
+		marketPosition(demo, 7, 2, "0xb", ledger.SideUp, 900),
+	}
+
+	rounds := ledger.Project(events)
+	if len(rounds) != 2 {
+		t.Fatalf("want two rounds, got %d — markets merged", len(rounds))
+	}
+	for _, r := range rounds {
+		want := int64(100)
+		if r.Market == demo {
+			want = 900
+		}
+		if r.UpPool.Int64() != want {
+			t.Fatalf("market %s pool is %s, want %d — pools summed across markets", r.Market, r.UpPool, want)
+		}
+	}
+}
+
+// The same, for an account holding the same round number in two markets.
+// Merged, they read as one position with the sum of two stakes.
+func TestProjectPositionsKeepsMarketsApart(t *testing.T) {
+	const btc, demo = "0x00000000000000000000000000000000000B7C00", "0x00000000000000000000000000000000000De300"
+	const me = "0xa"
+
+	positions := ledger.ProjectPositions([]ledger.RoundEvent{
+		marketPosition(btc, 7, 1, me, ledger.SideUp, 100),
+		marketPosition(demo, 7, 2, me, ledger.SideDown, 900),
+	}, me)
+
+	if len(positions) != 2 {
+		t.Fatalf("want two positions, got %d", len(positions))
+	}
+	for _, p := range positions {
+		if p.Market == "" {
+			t.Fatal("a position with no market cannot be rendered against its round")
+		}
+		if p.TotalStake().Int64() != 100 && p.TotalStake().Int64() != 900 {
+			t.Fatalf("stake %s is neither position — they were summed", p.TotalStake())
+		}
+	}
+}
+
+func marketPosition(market string, roundID, block uint64, account, side string, amount int64) ledger.RoundEvent {
+	return ledger.RoundEvent{
+		Provenance: ledger.Provenance{ChainID: 31337, BlockNumber: block, EventName: ledger.PositionTaken},
+		Market:     market,
+		RoundID:    roundID,
+		Account:    account,
+		Side:       side,
+		Amount:     big.NewInt(amount),
+		Data:       map[string]string{},
+	}
+}

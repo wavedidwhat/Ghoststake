@@ -48,7 +48,7 @@ func TestDerivedFiguresMatchTheContracts(t *testing.T) {
 	}
 	defer client.Close()
 
-	reader, err := protocol.New(client, vault, pool, market)
+	reader, err := protocol.New(client, vault, pool, []string{market})
 	if err != nil {
 		t.Fatalf("reader: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestMarketParamsComeFromTheContract(t *testing.T) {
 	}
 	defer client.Close()
 
-	reader, err := protocol.New(client, vault, pool, market)
+	reader, err := protocol.New(client, vault, pool, []string{market})
 	if err != nil {
 		t.Fatalf("reader: %v", err)
 	}

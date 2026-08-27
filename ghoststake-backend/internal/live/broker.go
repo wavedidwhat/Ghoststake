@@ -18,17 +18,25 @@ type Update struct {
 	ChainID int64
 	// Block is the height the range ended at.
 	Block uint64
-	// RoundIDs are the rounds something happened to, newest last.
-	RoundIDs []uint64
+	// Rounds are the rounds something happened to, newest last, each named by
+	// its market as well as its id.
+	//
+	// The pair, not a bare id: round ids restart at 1 in every market, so a
+	// bare id would wake every client watching that number in any market and
+	// — worse — `Touched` would report a match for a round nothing happened
+	// to. The subscriber re-reads on a match, so a false one is a wasted read
+	// rather than a wrong number, but it is a wasted read that scales with the
+	// number of markets deployed.
+	Rounds []ledger.RoundRef
 	// Accounts are the addresses named by any record in the range, in the
 	// checksummed form the ledger stores.
 	Accounts []string
 }
 
 // Touched reports whether an update concerns a round a subscriber cares about.
-func (u Update) Touched(roundID uint64) bool {
-	for _, id := range u.RoundIDs {
-		if id == roundID {
+func (u Update) Touched(ref ledger.RoundRef) bool {
+	for _, r := range u.Rounds {
+		if r == ref {
 			return true
 		}
 	}
@@ -99,7 +107,7 @@ func (b *Broker) Subscribe(buffer int) (<-chan Update, func()) {
 // matters — a slow browser tab must not be able to stop the chain being read.
 func (b *Broker) Publish(batch ledger.Batch, cursor ledger.Cursor) {
 	update := summarise(batch, cursor)
-	if len(update.RoundIDs) == 0 && len(update.Accounts) == 0 {
+	if len(update.Rounds) == 0 && len(update.Accounts) == 0 {
 		return
 	}
 
@@ -131,7 +139,7 @@ func (b *Broker) Subscribers() int {
 func summarise(batch ledger.Batch, cursor ledger.Cursor) Update {
 	update := Update{ChainID: cursor.ChainID, Block: cursor.LastBlock}
 
-	seenRound := map[uint64]bool{}
+	seenRound := map[ledger.RoundRef]bool{}
 	seenAccount := map[string]bool{}
 	add := func(account string) {
 		if account == "" || seenAccount[account] {
@@ -142,9 +150,10 @@ func summarise(batch ledger.Batch, cursor ledger.Cursor) Update {
 	}
 
 	for _, e := range batch.Rounds {
-		if !seenRound[e.RoundID] {
-			seenRound[e.RoundID] = true
-			update.RoundIDs = append(update.RoundIDs, e.RoundID)
+		ref := ledger.RoundRef{Market: e.Market, RoundID: e.RoundID}
+		if !seenRound[ref] {
+			seenRound[ref] = true
+			update.Rounds = append(update.Rounds, ref)
 		}
 		add(e.Account)
 	}

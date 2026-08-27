@@ -12,6 +12,7 @@ import (
 	"github.com/wavedidwhat/ghoststake/internal/auth"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
 	"github.com/wavedidwhat/ghoststake/internal/live"
+	"github.com/wavedidwhat/ghoststake/internal/protocol"
 )
 
 // Websocket timings.
@@ -146,7 +147,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 			// Coalesce: drain anything that arrives in the next moment and
 			// send one snapshot covering all of it.
-			touched := update.RoundIDs
+			touched := update.Rounds
 			// Checked across every coalesced update, not only the first. An
 			// account named by the second one would otherwise be dropped
 			// silently — the subscriber would simply never hear about their
@@ -183,23 +184,19 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 // pushRounds sends the current state of the named rounds, or of the most
 // recent ones when nothing is named (the opening snapshot).
-func (s *Server) pushRounds(ctx context.Context, conn *websocket.Conn, address string, ids []uint64) error {
+func (s *Server) pushRounds(ctx context.Context, conn *websocket.Conn, address string, refs []ledger.RoundRef) error {
 	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	if len(ids) == 0 {
-		recent, err := s.store.RecentRoundIDs(readCtx, s.cfg.ChainID, defaultRoundLimit)
+	if len(refs) == 0 {
+		recent, err := s.store.RecentRounds(readCtx, s.cfg.ChainID, "", defaultRoundLimit)
 		if err != nil {
 			return err
 		}
-		ids = recent
+		refs = recent
 	}
 
-	events, err := s.store.RoundEventsByIDs(readCtx, s.cfg.ChainID, ids)
-	if err != nil {
-		return err
-	}
-	params, err := s.marketParams(readCtx)
+	events, err := s.store.RoundEventsByRefs(readCtx, s.cfg.ChainID, refs)
 	if err != nil {
 		return err
 	}
@@ -207,9 +204,21 @@ func (s *Server) pushRounds(ctx context.Context, conn *websocket.Conn, address s
 	now := time.Now().UTC()
 	projected := ledger.Project(events)
 	rounds := make([]roundJSON, 0, len(projected))
-	byID := map[uint64]ledger.Round{}
+	byRef := map[ledger.RoundRef]ledger.Round{}
+	// Params are per market and cached in the reader, so this is a map lookup
+	// after the first round of each market rather than a call per round.
+	paramsFor := map[string]protocol.MarketParams{}
 	for _, round := range projected {
-		byID[round.RoundID] = round
+		params, ok := paramsFor[round.Market]
+		if !ok {
+			p, err := s.marketParamsFor(readCtx, round.Market)
+			if err != nil {
+				return err
+			}
+			paramsFor[round.Market] = p
+			params = p
+		}
+		byRef[ledger.RoundRef{Market: round.Market, RoundID: round.RoundID}] = round
 		rounds = append(rounds, renderRound(round, params, now))
 	}
 
@@ -223,11 +232,12 @@ func (s *Server) pushRounds(ctx context.Context, conn *websocket.Conn, address s
 	}
 	if address != "" {
 		for _, position := range ledger.ProjectPositions(events, address) {
-			round, ok := byID[position.RoundID]
+			ref := ledger.RoundRef{Market: position.Market, RoundID: position.RoundID}
+			round, ok := byRef[ref]
 			if !ok {
 				continue
 			}
-			message.Positions = append(message.Positions, renderPosition(position, round, params, now))
+			message.Positions = append(message.Positions, renderPosition(position, round, paramsFor[round.Market], now))
 		}
 	}
 
@@ -243,14 +253,14 @@ func (s *Server) pushRounds(ctx context.Context, conn *websocket.Conn, address s
 // a round nor this account — a lending event for somebody else — and it is
 // deliberately permissive, because a spurious push costs a message and a
 // missing one costs a wrong number on someone's screen.
-func relevant(touchedRounds []uint64, namedAccount bool) bool {
+func relevant(touchedRounds []ledger.RoundRef, namedAccount bool) bool {
 	return len(touchedRounds) > 0 || namedAccount
 }
 
-func mergeRounds(into []uint64, update live.Update) []uint64 {
-	for _, id := range update.RoundIDs {
-		if !slices.Contains(into, id) {
-			into = append(into, id)
+func mergeRounds(into []ledger.RoundRef, update live.Update) []ledger.RoundRef {
+	for _, ref := range update.Rounds {
+		if !slices.Contains(into, ref) {
+			into = append(into, ref)
 		}
 	}
 	return into

@@ -1,6 +1,9 @@
 package httpx
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -113,5 +116,151 @@ func sortedKeys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// The same argument as the route check, one level down: a query parameter the
+// server reads and the spec does not mention is undiscoverable, and one the
+// spec promises and nothing reads is a lie a client will build against.
+//
+// GHO-43 added `?market=`, which is the first query parameter here that
+// changes *which rows* an answer is drawn from rather than how many. Getting
+// that undocumented would mean the only way to ask a multi-market API about
+// one market is to read the source.
+//
+// Set-level rather than per-route: mapping a handler back to its route needs
+// either reflection that Go does not offer over closures or a hand-kept table,
+// and a hand-kept table is the drift this file exists to prevent. Both
+// directions across the whole surface catches the two failures that actually
+// happen — a new parameter nobody documented, and a documented one nobody
+// reads.
+func TestOpenAPIDocumentsEveryQueryParameterTheServerReads(t *testing.T) {
+	read := queryParametersRead(t)
+	documented := documentedQueryParameters(t)
+
+	for name := range read {
+		if !documented[name] {
+			t.Errorf("the server reads ?%s= but openapi.yaml does not document it", name)
+		}
+	}
+	for name := range documented {
+		if !read[name] {
+			t.Errorf("openapi.yaml documents ?%s= but nothing reads it", name)
+		}
+	}
+
+	if t.Failed() {
+		t.Logf("read:       %s", sortedKeys(read))
+		t.Logf("documented: %s", sortedKeys(documented))
+	}
+}
+
+// queryParametersRead finds every `r.URL.Query().Get("name")` in this package
+// by parsing it, rather than by anyone remembering to update a list.
+func queryParametersRead(t *testing.T) map[string]bool {
+	t.Helper()
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+
+	out := map[string]bool{}
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			// The shape being matched is `<something>.Get("literal")` where the
+			// receiver is itself a call to `Query()`. Narrow enough not to
+			// catch a map lookup or an http.Get.
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Get" {
+				return true
+			}
+			inner, ok := sel.X.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			innerSel, ok := inner.Fun.(*ast.SelectorExpr)
+			if !ok || innerSel.Sel.Name != "Query" {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				// A non-literal parameter name cannot be checked against a
+				// static document, and silently skipping it would make this
+				// test pass by not looking. Fail instead.
+				t.Errorf("%s: query parameter name is not a string literal", fset.Position(call.Pos()))
+				return true
+			}
+			out[strings.Trim(lit.Value, `"`)] = true
+			return true
+		})
+	}
+	if len(out) == 0 {
+		t.Fatal("found no query parameters at all, which means the match stopped working")
+	}
+	return out
+}
+
+// documentedQueryParameters collects `in: query` parameters from the spec,
+// following the $ref indirection into components.
+func documentedQueryParameters(t *testing.T) map[string]bool {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "openapi.yaml"))
+	if err != nil {
+		t.Fatalf("read openapi.yaml: %v", err)
+	}
+
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name string `yaml:"name"`
+				In   string `yaml:"in"`
+				Ref  string `yaml:"$ref"`
+			} `yaml:"parameters"`
+		} `yaml:"paths"`
+		Components struct {
+			Parameters map[string]struct {
+				Name string `yaml:"name"`
+				In   string `yaml:"in"`
+			} `yaml:"parameters"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse openapi.yaml: %v", err)
+	}
+
+	out := map[string]bool{}
+	for _, item := range doc.Paths {
+		for _, op := range item {
+			for _, p := range op.Parameters {
+				switch {
+				case p.Ref != "":
+					// Only a parameter actually referenced by an operation
+					// counts. One defined in components and referenced by
+					// nothing documents no endpoint.
+					key := p.Ref[strings.LastIndex(p.Ref, "/")+1:]
+					if c, ok := doc.Components.Parameters[key]; ok && c.In == "query" {
+						out[c.Name] = true
+					}
+				case p.In == "query":
+					out[p.Name] = true
+				}
+			}
+		}
+	}
 	return out
 }
