@@ -164,7 +164,19 @@ type Cursor struct {
 //
 // A date-stamped name rather than a counter, so a bump is legible in a log
 // line without a table to look it up in.
-const DecoderVersion = "2026-08-27-nominal-flows"
+//
+// Bumped for GHO-50 without a decoder change. The stamp means "the rows behind
+// this cursor were derived by this decoder", and on the Sepolia deployment
+// that became untrue: the 2026-08-27 replay rewound 22,192 blocks, recovered
+// nothing because the RPC had pruned the range, and stamped itself as handled
+// on the way back up — so the gap it existed to close was recorded as closed
+// and would never be attempted again. Bumping makes that cursor stale a second
+// time, so the replay runs once more against whatever endpoint is configured
+// now. It is not free elsewhere: every healthy deployment re-reads its range
+// too. That re-read is idempotent and costs one pass of eth_getLogs, which is
+// the cheaper half of the trade against leaving known-missing rows missing
+// forever.
+const DecoderVersion = "2026-08-28-replay-after-prune"
 
 // Fingerprint identifies a set of watched contract addresses.
 //
@@ -223,6 +235,17 @@ type Repository interface {
 	// AttributeRoundEvents assigns a market to every round event that has
 	// none, returning how many rows it touched.
 	AttributeRoundEvents(ctx context.Context, chainID int64, market string) (int64, error)
+
+	// RecordsInRange counts the records already held for a block range,
+	// across both tables, inclusive of both ends.
+	//
+	// This exists to answer one question the indexer cannot answer from the
+	// chain alone: has the RPC stopped serving logs it used to serve? A
+	// re-read of a range that returns zero logs is indistinguishable from a
+	// quiet range — unless we already hold rows there, in which case the node
+	// is provably not serving what it served before. See
+	// Indexer.assertLogsStillServed.
+	RecordsInRange(ctx context.Context, chainID int64, fromBlock, toBlock uint64) (int64, error)
 
 	// ReplayFrom rewinds a cursor to just below a block WITHOUT deleting
 	// anything, so the range is read again.
