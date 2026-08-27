@@ -19,7 +19,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Exported so the read-API clients (activity, rounds) share one place where
+ * "the API was unreachable" and "the API said no" are told apart. A second
+ * fetch wrapper elsewhere would eventually disagree with this one about which
+ * of the two a user is looking at.
+ */
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${env.apiUrl}${path}`, {

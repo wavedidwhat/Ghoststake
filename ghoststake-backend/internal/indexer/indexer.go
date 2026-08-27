@@ -44,6 +44,11 @@ type Config struct {
 	// block: scanning from genesis on a public RPC is slow and pointless.
 	StartBlock uint64
 
+	// SkipDecoderReplay declines the one-time re-read a decoder version
+	// change asks for, keeping whatever gap it would have filled. See
+	// replayForNewDecoders.
+	SkipDecoderReplay bool
+
 	// Confirmations is how far behind the head to stay. Nothing is written
 	// for a block shallower than this.
 	Confirmations uint64
@@ -198,7 +203,67 @@ func (ix *Indexer) Preflight(ctx context.Context) error {
 	// about rows, not about the cursor: a database whose `indexer_cursor` was
 	// cleared but whose `round_events` was not has no cursor to check and
 	// every reason to still need its markets filled in.
-	return ix.attributeExistingRounds(ctx)
+	if err := ix.attributeExistingRounds(ctx); err != nil {
+		return err
+	}
+	return ix.replayForNewDecoders(ctx)
+}
+
+// replayForNewDecoders rewinds the cursor once when the decoders have started
+// deriving records the rows already in the table do not have.
+//
+// The failure this removes: a decoder that begins recording something new
+// fixes every log read from that moment on and does nothing at all for the
+// ones already read, because nothing revisits a block the cursor has passed.
+// GHO-49 added the pool's *nominal* supply and withdraw amounts — previously
+// decoded and thrown away, the scaled half kept — and without this, every
+// supply made before the upgrade would be missing from the history page while
+// every supply after it appeared. A feature that works only for new users is
+// harder to notice than one that does not work at all.
+//
+// Nothing is deleted; see Repository.ReplayFrom. The re-read is a no-op for
+// every row that exists and an insert for every one that does not, which is a
+// property of the uniqueness constraint rather than of this function being
+// careful.
+//
+// Runs exactly once per version bump: the new stamp is written by the same
+// transaction that advances the cursor, so the condition clears on the first
+// committed range and a crash mid-replay resumes forward rather than
+// restarting.
+func (ix *Indexer) replayForNewDecoders(ctx context.Context) error {
+	cursor, found, err := ix.repo.LoadCursor(ctx, ix.stream)
+	if err != nil {
+		return err
+	}
+	if !found || cursor.Decoders == ledger.DecoderVersion {
+		return nil
+	}
+	// Already at or behind the start block: the replay it would ask for is
+	// the read that is about to happen anyway.
+	if cursor.LastBlock < ix.cfg.StartBlock {
+		return nil
+	}
+
+	if ix.cfg.SkipDecoderReplay {
+		// The escape hatch, for an operator who would rather keep the gap
+		// than re-read a long range — a pruned RPC, or a deployment where the
+		// history predates anything anyone will look at. Stamped by the next
+		// committed range, so it is not asked again.
+		slog.Warn("decoder version changed but INDEXER_SKIP_DECODER_REPLAY is set, leaving the gap",
+			"stream", ix.stream, "was", cursor.Decoders, "now", ledger.DecoderVersion,
+			"records_missing_below_block", cursor.LastBlock)
+		return nil
+	}
+
+	// Loud, because this is a long operation that a deploy started on its own
+	// and an operator watching a restart deserves to know why the indexer is
+	// suddenly a long way behind the head.
+	slog.Warn("decoder version changed, replaying the indexed range to derive the new records",
+		"stream", ix.stream, "was", cursor.Decoders, "now", ledger.DecoderVersion,
+		"from_block", ix.cfg.StartBlock, "to_block", cursor.LastBlock,
+		"note", "nothing is deleted; existing rows are left untouched")
+
+	return ix.repo.ReplayFrom(ctx, ix.stream, ix.cfg.StartBlock)
 }
 
 func (ix *Indexer) checkCursorContracts(ctx context.Context) error {
@@ -358,6 +423,7 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		cursor = ledger.Cursor{
 			Stream: ix.stream, ChainID: ix.cfg.ChainID,
 			LastBlock: ix.cfg.StartBlock - 1, Contracts: ix.fingerprint,
+			Decoders: ledger.DecoderVersion,
 		}
 	}
 
@@ -401,6 +467,11 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		LastBlock: to,
 		LastHash:  tip.Hash().Hex(),
 		Contracts: ix.fingerprint,
+		// Stamped on every advance, not only on a fresh cursor. Stamping only
+		// the fresh one leaves every existing deployment's cursor blank
+		// forever, so the version check fires on every boot and the indexer
+		// replays its whole range each restart without ever catching up.
+		Decoders: ledger.DecoderVersion,
 	}
 	if err := ix.repo.Append(ctx, batch, next); err != nil {
 		return err

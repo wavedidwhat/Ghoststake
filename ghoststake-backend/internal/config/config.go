@@ -68,6 +68,17 @@ type IndexerConfig struct {
 	// public RPC is slow and returns nothing for the whole range.
 	StartBlock uint64
 
+	// SkipDecoderReplay declines the one-time replay a decoder version change
+	// asks for.
+	//
+	// Off by default, so the correct thing happens to a deployment nobody
+	// touches: a decoder that starts deriving a new record backfills it, and
+	// history is complete rather than complete-from-the-upgrade-onwards. The
+	// flag exists for the deployment where re-reading the range is genuinely
+	// not worth it — a pruned RPC, or history older than anything anyone will
+	// look at — and it keeps the gap knowingly instead of by accident.
+	SkipDecoderReplay bool
+
 	// Confirmations is how far behind the head to stay before writing.
 	//
 	// Arbitrum blocks are final once posted to L1, but the sequencer can
@@ -100,14 +111,15 @@ func Load() (Config, error) {
 		CORSOrigins:      envList("CORS_ORIGINS", "http://localhost:3000"),
 		AllowSchemaAhead: envBool("ALLOW_SCHEMA_AHEAD", false),
 		Indexer: IndexerConfig{
-			Enabled:         envBool("INDEXER_ENABLED", false),
-			VaultAddress:    env("VAULT_ADDRESS", ""),
-			PoolAddress:     env("POOL_ADDRESS", ""),
-			MarketAddresses: envList("MARKET_ADDRESSES", env("MARKET_ADDRESS", "")),
-			StartBlock:      uint64(envInt64("INDEXER_START_BLOCK", 0)),
-			Confirmations:   uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
-			BatchSize:       uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
-			PollInterval:    envDuration("INDEXER_POLL_INTERVAL", 12*time.Second),
+			Enabled:           envBool("INDEXER_ENABLED", false),
+			VaultAddress:      env("VAULT_ADDRESS", ""),
+			PoolAddress:       env("POOL_ADDRESS", ""),
+			MarketAddresses:   envList("MARKET_ADDRESSES", env("MARKET_ADDRESS", "")),
+			StartBlock:        uint64(envInt64("INDEXER_START_BLOCK", 0)),
+			Confirmations:     uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
+			SkipDecoderReplay: envBool("INDEXER_SKIP_DECODER_REPLAY", false),
+			BatchSize:         uint64(envInt64("INDEXER_BATCH_SIZE", 2000)),
+			PollInterval:      envDuration("INDEXER_POLL_INTERVAL", 12*time.Second),
 		},
 	}
 

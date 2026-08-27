@@ -133,6 +133,7 @@ func (s *Server) routes() http.Handler {
 			r.Use(httprate.LimitByIP(120, time.Minute))
 			r.Get("/rounds", s.handleRounds)
 			r.Get("/positions/{address}", s.handlePositions)
+			r.Get("/activity/{address}", s.handleActivity)
 			r.Get("/health/{address}", s.handleHealth)
 		})
 

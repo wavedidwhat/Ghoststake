@@ -17,6 +17,11 @@ import { usePathname } from "next/navigation";
  * pipeline and the app used the same word for both, which quietly erased the
  * half the product is named after.
  *
+ * Activity sits at the end of the pipeline because that is what it is: the
+ * record of having been through it. It replaced a dead "History" link that
+ * pointed at a route nobody had built (GHO-49) — and the endpoint behind it
+ * covers the lending side too, which no history surface ever did.
+ *
  * Lend sits under its own heading rather than as a fourth pipeline step,
  * because it is not one. A lender is on the other side of the borrow: they
  * fund it, they are paid by it, and they never stake or take a view. Listing
@@ -31,7 +36,7 @@ const NAV = [
   { href: "/stake", label: "Stake", ready: true, note: "earn" },
   { href: "/borrow", label: "Borrow", ready: true, note: "against it" },
   { href: "/markets", label: "Markets", ready: true, note: "take a view" },
-  { href: "/history", label: "History", ready: false, note: "GHO-17" },
+  { href: "/activity", label: "Activity", ready: true, note: "everything you did" },
 
   { section: "Fund it" },
   { href: "/lend", label: "Lend", ready: true, note: "earn the spread" },
@@ -85,12 +90,15 @@ export function Sidebar() {
               )}
             </Link>
           ) : (
+            // Nothing is unbuilt right now — GHO-49 took the last one — but
+            // the branch stays, because the alternative when the next page is
+            // scaffolded is a live link to a 404.
             <span
               key={item.href}
               className="flex cursor-not-allowed items-baseline justify-between rounded-lg px-3 py-2 text-sm text-ink-faint"
             >
               <span>{item.label}</span>
-              <span className="text-[11px]">{item.note}</span>
+              {"note" in item && item.note && <span className="text-[11px]">{item.note}</span>}
             </span>
           ),
         )}
