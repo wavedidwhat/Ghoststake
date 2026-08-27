@@ -43,15 +43,49 @@ func newTestStore(t *testing.T) *store.Store {
 	return st
 }
 
+// chainOf gives a test its own chain id, and with it its own everything.
+//
+// Namespacing the account is not enough for any test that operates on a range
+// of blocks. `RollbackFrom` deletes by (chain_id, block_number) across every
+// account — that is correct, a reorg does not care whose rows it takes — so a
+// test rolling back to block 51 deletes rows another test wrote at block 51
+// under an unrelated address, and both then fail in ways that depend on the
+// order they happened to run in.
+//
+// The chain id is the one axis that isolates completely: it leads the
+// uniqueness constraint, every index, and every WHERE clause in the store. A
+// test that writes on its own chain cannot be seen or deleted by any other.
+func chainOf(t *testing.T) int64 {
+	t.Helper()
+	var hash uint64 = 1469598103934665603
+	for _, b := range []byte(t.Name()) {
+		hash ^= uint64(b)
+		hash *= 1099511628211
+	}
+	// Kept clear of testChainID and of anything a real network uses, so a row
+	// written by a test is recognisable as one.
+	return 900_000_000 + int64(hash%1_000_000)
+}
+
 func entry(account, book string, delta int64, block uint64, tx string, logIndex uint, entryIndex int) ledger.Entry {
+	return entryOn(testChainID, account, book, delta, block, tx, logIndex, entryIndex)
+}
+
+func entryOn(chainID int64, account, book string, delta int64, block uint64, tx string, logIndex uint, entryIndex int) ledger.Entry {
 	kind := ledger.KindBalance
+	// Named from the ledger's own constants rather than as string literals.
+	// The list used to be literals, and a book added to the domain then
+	// silently became a *balance* entry here — which the activity feed
+	// excludes, so the tests for it would have passed by testing nothing.
 	switch book {
-	case "deposits", "withdrawals", "yield_settled", "borrow_flow", "repay_flow", "liquidations", "lien_settled":
+	case ledger.Deposits, ledger.Withdrawals, ledger.YieldSettled,
+		ledger.BorrowFlow, ledger.RepayFlow, ledger.Liquidations, ledger.LienSettled,
+		ledger.SupplyFlow, ledger.PoolWithdrawFlow, ledger.ShareTransferFlow:
 		kind = ledger.KindFlow
 	}
 	return ledger.Entry{
 		Provenance: ledger.Provenance{
-			ChainID: testChainID, BlockNumber: block, BlockHash: "0xblock",
+			ChainID: chainID, BlockNumber: block, BlockHash: "0xblock",
 			BlockTime: time.Unix(1700000000, 0).UTC(),
 			TxHash:    tx, LogIndex: logIndex, RecordIndex: entryIndex,
 			Contract: "CollateralVault", EventName: "Transfer",
@@ -62,6 +96,14 @@ func entry(account, book string, delta int64, block uint64, tx string, logIndex 
 
 func cursorAt(block uint64, hash string) ledger.Cursor {
 	return ledger.Cursor{Stream: "test", ChainID: testChainID, LastBlock: block, LastHash: hash}
+}
+
+// cursorOn is cursorAt for a test on its own chain, with its own stream name
+// — the cursor table is keyed on the stream, so a shared "test" stream is one
+// more thing two tests would fight over.
+func cursorOn(t *testing.T, chainID int64, block uint64) ledger.Cursor {
+	t.Helper()
+	return ledger.Cursor{Stream: t.Name(), ChainID: chainID, LastBlock: block, LastHash: "0xh"}
 }
 
 // Each test works in its own account namespace so they do not collide when
@@ -179,17 +221,21 @@ func TestRollbackRemovesEntriesAndRewindsTheCursor(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	acct := account(t, "")
+	// Its own chain: a rollback deletes by block across every account, so on
+	// the shared chain this counted — and deleted — rows other tests wrote at
+	// the same heights. See chainOf.
+	chainID := chainOf(t)
 
 	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
-		entry(acct, "shares", 100, 50, "0xr1", 0, 0),
-		entry(acct, "shares", 100, 51, "0xr2", 0, 0),
-		entry(acct, "shares", 100, 52, "0xr3", 0, 0),
-	}}, cursorAt(52, "0xh52"))
+		entryOn(chainID, acct, "shares", 100, 50, "0xr1", 0, 0),
+		entryOn(chainID, acct, "shares", 100, 51, "0xr2", 0, 0),
+		entryOn(chainID, acct, "shares", 100, 52, "0xr3", 0, 0),
+	}}, cursorOn(t, chainID, 52))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	deleted, err := st.RollbackFrom(ctx, testChainID, "test", 51)
+	deleted, err := st.RollbackFrom(ctx, chainID, t.Name(), 51)
 	if err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
@@ -197,12 +243,12 @@ func TestRollbackRemovesEntriesAndRewindsTheCursor(t *testing.T) {
 		t.Fatalf("want 2 deleted, got %d", deleted)
 	}
 
-	got, _ := st.BalanceOf(ctx, testChainID, acct, "shares")
+	got, _ := st.BalanceOf(ctx, chainID, acct, "shares")
 	if got.Cmp(big.NewInt(100)) != 0 {
 		t.Fatalf("want 100 after rollback, got %s", got)
 	}
 
-	cursor, found, err := st.LoadCursor(ctx, "test")
+	cursor, found, err := st.LoadCursor(ctx, t.Name())
 	if err != nil || !found {
 		t.Fatalf("cursor: %v found=%v", err, found)
 	}

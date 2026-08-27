@@ -25,6 +25,9 @@ type fakeRepo struct {
 	rounds  []ledger.RoundEvent
 	cursor  *ledger.Cursor
 	seen    map[string]bool
+	// replayedFrom records every block a decoder-version replay rewound to,
+	// so a test can assert it happened once and not on every boot.
+	replayedFrom []uint64
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{seen: map[string]bool{}} }
@@ -88,6 +91,19 @@ func (f *fakeRepo) AttributeRoundEvents(_ context.Context, chainID int64, market
 		}
 	}
 	return n, nil
+}
+
+// ReplayFrom rewinds without deleting, which is the whole distinction from
+// RollbackFrom — so the fake keeps its `seen` map intact. A fake that cleared
+// it would let a replay re-insert every row, and the test would then prove
+// idempotency that production does not have.
+func (f *fakeRepo) ReplayFrom(_ context.Context, stream string, fromBlock uint64) error {
+	f.replayedFrom = append(f.replayedFrom, fromBlock)
+	if f.cursor != nil {
+		f.cursor.LastBlock = fromBlock - 1
+		f.cursor.LastHash = ""
+	}
+	return nil
 }
 
 func (f *fakeRepo) RollbackFrom(_ context.Context, _ int64, _ string, fromBlock uint64) (int64, error) {
@@ -408,6 +424,7 @@ func (f *failingRepo) UnattributedRoundEvents(context.Context, int64) (int64, er
 func (f *failingRepo) AttributeRoundEvents(context.Context, int64, string) (int64, error) {
 	return 0, nil
 }
+func (f *failingRepo) ReplayFrom(context.Context, string, uint64) error { return nil }
 func (f *failingRepo) RollbackFrom(context.Context, int64, string, uint64) (int64, error) {
 	return 0, nil
 }

@@ -60,6 +60,25 @@ const (
 	LienSettled  = "lien_settled"
 	BorrowFlow   = "borrow_flow"
 	RepayFlow    = "repay_flow"
+
+	// The three below were added by GHO-49, which needed a history feed and
+	// found three things a user does that left no nominal record anywhere.
+	//
+	// Supplying to the pool and withdrawing from it were recorded only as
+	// SupplyScaled balance entries, because that is the figure a balance is
+	// summed from. But a scaled amount is not what the user did — it is that
+	// amount divided by the supply index at the time — so a history row drawn
+	// from it shows a number the user never saw. The contract emits both
+	// (`Supplied(user, amount, scaledAmount)`), and the nominal half was
+	// simply being discarded.
+	//
+	// A share transfer between two users had no flow record at all: it moved
+	// the Shares book and nothing else. Mints and burns are already narrated
+	// by Deposits and Withdrawals, so only the user-to-user case is recorded
+	// here — the two entries a Transfer already writes cover the balance.
+	SupplyFlow        = "supply_flow"
+	PoolWithdrawFlow  = "pool_withdraw_flow"
+	ShareTransferFlow = "share_transfer_flow"
 )
 
 // Provenance names the log a record was derived from.
@@ -118,7 +137,34 @@ type Cursor struct {
 	// reading. See Fingerprint. Empty means a cursor written before the
 	// fingerprint existed.
 	Contracts string
+	// Decoders identifies the decoder that wrote the rows behind this
+	// position. See DecoderVersion. Empty means a cursor written before the
+	// column existed.
+	Decoders string
 }
+
+// DecoderVersion names the current shape of what the decoders derive from a
+// log. Bump it whenever a decoder starts producing a record it did not
+// produce before.
+//
+// The reason this exists: adding a record to a decoder fixes every log indexed
+// from that moment on and does nothing whatsoever for the ones already read.
+// Nothing revisits a block the cursor has passed, so the new record simply
+// does not exist for any of the protocol's history — and the gap is invisible.
+// The endpoint answers, the rows are real, and a whole class of the user's
+// past actions is missing with nothing to indicate it. That is the same shape
+// of failure the contract fingerprint was written to catch, one layer down.
+//
+// A cursor stamped with an older version is replayed: rewound to the start
+// block and re-read, with every insert idempotent on
+// (chain, tx, log index, record index), so existing rows are untouched and
+// only the newly-derived ones land. Adding records to a decoder is therefore
+// safe only if they are *appended* — see the RecordIndex note on
+// decodeVault's Transfer.
+//
+// A date-stamped name rather than a counter, so a bump is legible in a log
+// line without a table to look it up in.
+const DecoderVersion = "2026-08-27-nominal-flows"
 
 // Fingerprint identifies a set of watched contract addresses.
 //
@@ -177,4 +223,14 @@ type Repository interface {
 	// AttributeRoundEvents assigns a market to every round event that has
 	// none, returning how many rows it touched.
 	AttributeRoundEvents(ctx context.Context, chainID int64, market string) (int64, error)
+
+	// ReplayFrom rewinds a cursor to just below a block WITHOUT deleting
+	// anything, so the range is read again.
+	//
+	// Deliberately not RollbackFrom. A reorg means the rows were never
+	// history and must go; a decoder change means they are correct but
+	// incomplete, and deleting them would throw away good data to re-derive
+	// it from an RPC that may no longer serve those logs. Re-reading over
+	// them is a no-op for what exists and an insert for what does not.
+	ReplayFrom(ctx context.Context, stream string, fromBlock uint64) error
 }
