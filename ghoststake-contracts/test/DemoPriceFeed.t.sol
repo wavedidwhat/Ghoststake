@@ -176,6 +176,7 @@ contract DemoPriceFeedTest is Test {
             0.02e18,
             ParimutuelRound.Timing({ entryCutoff: 5 seconds, lockWindow: 60 seconds, resolveDeadline: 1 hours }),
             10e6,
+            operator,
             operator
         );
 

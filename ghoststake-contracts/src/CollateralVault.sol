@@ -7,6 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { EntryPausable } from "./EntryPausable.sol";
 
 /// @notice The creditor a position's lien is owed to. Kept as a narrow
 /// interface rather than importing BorrowLiquidityPool directly, so the
@@ -69,7 +70,7 @@ interface ILienSource {
 /// actually pay for the user's shares — never raw `principal` or
 /// `totalLedgerValue`. GHO-8's health factor depends on this: lending
 /// against uncapped ledger value would be lending against nothing.
-contract CollateralVault is ERC4626, ReentrancyGuard {
+contract CollateralVault is ERC4626, ReentrancyGuard, EntryPausable {
     struct Position {
         /// @dev Deposit basis. Earns yield; never absorbs it.
         uint256 principal;
@@ -185,10 +186,13 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     error ZeroAmount();
     error ZeroAddress();
 
-    constructor(IERC20 collateralAsset, uint256 yieldRatePerSecond_, ILienSource lienSource_, RiskParams memory risk)
-        ERC20("GhostStake Collateral Shares", "gsCOL")
-        ERC4626(collateralAsset)
-    {
+    constructor(
+        IERC20 collateralAsset,
+        uint256 yieldRatePerSecond_,
+        ILienSource lienSource_,
+        RiskParams memory risk,
+        address pauseGuardian_
+    ) ERC20("GhostStake Collateral Shares", "gsCOL") ERC4626(collateralAsset) EntryPausable(pauseGuardian_) {
         // Ordering matters as much as the values: originating above the
         // liquidation line would mean a borrow is liquidatable the moment it
         // opens, and a close factor of zero would make liquidation a no-op.
@@ -313,7 +317,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// with a health factor comfortably above 1, never right on it. That gap
     /// is the whole point: originating at the liquidation threshold would
     /// mean one block of interest makes you liquidatable.
-    function borrow(uint256 amount) external nonReentrant {
+    function borrow(uint256 amount) external nonReentrant whenEntriesOpen {
         _borrow(msg.sender, amount, msg.sender);
     }
 
@@ -329,7 +333,10 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// The proceeds go to `msg.sender` rather than a nominated address on
     /// purpose. A recipient parameter would let a delegate holding a bounded
     /// credit line send the funds anywhere, which is not a bounded credit line.
-    function borrowFor(address onBehalfOf, uint256 amount) external nonReentrant {
+    /// @dev Guarded alongside `borrow`. Both are entries — new debt is new
+    /// risk — and a pause that stopped one but not the other would leave the
+    /// router as an open door into a halted protocol.
+    function borrowFor(address onBehalfOf, uint256 amount) external nonReentrant whenEntriesOpen {
         uint256 allowed = borrowAllowance[onBehalfOf][msg.sender];
         if (allowed < amount) {
             revert InsufficientBorrowAllowance(onBehalfOf, msg.sender, allowed, amount);
@@ -647,10 +654,14 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     // ERC4626 hooks
     // ------------------------------------------------------------------
 
+    /// @dev Guarded here rather than on `deposit` and `mint` separately: both
+    /// funnel through this hook, and a guard on the pair is a guard somebody
+    /// can later add a third entry point around.
     function _deposit(address caller, address receiver, uint256 assets, uint256 shares)
         internal
         override
         nonReentrant
+        whenEntriesOpen
     {
         _settle(receiver);
         super._deposit(caller, receiver, assets, shares);

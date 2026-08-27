@@ -48,7 +48,7 @@ contract ParimutuelRoundTest is Test {
         token = new ERC20Mock();
         oracle = new MockRoundOracle(START_PRICE);
         market = new ParimutuelRound(
-            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), MIN_SIDE_POOL, owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), MIN_SIDE_POOL, owner, owner
         );
 
         address[3] memory users = [alice, bob, carol];
@@ -775,14 +775,16 @@ contract ParimutuelRoundTest is Test {
 
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
         new ParimutuelRound(
-            IERC20(address(token)), IRoundOracle(address(oracle)), tooMuchRake, _timing(), MIN_SIDE_POOL, owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), tooMuchRake, _timing(), MIN_SIDE_POOL, owner, owner
         );
 
         // A zero cutoff reopens the lock-transaction front-run.
         ParimutuelRound.Timing memory noCutoff = _timing();
         noCutoff.entryCutoff = 0;
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
-        new ParimutuelRound(IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noCutoff, MIN_SIDE_POOL, owner);
+        new ParimutuelRound(
+            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noCutoff, MIN_SIDE_POOL, owner, owner
+        );
 
         // A zero window on either transition means it can only ever land in
         // the exact second it was due.
@@ -790,12 +792,12 @@ contract ParimutuelRoundTest is Test {
         noLockWindow.lockWindow = 0;
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
         new ParimutuelRound(
-            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noLockWindow, MIN_SIDE_POOL, owner
+            IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, noLockWindow, MIN_SIDE_POOL, owner, owner
         );
 
         // A zero floor lets a round resolve with an empty winning side.
         vm.expectRevert(ParimutuelRound.InvalidParameters.selector);
-        new ParimutuelRound(IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), 0, owner);
+        new ParimutuelRound(IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), 0, owner, owner);
     }
 
     // ------------------------------------------------------------------

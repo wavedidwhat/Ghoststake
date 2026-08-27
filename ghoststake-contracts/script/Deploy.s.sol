@@ -86,7 +86,21 @@ contract Deploy is MarketDeployer {
             perSecond(100), // slope 2, punishing past it
             0.8e18, // kink at 80% utilization
             0.1e18, // 10% of borrower interest to reserves
-            deployer
+            deployer,
+            // The one address allowed to halt new deposits, supplies, borrows
+            // and positions. It can do nothing else — not move a token, not
+            // change a parameter, and above all not stop anyone leaving
+            // (GHO-31).
+            //
+            // Separable from the owner because it is a *hot* role: pausing is
+            // the thing you do at four in the morning from a laptop, which is
+            // exactly the key that should not also be able to move reserves.
+            // Defaults to the deployer so a local run needs no configuration.
+            //
+            // Read inline at each use rather than into a local: this function
+            // is already one variable off `Stack too deep`, and holding the
+            // address in a slot tips it over.
+            vm.envOr("PAUSE_GUARDIAN", deployer)
         );
 
         CollateralVault vault = new CollateralVault(
@@ -98,7 +112,8 @@ contract Deploy is MarketDeployer {
                 liquidationThreshold: 0.8e18, // liquidatable past 80%
                 liquidationBonus: 0.05e18, // 5% discount to liquidators
                 closeFactor: 0.5e18 // at most half a lien per liquidation
-             })
+             }),
+            vm.envOr("PAUSE_GUARDIAN", deployer)
         );
 
         pool.setBorrowModule(address(vault));
