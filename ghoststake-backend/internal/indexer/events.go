@@ -229,6 +229,36 @@ func decodeVault(name string, f *fields, _ types.Log) []ledger.Entry {
 				Delta: value, Counterparty: from,
 			})
 		}
+		// A user-to-user move, recorded again as history (GHO-49).
+		//
+		// Appended *after* the balance entries, never before. RecordIndex is
+		// assigned by position, and the insert is idempotent on
+		// (chain, tx, log index, record index) — so putting these first would
+		// renumber the balance entries already in the table, and a replay
+		// would write a second copy of every share movement ever indexed
+		// under the vacated indices. Appending leaves 0 and 1 exactly where
+		// they are and adds 2 and 3.
+		//
+		// Mints and burns are excluded because Deposited and Withdrawn
+		// already narrate them, and two rows for one deposit reads as a
+		// double count whether or not it is one.
+		if from != zeroAddress && to != zeroAddress {
+			out = append(out,
+				ledger.Entry{
+					Kind: ledger.KindFlow, Account: from, Ledger: ledger.ShareTransferFlow,
+					// Signed, because direction is the whole content of this
+					// record: the same log is an outgoing transfer for one
+					// account and an incoming one for the other, and an
+					// unsigned magnitude on both would make them
+					// indistinguishable in a list.
+					Delta: neg(value), Counterparty: to,
+				},
+				ledger.Entry{
+					Kind: ledger.KindFlow, Account: to, Ledger: ledger.ShareTransferFlow,
+					Delta: value, Counterparty: from,
+				},
+			)
+		}
 		return out
 
 	case "Deposited":
@@ -283,17 +313,47 @@ func decodeVault(name string, f *fields, _ types.Log) []ledger.Entry {
 // The scaled amount is the balance-bearing figure; see ledger.DebtScaled.
 func decodePool(name string, f *fields, _ types.Log) []ledger.Entry {
 	switch name {
+	// Supplied and Withdrawn each write two entries: the scaled balance, and
+	// the nominal amount as history (GHO-49).
+	//
+	// Both come off the same log — `Supplied(user, amount, scaledAmount)` —
+	// and the nominal half used to be discarded. That left supplying to the
+	// pool as the one user action with no nominal record anywhere, so the
+	// only number a history page could show was the scaled one, which is not
+	// what the user did. See ledger.SupplyFlow.
+	//
+	// Balance first, flow second, for the RecordIndex reason spelled out on
+	// the vault's Transfer above: these indices are already in the table.
 	case "Supplied":
-		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.SupplyScaled,
-			Delta: f.amount("scaledAmount"),
-		}}
+		user := f.addr("user")
+		return []ledger.Entry{
+			{
+				Kind: ledger.KindBalance, Account: user, Ledger: ledger.SupplyScaled,
+				Delta: f.amount("scaledAmount"),
+			},
+			{
+				Kind: ledger.KindFlow, Account: user, Ledger: ledger.SupplyFlow,
+				Delta: f.amount("amount"),
+			},
+		}
 
 	case "Withdrawn":
-		return []ledger.Entry{{
-			Kind: ledger.KindBalance, Account: f.addr("user"), Ledger: ledger.SupplyScaled,
-			Delta: neg(f.amount("scaledAmount")),
-		}}
+		user := f.addr("user")
+		return []ledger.Entry{
+			{
+				Kind: ledger.KindBalance, Account: user, Ledger: ledger.SupplyScaled,
+				Delta: neg(f.amount("scaledAmount")),
+			},
+			{
+				// Positive, unlike the balance entry beside it. A flow is a
+				// record of a movement and its name says which way it went;
+				// the sign is what makes the balance sum correctly, and a
+				// history row reading "-500" for a withdrawal invites the
+				// reader to add it to something.
+				Kind: ledger.KindFlow, Account: user, Ledger: ledger.PoolWithdrawFlow,
+				Delta: f.amount("amount"),
+			},
+		}
 
 	case "Borrowed":
 		return []ledger.Entry{{

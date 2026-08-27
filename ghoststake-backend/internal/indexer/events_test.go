@@ -96,18 +96,36 @@ func TestTransferDebitsAndCreditsBothSides(t *testing.T) {
 	log := makeLog(t, spec, "Transfer", []common.Hash{topicAddr(alice), topicAddr(bob)}, wei(500))
 
 	entries := decode(t, spec, log)
-	if len(entries) != 2 {
-		t.Fatalf("want 2 entries, got %d", len(entries))
+	// Four: the two balance entries that move the shares book, and the two
+	// flow entries GHO-49 added so a transfer appears in both parties'
+	// history. The flows must not be summed into the book — hence the split.
+	if len(entries) != 4 {
+		t.Fatalf("want 4 entries, got %d", len(entries))
 	}
 
 	// A transfer must net to zero across the two accounts, or the shares
 	// book invents or destroys supply.
 	sum := new(big.Int)
+	var balances, flows int
 	for _, e := range entries {
-		if e.Ledger != ledger.Shares || e.Kind != ledger.KindBalance {
-			t.Fatalf("unexpected entry: %+v", e)
+		switch e.Kind {
+		case ledger.KindBalance:
+			if e.Ledger != ledger.Shares {
+				t.Fatalf("unexpected balance entry: %+v", e)
+			}
+			balances++
+			sum.Add(sum, e.Delta)
+		case ledger.KindFlow:
+			if e.Ledger != ledger.ShareTransferFlow {
+				t.Fatalf("unexpected flow entry: %+v", e)
+			}
+			flows++
+		default:
+			t.Fatalf("unexpected kind: %+v", e)
 		}
-		sum.Add(sum, e.Delta)
+	}
+	if balances != 2 || flows != 2 {
+		t.Fatalf("want 2 balance and 2 flow entries, got %d and %d", balances, flows)
 	}
 	if sum.Sign() != 0 {
 		t.Fatalf("transfer did not net to zero: %s", sum)
@@ -115,8 +133,84 @@ func TestTransferDebitsAndCreditsBothSides(t *testing.T) {
 
 	// Entry indices must differ, or the unique constraint collapses them
 	// into one row and half the transfer is silently dropped.
-	if entries[0].RecordIndex == entries[1].RecordIndex {
-		t.Fatal("both entries share an record_index")
+	seen := map[int]bool{}
+	for _, e := range entries {
+		if seen[e.RecordIndex] {
+			t.Fatalf("record_index %d used twice", e.RecordIndex)
+		}
+		seen[e.RecordIndex] = true
+	}
+}
+
+// The balance entries must keep record indices 0 and 1, with anything new
+// appended after them.
+//
+// Not style: RecordIndex is assigned by position and the insert is idempotent
+// on (chain, tx, log index, record index). Rows for every share movement ever
+// indexed are already in the table under 0 and 1. Put the new flow entries
+// first and those indices now belong to different records — a replay would
+// write a second copy of every balance entry under the vacated indices, and
+// the shares book would double.
+func TestNewTransferEntriesAreAppendedAfterTheBalanceOnes(t *testing.T) {
+	spec := mustABI(t, abis.CollateralVault)
+	log := makeLog(t, spec, "Transfer", []common.Hash{topicAddr(alice), topicAddr(bob)}, wei(500))
+
+	for _, e := range decode(t, spec, log) {
+		if e.Kind == ledger.KindBalance && e.RecordIndex > 1 {
+			t.Fatalf("balance entry moved to record_index %d", e.RecordIndex)
+		}
+		if e.Kind == ledger.KindFlow && e.RecordIndex < 2 {
+			t.Fatalf("flow entry took record_index %d, which a balance entry already owns", e.RecordIndex)
+		}
+	}
+}
+
+// The two sides of one transfer are distinguished only by the sign, which is
+// what the API's share_transfer_in/out mapping reads. Both positive and the
+// same log renders as two incoming transfers.
+func TestShareTransferFlowsAreSignedByDirection(t *testing.T) {
+	spec := mustABI(t, abis.CollateralVault)
+	log := makeLog(t, spec, "Transfer", []common.Hash{topicAddr(alice), topicAddr(bob)}, wei(500))
+
+	byAccount := map[string]*big.Int{}
+	for _, e := range decode(t, spec, log) {
+		if e.Ledger == ledger.ShareTransferFlow {
+			byAccount[e.Account] = e.Delta
+		}
+	}
+	sender := common.HexToAddress(alice).Hex()
+	receiver := common.HexToAddress(bob).Hex()
+
+	if got := byAccount[sender]; got == nil || got.Sign() >= 0 {
+		t.Fatalf("sender's flow should be negative, got %v", got)
+	}
+	if got := byAccount[receiver]; got == nil || got.Sign() <= 0 {
+		t.Fatalf("receiver's flow should be positive, got %v", got)
+	}
+}
+
+// A mint and a burn are already narrated by Deposited and Withdrawn. A second
+// flow row for the same movement reads as a double count whether or not the
+// books actually double.
+func TestMintAndBurnWriteNoTransferFlow(t *testing.T) {
+	spec := mustABI(t, abis.CollateralVault)
+	zero := common.Hash{}
+
+	for _, tc := range []struct {
+		name   string
+		topics []common.Hash
+	}{
+		{"mint", []common.Hash{zero, topicAddr(alice)}},
+		{"burn", []common.Hash{topicAddr(alice), zero}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := makeLog(t, spec, "Transfer", tc.topics, wei(1000))
+			for _, e := range decode(t, spec, log) {
+				if e.Ledger == ledger.ShareTransferFlow {
+					t.Fatalf("%s wrote a transfer flow: %+v", tc.name, e)
+				}
+			}
+		})
 	}
 }
 
@@ -226,6 +320,94 @@ func TestRepayDebitsTheScaledDebtAndKeepsThePayer(t *testing.T) {
 	}
 	if e.Delta.Cmp(wei(-48)) != 0 {
 		t.Fatalf("want -48 scaled, got %s", e.Delta)
+	}
+}
+
+// Supplying to the pool is the case GHO-49 found: the contract emits both the
+// nominal amount and the scaled one, and only the scaled one was being kept.
+// A history page then had nothing nominal to show for the action, and the
+// scaled figure is not what the lender did — it is that amount divided by the
+// supply index at the time.
+func TestSupplyKeepsBothTheScaledBalanceAndTheNominalAmount(t *testing.T) {
+	pool := mustABI(t, abis.BorrowLiquidityPool)
+	log := makeLog(t, pool, "Supplied", []common.Hash{topicAddr(alice)}, wei(1000), wei(970))
+
+	entries := decode(t, pool, log)
+	if len(entries) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(entries))
+	}
+
+	balance, flow := entries[0], entries[1]
+	// Balance first. The RecordIndex argument from
+	// TestNewTransferEntriesAreAppendedAfterTheBalanceOnes applies identically
+	// here: index 0 already belongs to the scaled balance entry in every row
+	// already written.
+	if balance.Kind != ledger.KindBalance || balance.RecordIndex != 0 {
+		t.Fatalf("want the balance entry at index 0, got %+v", balance)
+	}
+	if balance.Ledger != ledger.SupplyScaled || balance.Delta.Cmp(wei(970)) != 0 {
+		t.Fatalf("want +970 scaled in %s, got %+v", ledger.SupplyScaled, balance)
+	}
+	if flow.Kind != ledger.KindFlow || flow.Ledger != ledger.SupplyFlow {
+		t.Fatalf("want a %s flow, got %+v", ledger.SupplyFlow, flow)
+	}
+	// The nominal amount, which is what the lender actually handed over.
+	if flow.Delta.Cmp(wei(1000)) != 0 {
+		t.Fatalf("want the nominal 1000, got %s", flow.Delta)
+	}
+}
+
+// The two entries a pool withdrawal writes disagree about sign on purpose:
+// the balance must go down, and the history row must not read as something to
+// subtract from a total.
+func TestPoolWithdrawDebitsTheBalanceAndRecordsAPositiveFlow(t *testing.T) {
+	pool := mustABI(t, abis.BorrowLiquidityPool)
+	log := makeLog(t, pool, "Withdrawn", []common.Hash{topicAddr(alice)}, wei(500), wei(480))
+
+	entries := decode(t, pool, log)
+	if len(entries) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(entries))
+	}
+	balance, flow := entries[0], entries[1]
+
+	if balance.Ledger != ledger.SupplyScaled || balance.Delta.Cmp(wei(-480)) != 0 {
+		t.Fatalf("want -480 scaled, got %+v", balance)
+	}
+	if flow.Ledger != ledger.PoolWithdrawFlow || flow.Delta.Cmp(wei(500)) != 0 {
+		t.Fatalf("want a positive nominal 500 flow, got %+v", flow)
+	}
+}
+
+// The vault and the pool both emit "Withdrawn", meaning different things.
+// Nothing downstream may switch on the event name alone, and the two must end
+// up in different books or a lender's pool exit and a depositor's vault exit
+// are the same row.
+func TestTheTwoWithdrawnEventsAreNotTheSameThing(t *testing.T) {
+	vault := mustABI(t, abis.CollateralVault)
+	pool := mustABI(t, abis.BorrowLiquidityPool)
+
+	fromVault := decode(t, vault, makeLog(t, vault, "Withdrawn",
+		[]common.Hash{topicAddr(alice)}, wei(300), wei(290)))
+	fromPool := decode(t, pool, makeLog(t, pool, "Withdrawn",
+		[]common.Hash{topicAddr(alice)}, wei(300), wei(290)))
+
+	vaultBook := ""
+	for _, e := range fromVault {
+		if e.Kind == ledger.KindFlow {
+			vaultBook = e.Ledger
+		}
+	}
+	poolBook := ""
+	for _, e := range fromPool {
+		if e.Kind == ledger.KindFlow {
+			poolBook = e.Ledger
+		}
+	}
+	if vaultBook != ledger.Withdrawals {
+		t.Fatalf("vault Withdrawn should be %s, got %q", ledger.Withdrawals, vaultBook)
+	}
+	if poolBook != ledger.PoolWithdrawFlow {
+		t.Fatalf("pool Withdrawn should be %s, got %q", ledger.PoolWithdrawFlow, poolBook)
 	}
 }
 
