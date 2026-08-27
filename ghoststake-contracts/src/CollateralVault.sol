@@ -16,6 +16,10 @@ interface ILienSource {
     function borrow(uint256 amount, address onBehalfOf) external;
     function repay(uint256 amount, address onBehalfOf) external;
     function accrue() external;
+    /// @dev Writes a borrower's remaining debt off as uncollectable. Only the
+    /// creditor knows where the loss lands; only this contract can prove the
+    /// debt is uncollectable. See `writeOffBadDebt`.
+    function absorbBadDebt(address user) external returns (uint256 loss);
 }
 
 /// @notice Holds staked ERC-20 collateral, issues shares against it, and
@@ -150,6 +154,11 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     event Borrowed(address indexed user, uint256 amount, uint256 lienAfter);
     event BorrowDelegationApproved(address indexed user, address indexed delegate, uint256 amount);
     event Repaid(address indexed payer, address indexed user, uint256 amount, uint256 lienAfter);
+    /// @dev Emitted when a position is closed as uncollectable. `recovered` is
+    /// what the seized collateral paid off; `writtenOff` is what the pool will
+    /// never see.
+    event BadDebtWrittenOff(address indexed caller, address indexed user, uint256 recovered, uint256 writtenOff);
+
     event Liquidated(
         address indexed liquidator,
         address indexed user,
@@ -168,6 +177,9 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     error InsufficientBorrowAllowance(address user, address delegate, uint256 allowed, uint256 requested);
     error NothingToRepay(address user);
     error PositionNotLiquidatable(address user, uint256 healthFactor);
+    /// @dev The position is still worth more than it owes, so a liquidator can
+    /// clear it at a profit and no write-off is warranted.
+    error PositionIsRecoverable(address user, uint256 debt, uint256 collateral);
     error ExceedsCloseFactor(uint256 requested, uint256 maxRepayable);
     error InvalidRiskParameters();
     error ZeroAmount();
@@ -465,6 +477,89 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
         );
     }
 
+    /// @notice Close a position whose debt can never be recovered: seize what
+    /// is left, pay down what it covers, and write off the remainder.
+    ///
+    /// @dev The case `liquidate` cannot reach. Liquidation pays a bonus out of
+    /// collateral, so once a position owes more than it holds there is no
+    /// repayment size at which a liquidator comes out ahead — GHO-9's own
+    /// `test_deeplyUnderwaterLiquidationIsUnprofitable` says so. A rational
+    /// liquidator takes the profitable slice and stops, and what is left is a
+    /// position that can never be closed: still liquidatable, still accruing,
+    /// still counted as borrowed, and nobody willing to touch it.
+    ///
+    /// Left alone it is not inert. The debt compounds against collateral that
+    /// cannot grow — `collateralValue` caps at what the shares can redeem, so
+    /// the gap widens without limit — and it keeps counting toward the pool's
+    /// utilization, which sets the borrow rate for every other borrower. The
+    /// supply index goes on climbing on interest nobody will ever pay, so
+    /// every supplier's balance overstates what the pool can return. Whoever
+    /// withdraws last discovers this, and eats all of it.
+    ///
+    /// # Permissionless, on evidence rather than authority
+    ///
+    /// The precondition is `debt > seizable collateral`, and both numbers are
+    /// read on chain at the moment of the call. There is nothing for an owner
+    /// to attest to and nothing to trust, which is what makes it safe to leave
+    /// open — the same argument `liquidate` is open on. An owner-gated
+    /// `writeDownBadDebt` would be a switch for cancelling any borrower's debt
+    /// and charging the loss to suppliers.
+    ///
+    /// The condition is exact rather than cautious. At `debt > collateral`
+    /// even seizing everything leaves a shortfall, so no liquidation can close
+    /// the position — and every liquidation up to that point pays a bonus out
+    /// of collateral the pool needs, making the pool *worse* off than a write-
+    /// off would. Below that line the position is genuinely recoverable and
+    /// this refuses: `liquidate` is the right tool and pays someone to use it.
+    ///
+    /// # Nobody is paid to call this
+    ///
+    /// Stated plainly because it is the weak point. Unlike liquidation there
+    /// is no bonus, and a supplier calling it takes an immediate write-down in
+    /// exchange for books that tell the truth. The beneficiaries are whoever
+    /// supplies *next*, and the protocol's own solvency reporting. In practice
+    /// the keeper calls it; a caller bounty is an open question, not a
+    /// decision made here.
+    function writeOffBadDebt(address user) external nonReentrant {
+        if (address(lienSource) == address(0)) revert NoLienSource();
+
+        // Both sides current before anything is judged, exactly as in
+        // `liquidate`: yield feeds the collateral, interest feeds the lien,
+        // and the comparison between them is the whole precondition.
+        _settle(user);
+        lienSource.accrue();
+
+        uint256 debt = lienOf(user);
+        uint256 collateral = convertToAssets(balanceOf(user));
+
+        // `convertToAssets(balanceOf)` and not `collateralValue`, which is the
+        // *lower* of that and the ledger value. Here the question is what can
+        // actually be seized and handed over, and the ledger's unfunded yield
+        // was never seizable — reading the capped figure would call positions
+        // uncollectable while there were still assets behind them.
+        if (debt <= collateral) revert PositionIsRecoverable(user, debt, collateral);
+
+        uint256 recovered;
+        if (collateral != 0) {
+            // Everything, at no bonus. A liquidator is paid to take this risk
+            // early; by the time a position reaches here there is nothing left
+            // to pay them with, and paying a bonus out of the pool's last
+            // recovery would enlarge the loss it is meant to limit.
+            _burnCollateral(user, collateral);
+            IERC20 asset_ = IERC20(asset());
+            SafeERC20.forceApprove(asset_, address(lienSource), collateral);
+            lienSource.repay(collateral, user);
+            recovered = collateral;
+        }
+
+        // The pool measures the remainder itself. Handing it a number would
+        // make every supplier's haircut a function of this contract's
+        // arithmetic rather than of its own books.
+        uint256 writtenOff = lienSource.absorbBadDebt(user);
+
+        emit BadDebtWrittenOff(msg.sender, user, recovered, writtenOff);
+    }
+
     /// @dev Takes `amount` from `payer` and clears that much of `user`'s lien.
     function _pullAndRepay(address payer, address user, uint256 amount) private {
         IERC20 collateral = IERC20(asset());
@@ -476,13 +571,23 @@ contract CollateralVault is ERC4626, ReentrancyGuard {
     /// @dev Burns the shares backing `amount` of collateral and hands the
     /// assets to `recipient`, keeping the position ledger proportional.
     function _seizeCollateral(address user, address recipient, uint256 amount) private {
+        _burnCollateral(user, amount);
+        SafeERC20.safeTransfer(IERC20(asset()), recipient, amount);
+    }
+
+    /// @dev The claim half of a seizure, without the payout.
+    ///
+    /// Split out for `writeOffBadDebt`, which sends the assets straight to the
+    /// pool as a repayment instead of to a recipient. Going through
+    /// `_seizeCollateral(user, address(this), amount)` would have transferred
+    /// the vault's own tokens to itself — a no-op that costs gas and that some
+    /// ERC-20s reject outright.
+    function _burnCollateral(address user, uint256 amount) private {
         uint256 sharesBefore = balanceOf(user);
         uint256 sharesToBurn = Math.min(previewWithdraw(amount), sharesBefore);
 
         _burn(user, sharesToBurn);
         _reducePositionProRata(user, sharesToBurn, sharesBefore);
-
-        SafeERC20.safeTransfer(IERC20(asset()), recipient, amount);
     }
 
     // ------------------------------------------------------------------
