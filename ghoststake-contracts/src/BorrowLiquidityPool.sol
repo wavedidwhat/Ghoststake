@@ -100,6 +100,22 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     /// never withdrawable by suppliers.
     uint256 public totalReserves;
 
+    /// @dev Cumulative debt written off as uncollectable, in asset units at
+    /// the moment each write-off happened. A running total for reporting, not
+    /// a balance: the loss it describes has already been taken out of
+    /// `totalReserves` and out of `supplyIndex`.
+    uint256 public totalBadDebt;
+
+    /// @dev Loss that landed when there were no suppliers to absorb it.
+    ///
+    /// Separate from the socialised figure because it is a different fact. A
+    /// write-down works by moving `supplyIndex`, which only means anything if
+    /// somebody holds scaled supply against it. With an empty pool there is
+    /// nobody to charge, and charging the *next* supplier would bill them for
+    /// a loss that predates their deposit — they buy in at the current index,
+    /// and the index is the only thing that remembers.
+    uint256 public unsocialisedBadDebt;
+
     mapping(address => uint256) public scaledSupply;
     mapping(address => uint256) public scaledDebt;
 
@@ -116,6 +132,14 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     event Accrued(uint256 supplyIndex, uint256 borrowIndex, uint256 reservesAdded);
     event BorrowModuleSet(address indexed module);
     event ReservesWithdrawn(address indexed to, uint256 amount);
+    event BadDebtAbsorbed(
+        address indexed user,
+        uint256 loss,
+        uint256 fromReserves,
+        uint256 socialised,
+        uint256 supplyIndexBefore,
+        uint256 supplyIndexAfter
+    );
 
     error ZeroAmount();
     error NotBorrowModule(address caller);
@@ -126,6 +150,7 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error BorrowModuleAlreadySet(address current);
     error ReservesSeniorToSuppliers(uint256 requested, uint256 withdrawable);
+    error NoDebtToAbsorb(address user);
 
     modifier onlyBorrowModule() {
         if (msg.sender != borrowModule) revert NotBorrowModule(msg.sender);
@@ -366,6 +391,104 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard {
 
         asset.safeTransferFrom(msg.sender, address(this), amount);
         emit Repaid(msg.sender, onBehalfOf, amount, scaled);
+    }
+
+    // ------------------------------------------------------------------
+    // Bad debt
+    // ------------------------------------------------------------------
+
+    /// @notice Write off a borrower's remaining debt as uncollectable, and
+    /// charge the loss to reserves first and suppliers second.
+    ///
+    /// @dev Gated to the borrow module for the same reason `borrow` is, and it
+    /// is the same trust. This contract has no concept of collateral, so it
+    /// cannot tell an uncollectable loan from a perfectly good one — the
+    /// module already decides what may be lent against what, and here it
+    /// decides what can no longer be recovered. A public version of this
+    /// function would be a permissionless "forgive my debt".
+    ///
+    /// The loss is measured here rather than passed in. The caller has already
+    /// applied every asset it could seize; asking it to also state the
+    /// remainder would put the pool's write-down at the mercy of the caller's
+    /// arithmetic, and an overstated figure is an overstated haircut on every
+    /// supplier at once.
+    ///
+    /// # Why the debt is cleared rather than left standing
+    ///
+    /// A written-off loan that stays in `totalBorrowScaled` keeps compounding
+    /// interest nobody will pay, and — worse — keeps counting toward
+    /// `utilization()`. Utilization sets the borrow rate for *everybody*, so a
+    /// dead loan left on the books quietly taxes every honest borrower and
+    /// pays the proceeds into an index backed by nothing. The write-off has to
+    /// remove it from the supply of credit, not merely relabel it.
+    ///
+    /// # The order: reserves, then suppliers
+    ///
+    /// Reserves exist as the protocol's cut of borrower interest, and this is
+    /// the risk that cut is being paid for. Charging suppliers while the
+    /// treasury still held a balance would make the treasury senior to the
+    /// people whose money was actually lent — the inversion `withdrawReserves`
+    /// already refuses to allow on the cash side.
+    ///
+    /// @return loss The amount written off, in asset units.
+    function absorbBadDebt(address user) external nonReentrant onlyBorrowModule returns (uint256 loss) {
+        accrue();
+
+        loss = balanceOfDebt(user);
+        if (loss == 0) revert NoDebtToAbsorb(user);
+
+        // Cleared before anything else, so the position stops accruing and
+        // stops counting toward utilization from this instant.
+        totalBorrowScaled -= scaledDebt[user];
+        scaledDebt[user] = 0;
+
+        uint256 fromReserves = Math.min(loss, totalReserves);
+        totalReserves -= fromReserves;
+
+        uint256 remainder = loss - fromReserves;
+        uint256 indexBefore = supplyIndex;
+        uint256 socialised;
+
+        if (remainder != 0) {
+            uint256 supplied = totalSupplied();
+            if (supplied == 0) {
+                // Nobody to charge. Recorded rather than dropped, and
+                // deliberately NOT carried forward onto whoever supplies next:
+                // a new supplier buys in at the current index, and billing
+                // them for a loss that predates their deposit would be
+                // charging them for someone else's loan.
+                unsocialisedBadDebt += remainder;
+            } else {
+                socialised = Math.min(remainder, supplied);
+                // Rounded down, so the index never lands above the value the
+                // pool can actually stand behind. The dust falls on suppliers,
+                // which is the only direction available — the pool has no
+                // third party to absorb it.
+                uint256 next = Math.mulDiv(supplyIndex, supplied - socialised, supplied);
+
+                // The index may never reach zero, and this is not a rounding
+                // nicety. `supply` divides by it to scale a deposit, so an
+                // index of zero is not "suppliers lost everything" — it is a
+                // pool that reverts on every future deposit, permanently, with
+                // no way back. A total wipeout is reachable in principle: a
+                // loss equal to everything suppliers hold takes the multiplier
+                // to zero exactly.
+                //
+                // Floored at one, which leaves holders a dust rather than a
+                // brick. The scaled amounts a near-zero index produces stay
+                // well inside uint256 — `mulDiv` carries the intermediate
+                // product at 512 bits — so the floor costs nothing but the
+                // failure mode.
+                supplyIndex = next == 0 ? 1 : next;
+
+                // A loss larger than everything suppliers hold has nowhere
+                // left to go.
+                if (remainder > socialised) unsocialisedBadDebt += remainder - socialised;
+            }
+        }
+
+        totalBadDebt += loss;
+        emit BadDebtAbsorbed(user, loss, fromReserves, socialised, indexBefore, supplyIndex);
     }
 
     // ------------------------------------------------------------------
