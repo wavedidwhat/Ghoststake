@@ -22,6 +22,13 @@ import { usePathname } from "next/navigation";
  * pointed at a route nobody had built (GHO-49) — and the endpoint behind it
  * covers the lending side too, which no history surface ever did.
  *
+ * Positions sits beside it, and the pair is named by what each one holds
+ * rather than by how old it is. Activity is the lending ledger — every
+ * deposit, borrow, repay and supply. Positions is the market ledger — the
+ * views taken and how they turned out. GHO-38 asked for a "History" link;
+ * adding one next to "Activity" would have offered two words for the same
+ * promise and left a user guessing which held their bets.
+ *
  * Lend sits under its own heading rather than as a fourth pipeline step,
  * because it is not one. A lender is on the other side of the borrow: they
  * fund it, they are paid by it, and they never stake or take a view. Listing
@@ -36,6 +43,7 @@ const NAV = [
   { href: "/stake", label: "Stake", ready: true, note: "earn" },
   { href: "/borrow", label: "Borrow", ready: true, note: "against it" },
   { href: "/markets", label: "Markets", ready: true, note: "take a view" },
+  { href: "/positions", label: "Positions", ready: true, note: "how they went" },
   { href: "/activity", label: "Activity", ready: true, note: "everything you did" },
 
   { section: "Fund it" },
