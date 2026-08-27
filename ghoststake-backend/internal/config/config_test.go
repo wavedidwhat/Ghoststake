@@ -103,3 +103,67 @@ func TestIndexerRequiresAStartBlock(t *testing.T) {
 		t.Fatal("a zero start block was accepted")
 	}
 }
+
+// MARKET_ADDRESSES is a list, and the singular MARKET_ADDRESS still works.
+//
+// The fallback is not politeness: every deployed .env still writes the
+// singular name, and an indexer that silently watches nothing because a
+// variable was renamed is precisely the failure the cursor fingerprint exists
+// to catch. No reason to manufacture a new one.
+func TestMarketAddressesAcceptsAListAndTheOldSingularName(t *testing.T) {
+	const first = "0x000000000000000000000000000000000000003a"
+	const second = "0x000000000000000000000000000000000000003b"
+
+	indexed := func(t *testing.T) {
+		t.Helper()
+		base(t)
+		t.Setenv("INDEXER_ENABLED", "true")
+		t.Setenv("INDEXER_START_BLOCK", "1")
+		t.Setenv("VAULT_ADDRESS", "0x000000000000000000000000000000000000000f")
+		t.Setenv("POOL_ADDRESS", "0x0000000000000000000000000000000000000900")
+	}
+
+	t.Run("a list", func(t *testing.T) {
+		indexed(t)
+		t.Setenv("MARKET_ADDRESSES", first+","+second)
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if len(cfg.Indexer.MarketAddresses) != 2 {
+			t.Fatalf("got %v, want both markets", cfg.Indexer.MarketAddresses)
+		}
+	})
+
+	t.Run("the old singular name", func(t *testing.T) {
+		indexed(t)
+		t.Setenv("MARKET_ADDRESS", first)
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if len(cfg.Indexer.MarketAddresses) != 1 || cfg.Indexer.MarketAddresses[0] != first {
+			t.Fatalf("got %v, want [%s]", cfg.Indexer.MarketAddresses, first)
+		}
+	})
+
+	// Each market is named individually in the error, because "the list is
+	// invalid" is a worse message than the one it replaces.
+	t.Run("a bad entry names its position", func(t *testing.T) {
+		indexed(t)
+		t.Setenv("MARKET_ADDRESSES", first+",0xnope")
+		_, err := config.Load()
+		if err == nil || !strings.Contains(err.Error(), "MARKET_ADDRESSES[1]") {
+			t.Fatalf("want the second entry named, got %v", err)
+		}
+	})
+
+	// An indexer with no market to watch would poll forever and write nothing.
+	t.Run("an empty list is refused", func(t *testing.T) {
+		indexed(t)
+		_, err := config.Load()
+		if err == nil || !strings.Contains(err.Error(), "MARKET_ADDRESSES") {
+			t.Fatalf("want a refusal naming MARKET_ADDRESSES, got %v", err)
+		}
+	})
+}

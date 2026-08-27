@@ -55,6 +55,20 @@ func SideFromEnum(v uint8) (string, error) {
 type RoundEvent struct {
 	Provenance
 
+	// Market is the address of the ParimutuelRound that emitted this, EIP-55
+	// checksummed.
+	//
+	// Load-bearing, not decoration. Round ids restart at 1 in every market, so
+	// `RoundID` alone is not an identity — it names round 7 in as many markets
+	// as are deployed. Without this the projections below fold two unrelated
+	// markets' round 7 into one round, summing pools that have nothing to do
+	// with each other. That is worse than the single-market blindness it
+	// replaced, because a wrong number is harder to notice than a missing one.
+	//
+	// The emitting contract's address rather than a configured label: it comes
+	// off the log, so it cannot disagree with where the event came from.
+	Market string
+
 	RoundID uint64
 	// Account is the user the event concerns, or "" for round-level events.
 	Account string
@@ -71,6 +85,16 @@ type RoundEvent struct {
 	// back to be displayed, not to be summed or filtered on, and the set
 	// grows every time the contract gains an event.
 	Data map[string]string
+}
+
+// RoundRef identifies one round: which market, and which round in it.
+//
+// The pair is the identity. A bare round id is ambiguous across markets, and
+// every read path that used one — recent rounds, an account's rounds, the
+// event fetch behind both — returned a set that silently spanned markets.
+type RoundRef struct {
+	Market  string
+	RoundID uint64
 }
 
 // Batch is everything one indexed range produced.
@@ -99,6 +123,7 @@ const (
 // Round is the projection: what the events add up to.
 type Round struct {
 	ChainID   int64
+	Market    string
 	RoundID   uint64
 	Status    RoundStatus
 	OpenTime  time.Time
@@ -141,19 +166,24 @@ func Project(events []RoundEvent) []Round {
 		return sorted[i].LogIndex < sorted[j].LogIndex
 	})
 
-	byID := map[uint64]*Round{}
-	var order []uint64
+	// Keyed by (market, round), never by round id alone. Round ids restart at
+	// 1 in every market, so keying on the id merges round 7 of the BTC market
+	// with round 7 of the demo market and sums their pools together.
+	byRef := map[RoundRef]*Round{}
+	var order []RoundRef
 	for _, e := range sorted {
-		r, ok := byID[e.RoundID]
+		ref := RoundRef{Market: e.Market, RoundID: e.RoundID}
+		r, ok := byRef[ref]
 		if !ok {
 			r = &Round{
 				ChainID:  e.ChainID,
+				Market:   e.Market,
 				RoundID:  e.RoundID,
 				UpPool:   new(big.Int),
 				DownPool: new(big.Int),
 			}
-			byID[e.RoundID] = r
-			order = append(order, e.RoundID)
+			byRef[ref] = r
+			order = append(order, ref)
 		}
 		if e.BlockNumber > r.LastBlock {
 			r.LastBlock = e.BlockNumber
@@ -162,8 +192,8 @@ func Project(events []RoundEvent) []Round {
 	}
 
 	out := make([]Round, 0, len(order))
-	for _, id := range order {
-		out = append(out, *byID[id])
+	for _, ref := range order {
+		out = append(out, *byRef[ref])
 	}
 	return out
 }
@@ -229,6 +259,7 @@ func unixField(data map[string]string, key string) time.Time {
 // events that name it.
 type AccountPosition struct {
 	ChainID   uint64
+	Market    string
 	RoundID   uint64
 	Account   string
 	UpStake   *big.Int
@@ -277,12 +308,17 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 		return sorted[i].LogIndex < sorted[j].LogIndex
 	})
 
-	byID := map[uint64]*AccountPosition{}
-	var order []uint64
+	// Keyed by (market, round) for the same reason Project is: an account
+	// holding round 7 in two markets has two positions, and merging them would
+	// report one stake that is the sum of two unrelated bets.
+	byRef := map[RoundRef]*AccountPosition{}
+	var order []RoundRef
 	for _, e := range sorted {
-		p, ok := byID[e.RoundID]
+		ref := RoundRef{Market: e.Market, RoundID: e.RoundID}
+		p, ok := byRef[ref]
 		if !ok {
 			p = &AccountPosition{
+				Market:        e.Market,
 				RoundID:       e.RoundID,
 				Account:       account,
 				UpStake:       new(big.Int),
@@ -290,8 +326,8 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 				ClaimedAmount: new(big.Int),
 				OpenedAt:      e.BlockTime,
 			}
-			byID[e.RoundID] = p
-			order = append(order, e.RoundID)
+			byRef[ref] = p
+			order = append(order, ref)
 		}
 		p.LastTime = e.BlockTime
 		if e.BlockNumber > p.LastBlock {
@@ -322,10 +358,21 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 
 	// Newest round first: a positions list is read top-down and the round
 	// someone is in right now is the one they came to look at.
+	//
+	// Across markets the id is no longer a clock — round 3 of a market
+	// deployed today is newer than round 900 of one deployed in June — so the
+	// tie-break is the block the position was last touched at, which is
+	// comparable between markets. The id only orders within one market, where
+	// it is exact.
 	out := make([]AccountPosition, 0, len(order))
 	for i := len(order) - 1; i >= 0; i-- {
-		out = append(out, *byID[order[i]])
+		out = append(out, *byRef[order[i]])
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].RoundID > out[j].RoundID })
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Market != out[j].Market {
+			return out[i].LastBlock > out[j].LastBlock
+		}
+		return out[i].RoundID > out[j].RoundID
+	})
 	return out
 }

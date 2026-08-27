@@ -61,12 +61,17 @@ func LoadKeeper() (KeeperConfig, error) {
 		RPCURL:          env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
 		PrivateKey:      env("KEEPER_PRIVATE_KEY", ""),
 		RegistryAddress: env("REGISTRY_ADDRESS", ""),
-		MarketAddresses: envList("KEEPER_MARKET_ADDRESSES", env("MARKET_ADDRESS", "")),
-		PollInterval:    envDuration("KEEPER_POLL_INTERVAL", 10*time.Second),
-		OpenRounds:      envBool("KEEPER_OPEN_ROUNDS", true),
-		Lead:            uint64(envInt64("KEEPER_LEAD", 45)),
-		EntryWindow:     uint64(envInt64("KEEPER_ENTRY_WINDOW", 0)),
-		Horizon:         uint64(envInt64("KEEPER_HORIZON", 3600)),
+		// Falls back through the indexer's list and then its old singular
+		// name. Both are kept: GHO-43 renamed MARKET_ADDRESS to
+		// MARKET_ADDRESSES, and a keeper that silently found no markets
+		// because of a rename would advance nothing while reporting healthy.
+		MarketAddresses: envList("KEEPER_MARKET_ADDRESSES",
+			env("MARKET_ADDRESSES", env("MARKET_ADDRESS", ""))),
+		PollInterval: envDuration("KEEPER_POLL_INTERVAL", 10*time.Second),
+		OpenRounds:   envBool("KEEPER_OPEN_ROUNDS", true),
+		Lead:         uint64(envInt64("KEEPER_LEAD", 45)),
+		EntryWindow:  uint64(envInt64("KEEPER_ENTRY_WINDOW", 0)),
+		Horizon:      uint64(envInt64("KEEPER_HORIZON", 3600)),
 
 		MaxUncalendaredRound: envDuration("KEEPER_MAX_UNCALENDARED_ROUND", 15*time.Minute),
 	}

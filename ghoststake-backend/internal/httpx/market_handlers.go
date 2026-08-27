@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,6 +34,12 @@ const (
 // silently fabricate the low digits of a balance — the frontend audit found
 // exactly this bug, in the other direction. Strings go into `BigInt()` intact.
 type roundJSON struct {
+	// Market is the ParimutuelRound this round belongs to, checksummed.
+	//
+	// Not decoration: round ids restart at 1 in every market, so `id` alone
+	// does not identify a round and a client keying a list on it merges two
+	// markets' rounds into one row.
+	Market string `json:"market"`
 	ID     uint64 `json:"id"`
 	Status string `json:"status"`
 	// Phase is what an observer sees, which differs from status on the clock
@@ -70,8 +77,6 @@ type roundsResponse struct {
 	// the backfill has not reached them yet.
 	IndexedBlock uint64      `json:"indexedBlock"`
 	AsOf         time.Time   `json:"asOf"`
-	Rake         string      `json:"rake"`
-	EntryCutoff  int64       `json:"entryCutoffSeconds"`
 	Rounds       []roundJSON `json:"rounds"`
 }
 
@@ -84,32 +89,47 @@ func (s *Server) handleRounds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	limit := clampLimit(r.URL.Query().Get("limit"))
 
-	ids, err := s.store.RecentRoundIDs(ctx, s.cfg.ChainID, limit)
+	market, ok := queryMarket(w, r)
+	if !ok {
+		return
+	}
+
+	refs, err := s.store.RecentRounds(ctx, s.cfg.ChainID, market, limit)
 	if err != nil {
 		serverError(w, "list rounds", err)
 		return
 	}
-	events, err := s.store.RoundEventsByIDs(ctx, s.cfg.ChainID, ids)
+	events, err := s.store.RoundEventsByRefs(ctx, s.cfg.ChainID, refs)
 	if err != nil {
 		serverError(w, "read round events", err)
-		return
-	}
-	params, err := s.marketParams(ctx)
-	if err != nil {
-		serverError(w, "read market params", err)
 		return
 	}
 
 	now := time.Now().UTC()
 	rounds := ledger.Project(events)
-	// Newest first, by round id. Project preserves the order events were
-	// first seen in, which is usually the same thing and is not guaranteed
-	// to be — a round opened earlier can have its first indexed event later
-	// after a rollback. Sorting on the id says what is actually meant.
-	sort.Slice(rounds, func(i, j int) bool { return rounds[i].RoundID > rounds[j].RoundID })
+	// Newest first. Within a market the id orders exactly; across markets it
+	// does not order at all — round 3 of a market deployed today is newer
+	// than round 900 of one deployed in June — so the cross-market comparison
+	// is on the block the round was last touched at.
+	sort.Slice(rounds, func(i, j int) bool {
+		if rounds[i].Market != rounds[j].Market {
+			return rounds[i].LastBlock > rounds[j].LastBlock
+		}
+		return rounds[i].RoundID > rounds[j].RoundID
+	})
 
 	out := make([]roundJSON, 0, len(rounds))
 	for _, round := range rounds {
+		// Per round rather than once for the listing. Rake, entry cutoff and
+		// minimum side pool are constructor arguments, and the demo market is
+		// deliberately configured differently from the Chainlink one — so one
+		// set of params applied to a mixed listing would put the wrong rake
+		// on the odds of every row from the other market.
+		params, err := s.marketParamsFor(ctx, round.Market)
+		if err != nil {
+			serverError(w, "read market params", err)
+			return
+		}
 		out = append(out, renderRound(round, params, now))
 	}
 
@@ -117,8 +137,6 @@ func (s *Server) handleRounds(w http.ResponseWriter, r *http.Request) {
 		ChainID:      s.cfg.ChainID,
 		IndexedBlock: s.indexedBlock(ctx),
 		AsOf:         now,
-		Rake:         params.Rake.String(),
-		EntryCutoff:  params.EntryCutoff,
 		Rounds:       out,
 	})
 }
@@ -162,7 +180,12 @@ func (s *Server) handlePositions(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := clampLimit(r.URL.Query().Get("limit"))
 
-	ids, err := s.store.RoundIDsForAccount(ctx, s.cfg.ChainID, address, limit)
+	market, ok := queryMarket(w, r)
+	if !ok {
+		return
+	}
+
+	refs, err := s.store.RoundsForAccount(ctx, s.cfg.ChainID, address, market, limit)
 	if err != nil {
 		serverError(w, "list account rounds", err)
 		return
@@ -170,21 +193,19 @@ func (s *Server) handlePositions(w http.ResponseWriter, r *http.Request) {
 	// Every event of those rounds, not only this account's: the payout
 	// depends on the whole pool, so a position read from its own stake alone
 	// could not say what it is worth.
-	events, err := s.store.RoundEventsByIDs(ctx, s.cfg.ChainID, ids)
+	events, err := s.store.RoundEventsByRefs(ctx, s.cfg.ChainID, refs)
 	if err != nil {
 		serverError(w, "read round events", err)
 		return
 	}
-	params, err := s.marketParams(ctx)
-	if err != nil {
-		serverError(w, "read market params", err)
-		return
-	}
 
 	now := time.Now().UTC()
-	rounds := map[uint64]ledger.Round{}
+	// Keyed by the pair. Keyed by id alone, a position in the demo market's
+	// round 7 would be rendered against the BTC market's round 7 — same
+	// number, different bet, and every figure on it wrong.
+	rounds := map[ledger.RoundRef]ledger.Round{}
 	for _, round := range ledger.Project(events) {
-		rounds[round.RoundID] = round
+		rounds[ledger.RoundRef{Market: round.Market, RoundID: round.RoundID}] = round
 	}
 
 	response := positionsResponse{
@@ -197,11 +218,16 @@ func (s *Server) handlePositions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, position := range ledger.ProjectPositions(events, address) {
-		round, ok := rounds[position.RoundID]
+		round, ok := rounds[ledger.RoundRef{Market: position.Market, RoundID: position.RoundID}]
 		if !ok {
 			// Unreachable: the position was folded from the same events. Skip
 			// rather than render a position with no round beside it.
 			continue
+		}
+		params, err := s.marketParamsFor(ctx, round.Market)
+		if err != nil {
+			serverError(w, "read market params", err)
+			return
 		}
 		rendered := renderPosition(position, round, params, now)
 		if round.Status == ledger.StatusResolved || round.Status == ledger.StatusVoid {
@@ -220,6 +246,7 @@ func renderRound(round ledger.Round, params protocol.MarketParams, now time.Time
 	open, lock := round.OpenTime.Unix(), round.LockTime.Unix()
 
 	return roundJSON{
+		Market:    round.Market,
 		ID:        round.RoundID,
 		Status:    status,
 		Phase:     string(finance.PhaseOf(status, open, lock, params.EntryCutoff, nowUnix)),
@@ -264,7 +291,36 @@ func renderPosition(p ledger.AccountPosition, round ledger.Round, params protoco
 	}
 }
 
-// marketParams reads the market's immutables, which protocol.Reader caches.
+// marketParamsFor reads one market's immutables, which protocol.Reader caches
+// per market.
+func (s *Server) marketParamsFor(ctx context.Context, market string) (protocol.MarketParams, error) {
+	if s.reader == nil {
+		return protocol.MarketParams{}, errNoChainReader
+	}
+	return s.reader.MarketParamsFor(ctx, market)
+}
+
+// queryMarket reads an optional `?market=` filter, normalised to the
+// checksummed spelling the indexer writes.
+//
+// A malformed address is rejected rather than ignored. Ignoring it would
+// answer with every market's rounds, which is not a narrower answer to the
+// question asked — it is a wider one, and the caller has no way to tell.
+func queryMarket(w http.ResponseWriter, r *http.Request) (string, bool) {
+	raw := strings.TrimSpace(r.URL.Query().Get("market"))
+	if raw == "" {
+		return "", true
+	}
+	address, err := auth.NormalizeAddress(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid market address")
+		return "", false
+	}
+	return address, true
+}
+
+// marketParams reads the primary market's immutables, which protocol.Reader
+// caches.
 func (s *Server) marketParams(ctx context.Context) (protocol.MarketParams, error) {
 	if s.reader == nil {
 		// The API can serve indexed rounds with no chain connection, but not
