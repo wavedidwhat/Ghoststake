@@ -112,6 +112,21 @@ export type MarketRound = {
  * different blocks.
  *
  * Round ids restart at 1 in each market, so nothing here keys on `id` alone.
+ *
+ * Stays on the chain rather than moving to `/api/v1/rounds`, which GHO-38 asked
+ * to decide. The API returns the same information in one request and is cheaper
+ * by every measure — but it is `INDEXER_CONFIRMATIONS` behind the head by
+ * design, and every number this hook produces feeds a transaction the user is
+ * about to sign. A pool split five blocks stale quotes odds that no longer
+ * exist; an `entryOpen` computed server-side lets the stake button stay live
+ * past the cutoff, which is the one piece of round state a UI can get wrong in
+ * a way that costs a user gas. The lag is free on a settled round and not free
+ * here.
+ *
+ * The historical read went to the API instead — see `lib/positions.ts`. That is
+ * not two sources of truth for one number: it is two questions, each asked
+ * where it can be answered. "What can I bet on now" is the chain's; "what
+ * happened" is the indexer's, and the chain is worst at it.
  */
 export function useRounds(markets: Market[]) {
   const { address } = useConnection();
