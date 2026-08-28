@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
@@ -33,14 +32,93 @@ func TestPreflightAllowsTheSameContracts(t *testing.T) {
 	}
 }
 
-// The bug this exists for: contracts redeployed, cursor left at the old
-// deployment's head. Resuming would skip the new deployment's history
-// entirely and report healthy while indexing nothing.
-func TestPreflightRefusesADifferentContractSet(t *testing.T) {
+// Redeploying used to be a boot failure whose documented recovery was
+// "DELETE FROM ledger_entries; DELETE FROM round_events; DELETE FROM
+// indexer_cursor" — every user's history, thrown away to ship a contract
+// change. GHO-51 makes it a new stream instead.
+//
+// The refusal was not wrong, and this is not a relaxation of it. It was the
+// only thing standing between us and summing two deployments' books together,
+// and it is replaced rather than removed: entries now carry the address that
+// wrote them, and every balance query is scoped to one deployment's contracts.
+func TestPreflightStartsAFreshStreamForADifferentContractSet(t *testing.T) {
 	repo := newFakeRepo()
-	// A cursor from some other deployment, already past our start block.
+	previous := ledger.Cursor{
+		Stream:    ledger.StreamName(421614, ledger.Fingerprint([]string{"0xdeadbeef"})),
+		ChainID:   421614,
+		LastBlock: 900,
+		Contracts: ledger.Fingerprint([]string{"0xdeadbeef"}),
+	}
+	if err := repo.Append(context.Background(), ledger.Batch{}, previous); err != nil {
+		t.Fatalf("seed cursor: %v", err)
+	}
+
+	chain := newFakeChain(1000)
+	ix := newTestIndexer(t, chain, repo, Config{StartBlock: 10, Confirmations: 1})
+	if err := ix.Preflight(context.Background()); err != nil {
+		t.Fatalf("preflight refused a redeployment instead of starting a new stream: %v", err)
+	}
+
+	// The previous deployment's position is untouched — which is what makes
+	// its rows still readable rather than orphaned at an unknown block.
+	if repo.cursor.LastBlock != 900 || repo.cursor.Stream != previous.Stream {
+		t.Fatalf("a redeployment moved the previous deployment's cursor: %+v", *repo.cursor)
+	}
+
+	// And this deployment reads from its own start block rather than
+	// inheriting a position 890 blocks past its own history.
+	if err := ix.Step(context.Background()); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(chain.ranges) == 0 {
+		t.Fatal("no range was read at all")
+	}
+	if got := chain.ranges[0][0]; got != 10 {
+		t.Fatalf("first read started at block %d, want the configured start block 10", got)
+	}
+}
+
+// A cursor written before the stream carried a fingerprint is filed under a
+// name nothing looks for any more. Left alone it is not lost but invisible:
+// the indexer would see a stream that has never run and re-read its whole
+// range to arrive exactly where it already was.
+func TestPreflightAdoptsAPreDeploymentScopedCursor(t *testing.T) {
+	repo := newFakeRepo()
 	if err := repo.Append(context.Background(), ledger.Batch{}, ledger.Cursor{
-		Stream:    ledger.StreamName(421614),
+		Stream:    ledger.StreamName(421614, ""),
+		ChainID:   421614,
+		LastBlock: 50,
+		Contracts: "", // predates the fingerprint entirely
+		// Current, so the decoder replay stays out of this test. A cursor
+		// carrying a stale decoder stamp is *also* rewound by preflight, which
+		// is correct and covered separately — but it would land the position
+		// at StartBlock-1 here and make an adoption that worked perfectly look
+		// like one that lost 41 blocks.
+		Decoders: ledger.DecoderVersion,
+	}); err != nil {
+		t.Fatalf("seed cursor: %v", err)
+	}
+
+	ix := newTestIndexer(t, newFakeChain(1000), repo, Config{StartBlock: 10, Confirmations: 1})
+	if err := ix.Preflight(context.Background()); err != nil {
+		t.Fatalf("preflight rejected a legacy cursor: %v", err)
+	}
+
+	if repo.cursor.Stream != ix.stream {
+		t.Fatalf("legacy cursor was not adopted: still at %q, want %q", repo.cursor.Stream, ix.stream)
+	}
+	if repo.cursor.LastBlock != 50 {
+		t.Fatalf("adoption moved the position to %d, want 50", repo.cursor.LastBlock)
+	}
+}
+
+// Somebody else's cursor is not ours to take. Adopting one would put this
+// deployment's stream at a block it never read, which is the exact failure the
+// fingerprint check was written for.
+func TestPreflightLeavesAnotherDeploymentsLegacyCursorAlone(t *testing.T) {
+	repo := newFakeRepo()
+	if err := repo.Append(context.Background(), ledger.Batch{}, ledger.Cursor{
+		Stream:    ledger.StreamName(421614, ""),
 		ChainID:   421614,
 		LastBlock: 900,
 		Contracts: ledger.Fingerprint([]string{"0xdeadbeef"}),
@@ -49,37 +127,11 @@ func TestPreflightRefusesADifferentContractSet(t *testing.T) {
 	}
 
 	ix := newTestIndexer(t, newFakeChain(1000), repo, Config{StartBlock: 10, Confirmations: 1})
-
-	err := ix.Preflight(context.Background())
-	if err == nil {
-		t.Fatal("preflight accepted a cursor built from different contracts")
-	}
-	// The operator has to be able to act on this without reading the source,
-	// so the message must carry both positions and the way out.
-	for _, want := range []string{"redeployed", "900", "10", "DELETE FROM ledger_entries"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error message missing %q:\n%v", want, err)
-		}
-	}
-}
-
-// A cursor written before the fingerprint column existed has nothing to
-// compare against. Refusing would break every running deployment on upgrade,
-// so it is adopted — the one assumption in here.
-func TestPreflightAdoptsALegacyCursor(t *testing.T) {
-	repo := newFakeRepo()
-	if err := repo.Append(context.Background(), ledger.Batch{}, ledger.Cursor{
-		Stream:    ledger.StreamName(421614),
-		ChainID:   421614,
-		LastBlock: 50,
-		Contracts: "", // pre-migration
-	}); err != nil {
-		t.Fatalf("seed cursor: %v", err)
-	}
-
-	ix := newTestIndexer(t, newFakeChain(1000), repo, Config{StartBlock: 10, Confirmations: 1})
 	if err := ix.Preflight(context.Background()); err != nil {
-		t.Fatalf("preflight rejected a legacy cursor: %v", err)
+		t.Fatalf("preflight: %v", err)
+	}
+	if repo.cursor.Stream == ix.stream {
+		t.Fatal("adopted a cursor belonging to a different contract set")
 	}
 }
 

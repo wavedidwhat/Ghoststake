@@ -29,6 +29,9 @@ type fakeRepo struct {
 	// replayedFrom records every block a decoder-version replay rewound to,
 	// so a test can assert it happened once and not on every boot.
 	replayedFrom []uint64
+	// adopted tracks stream names already claimed, so a second adoption into
+	// the same name is refused the way the store's `NOT EXISTS` refuses it.
+	adopted map[string]bool
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{seen: map[string]bool{}} }
@@ -62,8 +65,12 @@ func provenanceKey(p ledger.Provenance) string {
 	return fmt.Sprintf("%d/%s/%d/%d", p.ChainID, p.TxHash, p.LogIndex, p.RecordIndex)
 }
 
-func (f *fakeRepo) LoadCursor(_ context.Context, _ string) (ledger.Cursor, bool, error) {
-	if f.cursor == nil {
+// Stream-aware since GHO-51. The fake ignored the name and returned its one
+// cursor for any stream, which cannot express the thing that now matters: a
+// cursor filed under a *different* stream, which is exactly what a pre-GHO-51
+// deployment has.
+func (f *fakeRepo) LoadCursor(_ context.Context, stream string) (ledger.Cursor, bool, error) {
+	if f.cursor == nil || (f.cursor.Stream != "" && f.cursor.Stream != stream) {
 		return ledger.Cursor{}, false, nil
 	}
 	return *f.cursor, true, nil
@@ -106,6 +113,51 @@ func (f *fakeRepo) RecordsInRange(_ context.Context, chainID int64, from, to uin
 	}
 	for _, e := range f.rounds {
 		if e.ChainID == chainID && e.BlockNumber >= from && e.BlockNumber <= to {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// AdoptCursor mirrors the store's rename, refusal included: a cursor already
+// under the new name is this deployment's real position, and clobbering it
+// with an older deployment's would move the stream to a block it never read.
+func (f *fakeRepo) AdoptCursor(_ context.Context, from, to string) (bool, error) {
+	if f.cursor == nil || f.cursor.Stream != from {
+		return false, nil
+	}
+	if f.adopted[to] {
+		return false, nil
+	}
+	if f.adopted == nil {
+		f.adopted = map[string]bool{}
+	}
+	f.adopted[to] = true
+	f.cursor.Stream = to
+	return true, nil
+}
+
+// UnattributedEntries and AttributeEntries back the preflight repair for rows
+// indexed before the contract address existed. The fake rewrites its own
+// slice, so the test exercises the decision rather than the SQL.
+func (f *fakeRepo) UnattributedEntries(_ context.Context, chainID int64) (int64, error) {
+	var n int64
+	for _, e := range f.entries {
+		if e.ChainID == chainID && e.ContractAddress == "" {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeRepo) AttributeEntries(
+	_ context.Context, chainID int64, contract, address string,
+) (int64, error) {
+	var n int64
+	for i := range f.entries {
+		if f.entries[i].ChainID == chainID && f.entries[i].Contract == contract &&
+			f.entries[i].ContractAddress == "" {
+			f.entries[i].ContractAddress = address
 			n++
 		}
 	}
@@ -452,6 +504,13 @@ func (f *failingRepo) AttributeRoundEvents(context.Context, int64, string) (int6
 	return 0, nil
 }
 func (f *failingRepo) ReplayFrom(context.Context, string, uint64) error { return nil }
+func (f *failingRepo) AdoptCursor(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (f *failingRepo) UnattributedEntries(context.Context, int64) (int64, error) { return 0, nil }
+func (f *failingRepo) AttributeEntries(context.Context, int64, string, string) (int64, error) {
+	return 0, nil
+}
 func (f *failingRepo) RecordsInRange(context.Context, int64, uint64, uint64) (int64, error) {
 	return 0, nil
 }
@@ -651,5 +710,57 @@ func TestPrunedRPCGuardProbesTheOldestWindowInBatchSizedRequests(t *testing.T) {
 			t.Fatalf("asked for %d blocks in one eth_getLogs, over the %d batch size: %v",
 				width, batch, chain.ranges)
 		}
+	}
+}
+
+// The indexer writes its cursor under a stream name derived from the contract
+// fingerprint, and the API reads that name back to report how far the index
+// has got. They are two derivations of the same value in two packages, and if
+// they ever disagree the API reports "never indexed" forever against a
+// perfectly healthy indexer — a bug that presents as an outage and has no
+// error anywhere to find it by.
+//
+// So they are pinned against each other here rather than trusted to stay in
+// step.
+func TestTheAPIDerivesTheSameStreamNameAsTheIndexer(t *testing.T) {
+	// Two markets, via the helper that actually honours the list —
+	// newTestIndexer hardcodes a single market and ignores cfg, which is what
+	// this test tripped over first.
+	markets := []string{marketAddr, "0x00000000000000000000000000000000000000b0"}
+	ix := newTestIndexerWithMarkets(t, newFakeChain(10), newFakeRepo(),
+		Config{StartBlock: 1, Confirmations: 1}, markets)
+
+	// What the API computes, from the raw configuration strings it holds.
+	fromConfig := ledger.StreamName(
+		ix.cfg.ChainID,
+		ledger.DeploymentOf(vaultAddr, poolAddr, markets),
+	)
+
+	if fromConfig != ix.stream {
+		t.Fatalf("the API would look for %q while the indexer writes %q", fromConfig, ix.stream)
+	}
+}
+
+// Addresses reach the two sides in whatever form somebody typed into an env
+// file. A fingerprint that depended on the casing would make an operator's
+// capitalisation decide whether the API can find the cursor.
+func TestTheDeploymentIdentityIgnoresHowAddressesAreSpelled(t *testing.T) {
+	lower := ledger.DeploymentOf(
+		strings.ToLower(vaultAddr), strings.ToLower(poolAddr),
+		[]string{strings.ToLower(marketAddr)},
+	)
+	upper := ledger.DeploymentOf(
+		"0x"+strings.ToUpper(vaultAddr[2:]), "0x"+strings.ToUpper(poolAddr[2:]),
+		[]string{"0x" + strings.ToUpper(marketAddr[2:])},
+	)
+	if lower != upper {
+		t.Fatalf("casing changed the deployment identity: %s vs %s", lower, upper)
+	}
+
+	// And a genuinely different set is genuinely different, or the whole
+	// mechanism is a constant.
+	other := ledger.DeploymentOf(vaultAddr, poolAddr, []string{"0x00000000000000000000000000000000000000ff"})
+	if other == lower {
+		t.Fatal("two different contract sets share a deployment identity")
 	}
 }
