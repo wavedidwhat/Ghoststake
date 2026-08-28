@@ -19,19 +19,20 @@ services:
         NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
         NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ghoststake.dev.wavedidwhat.com}
-        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0x4697ce4c2436750b89543405527c10bfaba8f8d0}
-        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0xd5655ac906e54b2fe5175126aee0c96dbb5f1dc4}
-        NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0xd95fc2f28a74087b81d6c915c639c864f3d55c63}
-        NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0xd811bb51427e7d6f399dcc0587707ddd588a7735}
-        # No default: until the demo market (GHO-29) is deployed to this
-        # network, the app should show one market rather than a second one
-        # pointing at an address that holds no contract.
-        NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-}
-        NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-}
+        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0x0ea31e490f9a9a21d2410add76668e4c2c24ba0e}
+        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0x1b851497a6f17af723eb93bdeebe4a3d1a19a6f6}
+        NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0x4650029f444997f76f4c6e0e0159865582da6ab5}
+        NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0x09f2ac4b5d14c27a13d5d6b35405baaf4afc8730}
+        # The demo market (GHO-29) is deployed on this network now, so these
+        # carry defaults like the rest. It runs on an operator-driven feed, so
+        # a round can be settled on cue for a demo rather than waiting on
+        # Chainlink's heartbeat.
+        NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-0x529f47c019a9fba9dac816b4a53c196800b45305}
+        NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-0x873a35843f0b9f156ebc957ebcbf1abe97a2caaa}
         # Set this and the four addresses above stop being read: the market
         # list comes from the chain, and adding a market is a transaction
         # rather than a rebuild of this image (GHO-34).
-        NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-}
+        NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-0xec64d918d12fb0ce59c26e72b1a234a18e983c68}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.
