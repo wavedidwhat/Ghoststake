@@ -135,6 +135,10 @@ func (s *Server) routes() http.Handler {
 			r.Get("/positions/{address}", s.handlePositions)
 			r.Get("/activity/{address}", s.handleActivity)
 			r.Get("/health/{address}", s.handleHealth)
+			// Before the /{address} route above in intent though not in
+			// registration: chi matches literal segments ahead of wildcards,
+			// so "at-risk" cannot be swallowed as an address.
+			r.Get("/positions/at-risk", s.handleAtRisk)
 		})
 
 		// The websocket is outside the rate limiter: it is one request that

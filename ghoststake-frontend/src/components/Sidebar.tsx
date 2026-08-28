@@ -52,7 +52,15 @@ const NAV = [
   // Last, and separated by what it is rather than by a permission check: the
   // page is reachable by anyone because half of what it does is
   // permissionless, and the contracts say so louder than a hidden link would.
+  //
+  // Liquidate belongs beside it for the same reason and is fully
+  // permissionless: anyone may close an underwater position and take the
+  // bonus, and that is what keeps the protocol solvent. It was the fifth
+  // participant the system audit found unserved (GHO-42) — the mechanism had
+  // been built and fuzz-tested since GHO-9, and nobody could reach it because
+  // every view in the app was per-address.
   { section: "Run it" },
+  { href: "/liquidate", label: "Liquidate", ready: true, note: "close bad positions" },
   { href: "/operator", label: "Operator", ready: true, note: "run rounds" },
 ] as const;
 

@@ -300,3 +300,52 @@ func (s *Store) CountEntries(ctx context.Context, chainID int64) (int64, error) 
 	}
 	return n, nil
 }
+
+// BorrowersByExposure lists every account carrying debt, largest first.
+//
+// The query GHO-42 needed and nothing had ever asked. `liquidate` is
+// permissionless — that is what keeps the protocol solvent — but every view in
+// the system was per-address, so a liquidator had to already know whose
+// position was underwater before they could act on it. The incentive existed,
+// the mechanism existed, and the discovery step did not.
+//
+// It comes from the ledger rather than the chain because the chain cannot
+// answer it: there is no borrower enumeration on the pool, and reconstructing
+// one means reading every Borrowed and Repaid log, which is the cost the
+// indexer was built to remove.
+//
+// Scaled debt, not current debt. The scaled figure is what the ledger stores
+// and is invariant under accrual, so ordering by it orders by exposure exactly
+// — current debt is that number times an index shared by every borrower, and
+// multiplying every row by the same constant does not reorder them.
+//
+// The ordering is what makes `limit` defensible rather than arbitrary. A cap
+// has to fall somewhere, and it should fall on the smallest positions: a
+// borrower with dust is not the one whose default matters, and a liquidator
+// reading a truncated list should be missing the trivia rather than the risk.
+func (s *Store) BorrowersByExposure(ctx context.Context, chainID int64, limit int) ([]string, error) {
+	const q = `
+		SELECT account
+		FROM ledger_entries
+		WHERE chain_id = $1 AND ledger = $2 AND kind = 'balance'
+		GROUP BY account
+		HAVING SUM(delta) > 0
+		ORDER BY SUM(delta) DESC
+		LIMIT $3`
+
+	rows, err := s.pool.Query(ctx, q, chainID, ledger.DebtScaled, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list borrowers: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var account string
+		if err := rows.Scan(&account); err != nil {
+			return nil, fmt.Errorf("scan borrower: %w", err)
+		}
+		out = append(out, account)
+	}
+	return out, rows.Err()
+}

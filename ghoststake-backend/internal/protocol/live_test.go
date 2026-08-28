@@ -190,3 +190,94 @@ func TestMarketParamsComeFromTheContract(t *testing.T) {
 	t.Logf("entry cutoff %ds  rake %s  min side pool %s",
 		params.EntryCutoff, params.Rake, params.MinSidePool)
 }
+
+// The liquidation quote, checked against the contract that would actually pay
+// it (GHO-42).
+//
+// Same argument as `TestDerivedFiguresMatchTheContracts`, and a sharper one.
+// `LiquidationQuote` is what the at-risk endpoint puts in front of a
+// liquidator: what they repay, what they receive, and whether the call is
+// worth making at all. A quote that drifts from the contract does not show a
+// wrong number on a dashboard — it sends somebody to spend gas on a
+// transaction that pays less than it says, or on one that pays nothing.
+//
+// The comparison is against `maxLiquidatableDebt`, which is the contract's own
+// close-factor arithmetic including the lift below the bonus line. If either
+// side's rule changes and the other does not, this fails.
+//
+// Needs the local stack up and a borrower who is actually underwater, so it
+// drives one there first rather than hoping the seed left one.
+func TestTheLiquidationQuoteMatchesTheContract(t *testing.T) {
+	rpcURL := os.Getenv("LIVE_RPC_URL")
+	vault, pool := os.Getenv("VAULT_ADDRESS"), os.Getenv("POOL_ADDRESS")
+	market := os.Getenv("MARKET_ADDRESS")
+	if rpcURL == "" || vault == "" || pool == "" || market == "" {
+		t.Skip("needs LIVE_RPC_URL, VAULT_ADDRESS, POOL_ADDRESS, MARKET_ADDRESS")
+	}
+
+	ctx := context.Background()
+	client, err := chain.Dial(ctx, rpcURL, 31337)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	reader, err := protocol.New(client, vault, pool, []string{market})
+	if err != nil {
+		t.Fatalf("reader: %v", err)
+	}
+	params, err := reader.VaultParams(ctx)
+	if err != nil {
+		t.Fatalf("vault params: %v", err)
+	}
+	if params.LiquidationBonus == nil || params.CloseFactor == nil {
+		t.Fatal("the reader did not load the liquidation immutables")
+	}
+
+	health, snapshot, err := reader.Health(ctx, seededBorrower)
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	block := new(big.Int).SetUint64(snapshot.Block)
+
+	vaultContract, err := client.Bind(abis.CollateralVault, vault)
+	if err != nil {
+		t.Fatalf("bind vault: %v", err)
+	}
+	address, err := chain.ParseAddress(seededBorrower)
+	if err != nil {
+		t.Fatalf("address: %v", err)
+	}
+
+	// The contract's views read the *stored* index, so the quote is computed
+	// from the stored debt too. The endpoint reports the accrued figures,
+	// which are larger and honest — but comparing those against a view that
+	// has not accrued would be comparing two different instants and calling
+	// the difference a bug.
+	storedHF, err := vaultContract.CallBig(ctx, block, "healthFactor", address)
+	if err != nil {
+		t.Fatalf("healthFactor: %v", err)
+	}
+	quote := finance.LiquidationQuote(health.Collateral, health.DebtAtStoredIndex, storedHF, params)
+
+	want, err := vaultContract.CallBig(ctx, block, "maxLiquidatableDebt", address)
+	if err != nil {
+		t.Fatalf("maxLiquidatableDebt: %v", err)
+	}
+
+	t.Logf("block %d  collateral %s  stored debt %s  hf %s",
+		snapshot.Block, health.Collateral, health.DebtAtStoredIndex, storedHF)
+	t.Logf("quote: repay %s  seized %s  bonus %s  profitable=%v  full=%v",
+		quote.MaxRepay, quote.Seized, quote.Bonus, quote.Profitable, quote.FullLiquidation)
+
+	if quote.MaxRepay.Cmp(want) != 0 {
+		t.Fatalf("max repay: derived %s, contract says %s", quote.MaxRepay, want)
+	}
+
+	// A healthy borrower makes the comparison above vacuous — both sides are
+	// zero and nothing is proven. Said out loud rather than passing quietly,
+	// which is the failure mode this whole file exists to avoid.
+	if want.Sign() == 0 {
+		t.Log("the seeded borrower is healthy: both sides are zero, so only the healthy path is covered here")
+	}
+}

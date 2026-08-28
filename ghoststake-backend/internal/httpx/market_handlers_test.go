@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/wavedidwhat/ghoststake/internal/config"
 	"github.com/wavedidwhat/ghoststake/internal/finance"
 	"github.com/wavedidwhat/ghoststake/internal/ledger"
@@ -152,5 +154,57 @@ func TestWebsocketOriginsMatchTheCORSList(t *testing.T) {
 	// policy does not protect anyway.
 	if !s.originAllowed("") {
 		t.Fatal("a client sending no origin was rejected")
+	}
+}
+
+// `/positions/at-risk` and `/positions/{address}` share a prefix, and the
+// wildcard would swallow the literal if chi resolved them in registration
+// order. It does not — static segments win — but the two routes are declared
+// six lines apart and nothing else in the file says so, which is exactly the
+// kind of thing a later reorder breaks silently: the endpoint would start
+// answering "at-risk is not an address" instead of listing anybody.
+func TestTheAtRiskRouteIsNotSwallowedByTheAddressWildcard(t *testing.T) {
+	var s Server
+	router, ok := s.routes().(chi.Routes)
+	if !ok {
+		t.Fatal("router does not expose its routes")
+	}
+
+	rctx := chi.NewRouteContext()
+	if !router.Match(rctx, "GET", "/api/v1/positions/at-risk") {
+		t.Fatal("no route matched /api/v1/positions/at-risk")
+	}
+	if got := rctx.RoutePattern(); got != "/api/v1/positions/at-risk" {
+		t.Fatalf("matched %q instead of the literal route", got)
+	}
+
+	// And the wildcard still works for an actual address.
+	rctx = chi.NewRouteContext()
+	if !router.Match(rctx, "GET", "/api/v1/positions/0x0000000000000000000000000000000000000001") {
+		t.Fatal("the address route stopped matching")
+	}
+	if got := rctx.RoutePattern(); got != "/api/v1/positions/{address}" {
+		t.Fatalf("an address matched %q", got)
+	}
+}
+
+func TestAtRiskLimitIsClamped(t *testing.T) {
+	// The cap bounds `eth_call`s, not rows, so a caller asking for more than
+	// the maximum gets the maximum rather than an error — the same shape as
+	// the round limits.
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{"", defaultAtRiskLimit},
+		{"nonsense", defaultAtRiskLimit},
+		{"0", defaultAtRiskLimit},
+		{"-5", defaultAtRiskLimit},
+		{"10", 10},
+		{"9999", maxAtRiskLimit},
+	} {
+		if got := clampAtRiskLimit(tc.raw); got != tc.want {
+			t.Errorf("clampAtRiskLimit(%q) = %d, want %d", tc.raw, got, tc.want)
+		}
 	}
 }
