@@ -39,6 +39,11 @@ const WANTED = {
     // `voidUnsettledRound` are owner-only, and the page says which is which
     // rather than hiding the ones a visitor may call.
     "openRound", "lockRound", "resolveRound", "voidUnsettledRound", "voidUnlockedRound",
+    // The fees panel (GHO-40). The rake accrued in `protocolFees` and the only
+    // way to move it was `cast send`. `treasury` and `setTreasury` are read
+    // and written here so the destination is stated before anything is signed
+    // rather than typed into a terminal.
+    "protocolFees", "withdrawFees", "treasury", "setTreasury",
   ],
   // The testnet stand-in asset. `mint` is open by design on a disposable
   // chain, which is what lets the UI offer test tokens without a CLI.
@@ -73,6 +78,8 @@ const WANTED = {
     // writes — the supply side, which had no way into the app at all until
     // GHO-39. Every borrow drew from a pool only `Seed.s.sol` could fill.
     "supply", "withdraw",
+    // The fees panel (GHO-40).
+    "totalReserves", "withdrawReserves", "treasury", "setTreasury", "owner",
   ],
 };
 

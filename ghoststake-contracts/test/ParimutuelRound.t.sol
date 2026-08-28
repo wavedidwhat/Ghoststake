@@ -51,6 +51,12 @@ contract ParimutuelRoundTest is Test {
             IERC20(address(token)), IRoundOracle(address(oracle)), RAKE, _timing(), MIN_SIDE_POOL, owner, owner
         );
 
+        // Fees default to the owner. Pointing them at a distinct address is
+        // what makes `balanceOf(treasury)` below a real assertion rather than
+        // one the default would satisfy by accident.
+        vm.prank(owner);
+        market.setTreasury(treasury);
+
         address[3] memory users = [alice, bob, carol];
         for (uint256 i = 0; i < users.length; i++) {
             token.mint(users[i], 1_000_000 ether);
@@ -711,10 +717,10 @@ contract ParimutuelRoundTest is Test {
         assertEq(token.balanceOf(address(market)), 400 ether);
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.InsufficientFees.selector, 9 ether, 8 ether));
-        market.withdrawFees(treasury, 9 ether);
+        market.withdrawFees(9 ether);
 
         vm.prank(owner);
-        market.withdrawFees(treasury, 8 ether);
+        market.withdrawFees(8 ether);
         assertEq(token.balanceOf(treasury), 8 ether);
         assertEq(market.protocolFees(), 0);
     }
@@ -724,7 +730,7 @@ contract ParimutuelRoundTest is Test {
         _resolveAt(roundId, START_PRICE + 1);
 
         vm.prank(owner);
-        market.withdrawFees(treasury, 8 ether);
+        market.withdrawFees(8 ether);
 
         market.claim(roundId, alice);
         market.claim(roundId, bob);
@@ -750,7 +756,7 @@ contract ParimutuelRoundTest is Test {
         market.claim(roundId, bob);
         uint256 fees = market.protocolFees();
         vm.prank(owner);
-        market.withdrawFees(treasury, fees);
+        market.withdrawFees(fees);
 
         // Dust is bounded by one wei per claimant.
         assertLe(token.balanceOf(address(market)), 2);
