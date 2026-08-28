@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Figure } from "./Figure";
 import { formatAmount, formatApr, formatHealthFactor, healthBand } from "@/lib/format";
+import type { StakeStanding } from "@/lib/stake";
 
 /**
  * The product, as one object.
@@ -19,6 +20,7 @@ import { formatAmount, formatApr, formatHealthFactor, healthBand } from "@/lib/f
 export function PipelineSummary({
   staked,
   yieldRate,
+  standing,
   accrued,
   borrowed,
   healthFactor,
@@ -30,6 +32,9 @@ export function PipelineSummary({
 }: {
   staked: bigint | undefined;
   yieldRate: bigint | undefined;
+  /** Ledger against redeemable. See lib/stake.ts. */
+  standing: StakeStanding | undefined;
+  /** `accruedYield` — pending since the last checkpoint. */
   accrued: bigint | undefined;
   borrowed: bigint | undefined;
   healthFactor: bigint | undefined;
@@ -68,11 +73,13 @@ export function PipelineSummary({
           value={staked}
           decimals={decimals}
           symbol={symbol}
-          caption={
-            accrued !== undefined && accrued > 0n
-              ? `+${formatAmount(accrued, decimals, 4)} earned`
-              : "earning, and still yours"
-          }
+          // `staked` is `collateralValue`, which is already capped at what the
+          // shares can redeem. Captioning it "+11.5596 earned" therefore said
+          // two wrong things at once: that the yield was money, and that it
+          // was money on top of the figure above — when the figure above is
+          // the whole of what can be withdrawn. See GHO-55.
+          caption={stakeCaption(standing, accrued, decimals)}
+          captionTone={standing && !standing.backed ? "warning" : undefined}
           href="/stake"
         />
 
@@ -105,6 +112,26 @@ export function PipelineSummary({
         />
       </div>
 
+      {/* Said once, properly, where people actually read — the health panel's
+          "capped at redeemable" was already honest and is further down the
+          page. The rate is named here too: 11.71 moving at four decimals
+          reads as volatile until you know it is 5% APR on 21,000, which is
+          2.88 a day. */}
+      {standing && !standing.backed && (
+        <p className="mt-5 rounded-xl border border-warning/30 bg-warning-soft/40 px-4 py-3 text-xs leading-relaxed text-ink-muted">
+          Your ledger credits{" "}
+          <span className="tabular text-ink">
+            {formatAmount(standing.unbacked, decimals, 4)} {symbol}
+          </span>{" "}
+          of yield{yieldRate !== undefined && <> at {formatApr(yieldRate)}</>}. Nothing funds it
+          yet, so it is not withdrawable and does not count as collateral — the{" "}
+          <span className="tabular text-ink">
+            {formatAmount(standing.redeemable, decimals, 2)} {symbol}
+          </span>{" "}
+          above is what the vault can actually redeem today.
+        </p>
+      )}
+
       {/* The consequence, stated plainly. A position funded by debt does not
           become someone else's problem when it loses. */}
       {hasDebt && (
@@ -136,12 +163,39 @@ export function PipelineSummary({
   );
 }
 
+/**
+ * What to say under the staked figure.
+ *
+ * Three states, and the middle one is the whole issue: a ledger crediting
+ * yield that no assets stand behind is not "earned", and it is not "not yet"
+ * either — nothing is scheduled to fund it. It is credited, and that is the
+ * word for it.
+ */
+function stakeCaption(
+  standing: StakeStanding | undefined,
+  accrued: bigint | undefined,
+  decimals: number,
+): string {
+  if (standing === undefined) return "earning, and still yours";
+  if (!standing.backed) {
+    return `+${formatAmount(standing.unbacked, decimals, 4)} credited, not redeemable`;
+  }
+  // Only reached once the ledger is covered, which is the one situation where
+  // "earned" is the right word — the shares can redeem all of it. That is not
+  // true of any deployment so far, and this branch is written for the vault
+  // being funded rather than pretending it already is.
+  return accrued !== undefined && accrued > 0n
+    ? `+${formatAmount(accrued, decimals, 4)} earned`
+    : "earning, and still yours";
+}
+
 function Step({
   label,
   value,
   decimals,
   symbol,
   caption,
+  captionTone,
   href,
   muted,
 }: {
@@ -150,6 +204,7 @@ function Step({
   decimals: number;
   symbol: string;
   caption: string;
+  captionTone?: "warning";
   href: string;
   muted?: boolean;
 }) {
@@ -169,7 +224,9 @@ function Step({
           tone={muted ? "muted" : "default"}
         />
       )}
-      <span className="text-xs text-ink-faint">{caption}</span>
+      <span className={`text-xs ${captionTone === "warning" ? "text-warning" : "text-ink-faint"}`}>
+        {caption}
+      </span>
     </Link>
   );
 }
