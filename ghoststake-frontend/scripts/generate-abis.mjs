@@ -22,6 +22,11 @@ const WANTED = {
     // writes
     "deposit", "withdraw", "redeem", "borrow", "repay",
     "approveBorrowDelegate", "borrowAllowance",
+    // The liquidator's surface (GHO-42). `maxLiquidatableDebt` is read
+    // straight from the contract rather than trusted from the API: the API's
+    // figure is a quote computed at its own block, and this is the number the
+    // transaction will actually be held to.
+    "maxLiquidatableDebt", "liquidate", "writeOffBadDebt",
   ],
   ParimutuelRound: [
     "rounds", "roundCount", "phaseOf", "claimableOf", "stakeOf", "claimed",
