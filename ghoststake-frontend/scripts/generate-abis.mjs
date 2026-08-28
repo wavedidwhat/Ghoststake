@@ -19,6 +19,11 @@ const WANTED = {
     "collateralValue", "totalLedgerValue", "accruedYield",
     "lienOf", "healthFactor", "maxBorrowable", "isLiquidatable",
     "liquidationThreshold", "maxLTV", "yieldRatePerSecond", "liquidationBonus", "closeFactor",
+    // The terms panel (GHO-30). `fullLiquidationThreshold` is derived on
+    // chain from the threshold and the bonus rather than configured, so it is
+    // read rather than recomputed here — the whole point of deriving it was
+    // that two copies of the number can drift.
+    "fullLiquidationThreshold",
     // writes
     "deposit", "withdraw", "redeem", "borrow", "repay",
     "approveBorrowDelegate", "borrowAllowance",

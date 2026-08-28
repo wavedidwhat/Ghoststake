@@ -219,6 +219,19 @@ export const collateralVaultAbi = [
   },
   {
     "type": "function",
+    "name": "fullLiquidationThreshold",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "healthFactor",
     "inputs": [
       {
