@@ -281,3 +281,51 @@ func TestTheLiquidationQuoteMatchesTheContract(t *testing.T) {
 		t.Log("the seeded borrower is healthy: both sides are zero, so only the healthy path is covered here")
 	}
 }
+
+// A market this process does not index must still be describable (GHO-53).
+//
+// GHO-51 made round history span deployments on purpose, so `/rounds` and
+// `/positions` return rounds from contracts the running process has never
+// watched. `MarketParamsFor` used to reject those outright, which turned both
+// endpoints into a 500 the moment the contracts were redeployed — and it did,
+// on the live deployment, within minutes of pointing the API at new addresses.
+//
+// The reader is constructed here with only ONE market and then asked about the
+// other, which is exactly the shape of the failure.
+func TestMarketParamsWorkForAMarketThisProcessDoesNotIndex(t *testing.T) {
+	rpcURL := os.Getenv("LIVE_RPC_URL")
+	vault, pool := os.Getenv("VAULT_ADDRESS"), os.Getenv("POOL_ADDRESS")
+	market, other := os.Getenv("MARKET_ADDRESS"), os.Getenv("OTHER_MARKET_ADDRESS")
+	if rpcURL == "" || vault == "" || pool == "" || market == "" || other == "" {
+		t.Skip("needs LIVE_RPC_URL, VAULT_ADDRESS, POOL_ADDRESS, MARKET_ADDRESS, OTHER_MARKET_ADDRESS")
+	}
+
+	ctx := context.Background()
+	client, err := chain.Dial(ctx, rpcURL, 11155111)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	// Deliberately configured with one market only.
+	reader, err := protocol.New(client, vault, pool, []string{market})
+	if err != nil {
+		t.Fatalf("reader: %v", err)
+	}
+
+	params, err := reader.MarketParamsFor(ctx, other)
+	if err != nil {
+		t.Fatalf("an unindexed market could not be described: %v", err)
+	}
+	if params.Rake == nil || params.MinSidePool == nil || params.EntryCutoff == 0 {
+		t.Fatalf("params look unread: %+v", params)
+	}
+	t.Logf("unindexed market %s -> rake %s, cutoff %ds, minSide %s",
+		other, params.Rake, params.EntryCutoff, params.MinSidePool)
+
+	// And the configured one still works, so the on-demand path has not
+	// displaced the constructed map.
+	if _, err := reader.MarketParamsFor(ctx, market); err != nil {
+		t.Fatalf("the configured market broke: %v", err)
+	}
+}
