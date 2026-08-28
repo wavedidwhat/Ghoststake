@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"os"
 	"testing"
@@ -12,6 +13,17 @@ import (
 )
 
 const testChainID int64 = 421614
+
+// Two deployments' worth of addresses. Checksummed, because that is the form
+// the indexer writes and the queries compare against — a lowercased spelling
+// matches nothing while looking entirely correct.
+var (
+	vaultA = common.HexToAddress("0x000000000000000000000000000000000000000a").Hex()
+	vaultB = common.HexToAddress("0x000000000000000000000000000000000000000b").Hex()
+
+	deploymentA = []string{vaultA}
+	deploymentB = []string{vaultB}
+)
 
 // newTestStore connects to TEST_DATABASE_URL and migrates.
 //
@@ -88,7 +100,7 @@ func entryOn(chainID int64, account, book string, delta int64, block uint64, tx 
 			ChainID: chainID, BlockNumber: block, BlockHash: "0xblock",
 			BlockTime: time.Unix(1700000000, 0).UTC(),
 			TxHash:    tx, LogIndex: logIndex, RecordIndex: entryIndex,
-			Contract: "CollateralVault", EventName: "Transfer",
+			Contract: "CollateralVault", ContractAddress: vaultA, EventName: "Transfer",
 		},
 		Kind: kind, Account: account, Ledger: book, Delta: big.NewInt(delta),
 	}
@@ -127,7 +139,7 @@ func TestBalanceIsDerivedFromEntries(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	got, err := st.BalanceOf(ctx, testChainID, acct, "shares")
+	got, err := st.BalanceOf(ctx, testChainID, acct, "shares", deploymentA)
 	if err != nil {
 		t.Fatalf("balance: %v", err)
 	}
@@ -154,7 +166,7 @@ func TestReplayingARangeIsANoOp(t *testing.T) {
 		}
 	}
 
-	got, err := st.BalanceOf(ctx, testChainID, acct, "shares")
+	got, err := st.BalanceOf(ctx, testChainID, acct, "shares", deploymentA)
 	if err != nil {
 		t.Fatalf("balance: %v", err)
 	}
@@ -174,19 +186,19 @@ func TestBothLegsOfOneLogSurvive(t *testing.T) {
 	err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
 		{Provenance: ledger.Provenance{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb",
 			BlockTime: time.Now().UTC(), TxHash: "0xleg", LogIndex: 7, RecordIndex: 0,
-			Contract: "CollateralVault", EventName: "Transfer"},
+			Contract: "CollateralVault", ContractAddress: vaultA, EventName: "Transfer"},
 			Kind: "balance", Account: from, Ledger: "shares", Delta: big.NewInt(-100)},
 		{Provenance: ledger.Provenance{ChainID: testChainID, BlockNumber: 30, BlockHash: "0xb",
 			BlockTime: time.Now().UTC(), TxHash: "0xleg", LogIndex: 7, RecordIndex: 1,
-			Contract: "CollateralVault", EventName: "Transfer"},
+			Contract: "CollateralVault", ContractAddress: vaultA, EventName: "Transfer"},
 			Kind: "balance", Account: to, Ledger: "shares", Delta: big.NewInt(100)},
 	}}, cursorAt(30, "0xh30"))
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	debit, _ := st.BalanceOf(ctx, testChainID, from, "shares")
-	credit, _ := st.BalanceOf(ctx, testChainID, to, "shares")
+	debit, _ := st.BalanceOf(ctx, testChainID, from, "shares", deploymentA)
+	credit, _ := st.BalanceOf(ctx, testChainID, to, "shares", deploymentA)
 	if debit.Cmp(big.NewInt(-100)) != 0 || credit.Cmp(big.NewInt(100)) != 0 {
 		t.Fatalf("a leg was lost: debit=%s credit=%s", debit, credit)
 	}
@@ -205,7 +217,7 @@ func TestFlowEntriesNeverEnterABalance(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	balances, err := st.BalancesOf(ctx, testChainID, acct)
+	balances, err := st.BalancesOf(ctx, testChainID, acct, deploymentA)
 	if err != nil {
 		t.Fatalf("balances: %v", err)
 	}
@@ -243,7 +255,7 @@ func TestRollbackRemovesEntriesAndRewindsTheCursor(t *testing.T) {
 		t.Fatalf("want 2 deleted, got %d", deleted)
 	}
 
-	got, _ := st.BalanceOf(ctx, chainID, acct, "shares")
+	got, _ := st.BalanceOf(ctx, chainID, acct, "shares", deploymentA)
 	if got.Cmp(big.NewInt(100)) != 0 {
 		t.Fatalf("want 100 after rollback, got %s", got)
 	}
@@ -276,7 +288,7 @@ func TestFullWidthUint256SurvivesTheRoundTrip(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	got, err := st.BalanceOf(ctx, testChainID, acct, "shares")
+	got, err := st.BalanceOf(ctx, testChainID, acct, "shares", deploymentA)
 	if err != nil {
 		t.Fatalf("balance: %v", err)
 	}
@@ -394,7 +406,7 @@ func TestBorrowersByExposureListsDebtorsLargestFirst(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	got, err := st.BorrowersByExposure(ctx, chainID, 10)
+	got, err := st.BorrowersByExposure(ctx, chainID, deploymentA, 10)
 	if err != nil {
 		t.Fatalf("borrowers: %v", err)
 	}
@@ -408,7 +420,7 @@ func TestBorrowersByExposureListsDebtorsLargestFirst(t *testing.T) {
 	}
 
 	// Another chain's borrowers are not ours.
-	other, err := st.BorrowersByExposure(ctx, chainID+1, 10)
+	other, err := st.BorrowersByExposure(ctx, chainID+1, deploymentA, 10)
 	if err != nil {
 		t.Fatalf("borrowers on another chain: %v", err)
 	}
@@ -434,11 +446,177 @@ func TestBorrowersByExposureDropsTheSmallestFirst(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	got, err := st.BorrowersByExposure(ctx, chainID, 2)
+	got, err := st.BorrowersByExposure(ctx, chainID, deploymentA, 2)
 	if err != nil {
 		t.Fatalf("borrowers: %v", err)
 	}
 	if len(got) != 2 || got[0] != big || got[1] != mid {
 		t.Fatalf("want the two largest, got %v", got)
+	}
+}
+
+// entryFrom is entryOn with a chosen contract, so a test can put two
+// deployments' rows in the same table.
+func entryFrom(address string, chainID int64, account, book string, delta int64, block uint64, tx string) ledger.Entry {
+	e := entryOn(chainID, account, book, delta, block, tx, 0, 0)
+	e.ContractAddress = address
+	return e
+}
+
+// The failure GHO-51 exists to prevent, asserted directly.
+//
+// Before deployments could be told apart, every balance was summed by
+// (chain_id, account, ledger) — so a redeployment would have added an old
+// vault's shares to a new vault's and an old pool's debt to a new pool's. One
+// number, no error, and wrong in the direction that makes an insolvent
+// position look healthy.
+//
+// This is the same shape GHO-43 found one layer down, where round ids restart
+// at 1 in every market and a table keyed on the id alone folded two markets'
+// round 7 into one. The answer is the same: identity is the real thing, not a
+// label.
+func TestBalancesNeverSumAcrossDeployments(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	acct := account(t, "")
+
+	// The same account, holding shares in two different vaults.
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
+		entryFrom(vaultA, chainID, acct, ledger.Shares, 100, 10, "0xdepA"),
+		entryFrom(vaultB, chainID, acct, ledger.Shares, 900, 11, "0xdepB"),
+	}}, cursorOn(t, chainID, 11)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	a, err := st.BalanceOf(ctx, chainID, acct, ledger.Shares, deploymentA)
+	if err != nil {
+		t.Fatalf("balance A: %v", err)
+	}
+	b, err := st.BalanceOf(ctx, chainID, acct, ledger.Shares, deploymentB)
+	if err != nil {
+		t.Fatalf("balance B: %v", err)
+	}
+
+	if a.Int64() != 100 {
+		t.Fatalf("deployment A sees %s shares, want 100 — it has picked up B's rows", a)
+	}
+	if b.Int64() != 900 {
+		t.Fatalf("deployment B sees %s shares, want 900 — it has picked up A's rows", b)
+	}
+	// The whole point: 1000 is the number the old query returned, and it
+	// describes neither deployment.
+	if a.Int64()+b.Int64() != 1000 {
+		t.Fatalf("setup is wrong: the two deployments should hold 1000 between them")
+	}
+
+	// BalancesOf takes the same scope, and would otherwise be the way the
+	// merge leaked back in through a different door.
+	books, err := st.BalancesOf(ctx, chainID, acct, deploymentA)
+	if err != nil {
+		t.Fatalf("balances A: %v", err)
+	}
+	if got := books[ledger.Shares]; got == nil || got.Int64() != 100 {
+		t.Fatalf("BalancesOf disagrees with BalanceOf: %v", got)
+	}
+}
+
+// The live path. A borrower on the previous deployment must not appear in this
+// one's at-risk list: their debt is owed to a pool this deployment does not
+// lend from, and liquidating them here is not a transaction that exists.
+func TestBorrowersAreScopedToTheirDeployment(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	oldBorrower := account(t, "old")
+	newBorrower := account(t, "new")
+
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
+		entryFrom(vaultA, chainID, oldBorrower, ledger.DebtScaled, 500, 10, "0xoldDebt"),
+		entryFrom(vaultB, chainID, newBorrower, ledger.DebtScaled, 700, 11, "0xnewDebt"),
+	}}, cursorOn(t, chainID, 11)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	got, err := st.BorrowersByExposure(ctx, chainID, deploymentB, 10)
+	if err != nil {
+		t.Fatalf("borrowers: %v", err)
+	}
+	if len(got) != 1 || got[0] != newBorrower {
+		t.Fatalf("want only this deployment's borrower, got %v", got)
+	}
+}
+
+// Rows written before migration 0009 carry no address, and are stamped at
+// preflight. Until then they belong to no deployment — which has to mean
+// "invisible", not "everyone's", because adopting them on a guess is how the
+// merge this whole change prevents would come back.
+func TestUnattributedRowsBelongToNobody(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	acct := account(t, "")
+
+	orphan := entryOn(chainID, acct, ledger.Shares, 100, 10, "0xorphan", 0, 0)
+	orphan.ContractAddress = "" // as migration 0009 leaves them
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{orphan}},
+		cursorOn(t, chainID, 10)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	got, err := st.BalanceOf(ctx, chainID, acct, ledger.Shares, deploymentA)
+	if err != nil {
+		t.Fatalf("balance: %v", err)
+	}
+	if got.Sign() != 0 {
+		t.Fatalf("an unattributed row was counted into a deployment: %s", got)
+	}
+
+	// And the preflight repair is what makes it visible again.
+	n, err := st.UnattributedEntries(ctx, chainID)
+	if err != nil || n != 1 {
+		t.Fatalf("unattributed count %d (err %v), want 1", n, err)
+	}
+	if _, err := st.AttributeEntries(ctx, chainID, "CollateralVault", vaultA); err != nil {
+		t.Fatalf("attribute: %v", err)
+	}
+	got, _ = st.BalanceOf(ctx, chainID, acct, ledger.Shares, deploymentA)
+	if got.Int64() != 100 {
+		t.Fatalf("attribution did not bring the row back: %s", got)
+	}
+}
+
+// A rename that would land on an occupied name is refused, because the row
+// already there is this deployment's real position and an older deployment's
+// would move it to a block it never read.
+func TestAdoptCursorRefusesToClobber(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	from, to := t.Name()+":legacy", t.Name()+":current"
+
+	seed := func(stream string, block uint64) {
+		c := cursorOn(t, chainID, block)
+		c.Stream = stream
+		if err := st.Append(ctx, ledger.Batch{}, c); err != nil {
+			t.Fatalf("seed %s: %v", stream, err)
+		}
+	}
+	seed(from, 50)
+	seed(to, 900)
+
+	adopted, err := st.AdoptCursor(ctx, from, to)
+	if err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+	if adopted {
+		t.Fatal("adopted over an occupied stream")
+	}
+	cursor, found, err := st.LoadCursor(ctx, to)
+	if err != nil || !found {
+		t.Fatalf("cursor: %v found=%v", err, found)
+	}
+	if cursor.LastBlock != 900 {
+		t.Fatalf("the occupying cursor moved to %d, want 900", cursor.LastBlock)
 	}
 }

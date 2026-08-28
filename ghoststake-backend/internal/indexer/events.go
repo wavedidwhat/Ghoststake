@@ -80,7 +80,13 @@ func (c contractSpec) decodeLog(chainID int64, log types.Log, blockTime time.Tim
 		TxHash:      log.TxHash.Hex(),
 		LogIndex:    log.Index,
 		Contract:    c.name,
-		EventName:   event.Name,
+		// Which deployment's contract, taken from the log rather than from
+		// the spec (GHO-51). They are the same address — the filter is by
+		// address — and using the log's is what makes the row's provenance
+		// self-consistent: it says where it came from, not where we believe
+		// it came from.
+		ContractAddress: log.Address.Hex(),
+		EventName:       event.Name,
 	}
 	for i := range batch.Entries {
 		batch.Entries[i].Provenance = stamp

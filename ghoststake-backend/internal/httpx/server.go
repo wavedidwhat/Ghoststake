@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -30,6 +31,11 @@ type Server struct {
 	tokens *auth.TokenIssuer
 	http   *http.Server
 
+	// deployment identifies which contracts this process serves (GHO-51).
+	// Computed once at construction: every balance read has to be scoped to
+	// it, and recomputing per request is a chance for two requests to disagree
+	// about which deployment they are describing.
+	deployment []string
 	// reader is nil when the contract addresses are not configured. The
 	// endpoints that need contract state say so rather than guessing.
 	reader *protocol.Reader
@@ -37,6 +43,25 @@ type Server struct {
 	// nothing to push.
 	broker   *live.Broker
 	upgrader websocket.Upgrader
+}
+
+// deploymentContracts is the address set every ledger read is scoped to.
+//
+// Checksummed the same way the indexer writes them, because these are compared
+// against `contract_address` with `= ANY(...)` and a differently-cased spelling
+// of the same contract matches nothing while looking entirely correct — which
+// would empty the at-risk list rather than erroring.
+func deploymentContracts(cfg config.Config) []string {
+	raw := append([]string{cfg.Indexer.VaultAddress, cfg.Indexer.PoolAddress},
+		cfg.Indexer.MarketAddresses...)
+
+	out := make([]string, 0, len(raw))
+	for _, a := range raw {
+		if a = strings.TrimSpace(a); a != "" {
+			out = append(out, common.HexToAddress(a).Hex())
+		}
+	}
+	return out
 }
 
 // Deps are the optional collaborators the API is given when they exist.
@@ -51,12 +76,13 @@ type Deps struct {
 
 func NewServer(cfg config.Config, st *store.Store, ch *chain.Client, deps Deps) *Server {
 	s := &Server{
-		cfg:    cfg,
-		store:  st,
-		chain:  ch,
-		tokens: auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL),
-		reader: deps.Reader,
-		broker: deps.Broker,
+		cfg:        cfg,
+		store:      st,
+		chain:      ch,
+		tokens:     auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL),
+		reader:     deps.Reader,
+		broker:     deps.Broker,
+		deployment: deploymentContracts(cfg),
 	}
 
 	// The websocket handshake is not subject to CORS — the browser sends no

@@ -338,7 +338,18 @@ func (s *Server) marketParams(ctx context.Context) (protocol.MarketParams, error
 // and failing the whole request because the staleness marker could not be
 // read would be the tail wagging the dog.
 func (s *Server) indexedBlock(ctx context.Context) uint64 {
-	cursor, found, err := s.store.LoadCursor(ctx, ledger.StreamName(s.cfg.ChainID))
+	// The deployment's own stream (GHO-51). Reading the chain-scoped name
+	// would find whichever deployment last wrote under it, which after a
+	// redeploy is the previous one — so the freshness marker on every
+	// response would be describing a different set of contracts than the
+	// response.
+	stream := ledger.StreamName(
+		s.cfg.ChainID,
+		ledger.DeploymentOf(
+			s.cfg.Indexer.VaultAddress, s.cfg.Indexer.PoolAddress, s.cfg.Indexer.MarketAddresses,
+		),
+	)
+	cursor, found, err := s.store.LoadCursor(ctx, stream)
 	if err != nil || !found {
 		return 0
 	}

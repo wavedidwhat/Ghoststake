@@ -204,7 +204,7 @@ func (s *Server) handleAtRisk(w http.ResponseWriter, r *http.Request) {
 
 	// One extra, so "there were more than the cap" is a fact rather than an
 	// inference from the count coming back exactly full.
-	borrowers, err := s.store.BorrowersByExposure(ctx, s.cfg.ChainID, limit+1)
+	borrowers, err := s.store.BorrowersByExposure(ctx, s.cfg.ChainID, s.deployment, limit+1)
 	if err != nil {
 		serverError(w, "list borrowers", err)
 		return

@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Kind separates books from history.
@@ -99,8 +101,19 @@ type Provenance struct {
 	// unique on their own.
 	RecordIndex int
 
-	Contract  string
-	EventName string
+	// Contract is the contract's *name* — "CollateralVault". Kept because it
+	// is what a log line and an activity row read well as.
+	Contract string
+	// ContractAddress is which one, and it is the identity (GHO-51).
+	//
+	// The name was enough while there was only ever one of each. Two
+	// deployments both write "CollateralVault", and a balance summed across
+	// them adds an old vault's shares to a new vault's — silently, because
+	// nothing in the sum knows the two are different contracts. The address
+	// comes off the log itself, so it cannot disagree with the row it
+	// describes.
+	ContractAddress string
+	EventName       string
 }
 
 // Entry is one line of the ledger, derived from one log.
@@ -123,7 +136,22 @@ type Entry struct {
 // It was "lending:<chain>" while the indexer only watched the vault and the
 // pool; migration 0003 renames existing cursors so that adding the market did
 // not silently restart the backfill from the deploy block.
-func StreamName(chainID int64) string { return fmt.Sprintf("ghoststake:%d", chainID) }
+//
+// Deployment-scoped since GHO-51. It was chain-scoped, and that is exactly why
+// a redeployment inherited the previous deployment's cursor: same chain, same
+// name, a position at the old contracts' head that sits *above* the new
+// deployment's history. GHO-17 caught that with a fingerprint check that
+// refuses to boot. Putting the fingerprint in the name means there is nothing
+// to collide — two deployments have two cursors, and the old one survives
+// beside the new rather than being overwritten or deleted.
+func StreamName(chainID int64, contracts string) string {
+	if contracts == "" {
+		// The pre-GHO-51 name. Returned so a running deployment can find the
+		// cursor it already has; see Indexer.adoptLegacyCursor.
+		return fmt.Sprintf("ghoststake:%d", chainID)
+	}
+	return fmt.Sprintf("ghoststake:%d:%s", chainID, contracts)
+}
 
 // Cursor is how far a stream has been read.
 type Cursor struct {
@@ -206,6 +234,27 @@ func Fingerprint(addresses []string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// DeploymentOf identifies a deployment from the addresses that make it up.
+//
+// One implementation, called by both the indexer and the API, because the two
+// have to agree exactly: the indexer writes a cursor under this name and the
+// API reads it back to report how far the index has got. A second normalising
+// rule anywhere would make the API report "never indexed" forever against a
+// perfectly healthy indexer — which is a bug that looks like an outage.
+//
+// Addresses are checksummed through common.HexToAddress before hashing for
+// the same reason Fingerprint lowercases: it must describe the contracts, not
+// how somebody happened to type them.
+func DeploymentOf(vault, pool string, markets []string) string {
+	all := make([]string, 0, len(markets)+2)
+	for _, a := range append([]string{vault, pool}, markets...) {
+		if a = strings.TrimSpace(a); a != "" {
+			all = append(all, common.HexToAddress(a).Hex())
+		}
+	}
+	return Fingerprint(all)
+}
+
 // Repository is the port the indexer writes through.
 //
 // Declared here, next to the domain it serves, rather than in the package
@@ -246,6 +295,26 @@ type Repository interface {
 	// is provably not serving what it served before. See
 	// Indexer.assertLogsStillServed.
 	RecordsInRange(ctx context.Context, chainID int64, fromBlock, toBlock uint64) (int64, error)
+
+	// AdoptCursor renames a stream, returning false if there was nothing
+	// under the old name or something already under the new one.
+	//
+	// Migration 0003 did this in SQL when the stream was renamed from
+	// "lending:" to "ghoststake:". GHO-51's rename cannot: the new name
+	// contains the contract fingerprint, and SQL has no idea which contracts a
+	// process was started with.
+	AdoptCursor(ctx context.Context, from, to string) (bool, error)
+
+	// UnattributedEntries counts ledger entries carrying no contract address.
+	//
+	// Only ever non-zero on the first boot after migration 0009, which could
+	// not fill the column: the addresses are in the process's configuration,
+	// not in SQL.
+	UnattributedEntries(ctx context.Context, chainID int64) (int64, error)
+
+	// AttributeEntries stamps every entry a named contract wrote with that
+	// contract's address, returning how many rows it touched.
+	AttributeEntries(ctx context.Context, chainID int64, contract, address string) (int64, error)
 
 	// ReplayFrom rewinds a cursor to just below a block WITHOUT deleting
 	// anything, so the range is read again.
