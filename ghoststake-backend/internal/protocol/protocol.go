@@ -179,17 +179,47 @@ func (r *Reader) MarketParams(ctx context.Context) (MarketParams, error) {
 // market's rake would be a plausible wrong number on every row of the other
 // market's history.
 //
-// An unknown address is an error rather than a fallback to the primary. A
-// fallback is how the wrong rake gets applied silently, which is the bug this
-// method exists to prevent.
+// An unknown address is bound on demand rather than falling back to the
+// primary. The fallback is the thing to avoid — it applies one market's rake to
+// another's rounds and produces a plausible wrong number on every row — and
+// reading the unknown market's own immutables avoids it without refusing to
+// render history the indexer legitimately holds. See the note in the body.
 func (r *Reader) MarketParamsFor(ctx context.Context, market string) (MarketParams, error) {
 	if market == "" {
 		return r.MarketParams(ctx)
 	}
 	key := common.HexToAddress(market).Hex()
+
+	r.mu.Lock()
 	bound, ok := r.markets[key]
+	r.mu.Unlock()
+
 	if !ok {
-		return MarketParams{}, fmt.Errorf("protocol: %s is not a configured market", key)
+		// A market this process does not index, bound on demand.
+		//
+		// It used to be an error, and that was right while a redeployment
+		// wiped the derived index: every round in the database belonged to the
+		// configured deployment, so an unknown market meant a bug. GHO-51
+		// changed the premise — round history now spans deployments on
+		// purpose, so `/rounds` and `/positions` legitimately return rounds
+		// from contracts this process has never watched, and refusing to
+		// describe them turned both endpoints into a 500 the moment the
+		// contracts were redeployed.
+		//
+		// Binding is safe because the address is not user input: it comes off
+		// a round event this indexer decoded from a log, so it is an address
+		// that emitted a ParimutuelRound event. The reads below are `view`
+		// calls on immutables, and a non-market address fails them rather than
+		// returning something plausible.
+		c, err := r.client.Bind(abis.ParimutuelRound, key)
+		if err != nil {
+			return MarketParams{}, fmt.Errorf("protocol: bind market %s: %w", key, err)
+		}
+		bound = c
+
+		r.mu.Lock()
+		r.markets[key] = c
+		r.mu.Unlock()
 	}
 	return r.marketParams(ctx, key, bound)
 }
