@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +45,15 @@ type Config struct {
 	// expired holiday list degrades to this rather than stopping the market.
 	MaxUncalendaredRound time.Duration
 
+	// RefreshInterval is how often the market registry is re-read.
+	//
+	// Deliberately much slower than PollInterval. The round loop runs every
+	// ten seconds because a lock window is measured in tens of seconds; the
+	// set of listed markets changes about never, and re-reading it at that
+	// cadence would be a registry read per market per ten seconds forever to
+	// learn nothing. Zero, or a source that cannot change, means no refresh.
+	RefreshInterval time.Duration
+
 	// MinGasBalance is the balance below which the keeper starts warning on
 	// every tick. It never stops working over this — a keeper that refused to
 	// try is indistinguishable from one that is out of gas, and the one that
@@ -55,6 +65,7 @@ type Config struct {
 type Keeper struct {
 	client  *chain.Client
 	signer  *chain.Signer
+	source  MarketSource
 	markets []*Market
 	cfg     Config
 
@@ -76,6 +87,21 @@ type Keeper struct {
 	// rather than every tick.
 	refusal map[common.Address]string
 
+	// pending records, per market, whether its last complete pass found a
+	// round that is not yet terminal. Only read when a market is delisted:
+	// see refreshMarkets.
+	pending map[common.Address]bool
+
+	// retiring holds markets that have been delisted while still carrying an
+	// unsettled round. They are still driven — delisting hides a market from
+	// browsing, it does not settle anybody's stake — but no new round is
+	// opened on one, and it leaves the set once its last round is terminal.
+	retiring map[common.Address]bool
+
+	// rejected remembers why a newly listed market was refused, so a listing
+	// the keeper cannot drive is one log line rather than one a minute.
+	rejected map[common.Address]string
+
 	// maxBackoff is derived from the tightest deadline any of these markets
 	// imposes; see New.
 	maxBackoff time.Duration
@@ -90,7 +116,7 @@ type attempt struct {
 // failed. Never longer than this, and usually shorter — see maxBackoff.
 const backoffCeiling = 30 * time.Second
 
-func New(client *chain.Client, signer *chain.Signer, markets []*Market, cfg Config) (*Keeper, error) {
+func New(client *chain.Client, signer *chain.Signer, source MarketSource, markets []*Market, cfg Config) (*Keeper, error) {
 	if len(markets) == 0 {
 		return nil, fmt.Errorf("keeper: no markets to drive")
 	}
@@ -98,33 +124,50 @@ func New(client *chain.Client, signer *chain.Signer, markets []*Market, cfg Conf
 		return nil, fmt.Errorf("keeper: poll interval must be positive")
 	}
 
+	// Fatal at startup, and merely skipped for a market listed later. An
+	// operator who started the keeper on a market it cannot drive wants to
+	// know immediately; a keeper already driving four markets should not exit
+	// because somebody listed a fifth badly.
 	for _, m := range markets {
-		// A poll slower than the lock window means every round is locked late
-		// or not at all, and the symptom is rounds voiding for
-		// "lock window missed" with nothing in the logs looking wrong.
-		if window := time.Duration(m.Timing.LockWindow) * time.Second; cfg.PollInterval >= window {
-			return nil, fmt.Errorf(
-				"keeper: poll interval %s is not shorter than %s's lock window of %s — every round would void",
-				cfg.PollInterval, m.Address.Hex(), window)
-		}
-		if cfg.OpenRounds {
-			if _, _, err := m.schedulePlan(cfg); err != nil {
-				return nil, err
-			}
+		if err := validateMarket(m, cfg); err != nil {
+			return nil, err
 		}
 	}
 
 	return &Keeper{
 		client:     client,
 		signer:     signer,
+		source:     source,
 		markets:    markets,
 		cfg:        cfg,
 		cursor:     map[common.Address]uint64{},
 		retry:      map[string]*attempt{},
 		notOwner:   map[common.Address]bool{},
 		refusal:    map[common.Address]string{},
+		pending:    map[common.Address]bool{},
+		retiring:   map[common.Address]bool{},
+		rejected:   map[common.Address]string{},
 		maxBackoff: backoffLimit(markets),
 	}, nil
+}
+
+// validateMarket is the check that this keeper's configuration can actually
+// drive this market.
+func validateMarket(m *Market, cfg Config) error {
+	// A poll slower than the lock window means every round is locked late or
+	// not at all, and the symptom is rounds voiding for "lock window missed"
+	// with nothing in the logs looking wrong.
+	if window := time.Duration(m.Timing.LockWindow) * time.Second; cfg.PollInterval >= window {
+		return fmt.Errorf(
+			"keeper: poll interval %s is not shorter than %s's lock window of %s — every round would void",
+			cfg.PollInterval, m.Address.Hex(), window)
+	}
+	if cfg.OpenRounds {
+		if _, _, err := m.schedulePlan(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // backoffLimit is the longest a retry may wait: a third of the tightest lock
@@ -159,6 +202,11 @@ func (k *Keeper) Run(ctx context.Context) error {
 	ticker := time.NewTicker(k.cfg.PollInterval)
 	defer ticker.Stop()
 
+	// One goroutine drives both tickers, so nothing here needs a lock: a
+	// refresh can never rewrite k.markets while a tick is iterating it.
+	refresh := k.refreshTicker()
+	defer refresh.Stop()
+
 	k.tick(ctx)
 	for {
 		select {
@@ -167,6 +215,154 @@ func (k *Keeper) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			k.tick(ctx)
+		case <-refresh.C:
+			k.refreshMarkets(ctx)
+		}
+	}
+}
+
+// refreshTicker fires on the registry cadence, or never when there is no
+// registry to re-read.
+//
+// A stopped ticker rather than a nil channel so the select above stays one
+// shape. Receiving from a stopped ticker's channel blocks forever, which is
+// exactly "no refresh".
+func (k *Keeper) refreshTicker() *time.Ticker {
+	interval := k.cfg.RefreshInterval
+	if interval <= 0 || k.source == nil || !k.source.Dynamic() {
+		t := time.NewTicker(time.Hour)
+		t.Stop()
+		return t
+	}
+	slog.Info("keeper: watching the market registry", "every", interval)
+	return time.NewTicker(interval)
+}
+
+// refreshMarkets re-reads the market set and applies the difference.
+//
+// Logs the diff and not the set. Adding or removing a market is a transaction
+// somebody made, and it should be one line in the log; the steady state, which
+// is every minute of every day, should be silent.
+func (k *Keeper) refreshMarkets(ctx context.Context) {
+	listed, err := k.source.Markets(ctx)
+	if err != nil {
+		// Deliberately keeps the current set. Losing the RPC for one interval
+		// must not look like "every market was delisted", which would silently
+		// stop the keeper doing anything at all — the worst possible failure
+		// mode, because a keeper driving nothing looks exactly like a keeper
+		// with nothing to do.
+		slog.Warn("keeper: could not re-read the market registry, keeping the current set",
+			"markets", len(k.markets), "err", err)
+		return
+	}
+
+	enabled := make(map[common.Address]bool, len(listed))
+	for _, m := range listed {
+		enabled[m.Address] = true
+	}
+
+	next := make([]*Market, 0, len(listed))
+	kept := make(map[common.Address]bool, len(k.markets))
+
+	for _, m := range k.markets {
+		switch {
+		case enabled[m.Address]:
+			if k.retiring[m.Address] {
+				delete(k.retiring, m.Address)
+				slog.Info("keeper: market listed again, opening rounds on it once more", "market", m.String())
+			}
+
+		case k.pending[m.Address]:
+			// Delisted with a round still in flight. Keep driving it to
+			// settlement: delisting hides a market from browsing and does not
+			// settle anybody's stake, so a keeper that dropped it here would
+			// turn a delist into stranded rounds and refunds nobody could
+			// claim.
+			if !k.retiring[m.Address] {
+				k.retiring[m.Address] = true
+				slog.Info("keeper: market delisted, finishing its open rounds and opening no more",
+					"market", m.String())
+			}
+
+		default:
+			slog.Info("keeper: market delisted, nothing open on it", "market", m.String())
+			k.forgetMarket(m)
+			continue
+		}
+		next = append(next, m)
+		kept[m.Address] = true
+	}
+
+	for _, m := range listed {
+		if kept[m.Address] {
+			continue
+		}
+		if err := validateMarket(m, k.cfg); err != nil {
+			// Skipped, not fatal — see New. Logged once per distinct reason so
+			// a listing this keeper cannot drive does not print a line a
+			// minute for as long as it stays listed.
+			if k.rejected[m.Address] != err.Error() {
+				k.rejected[m.Address] = err.Error()
+				slog.Error("keeper: refusing to drive a newly listed market", "market", m.String(), "err", err)
+			}
+			continue
+		}
+		delete(k.rejected, m.Address)
+		// Assumed to have something outstanding until a pass proves it does
+		// not. A market listed and then delisted before its first tick would
+		// otherwise be dropped on the strength of a `pending` entry that has
+		// never been written — and it may well have arrived carrying an open
+		// round from a previous keeper. The first driveMarket corrects this
+		// within one poll interval.
+		k.pending[m.Address] = true
+		slog.Info("keeper: market listed", "market", m.String(),
+			"horizon_s", m.Horizon, "session", m.SessionLabel())
+		next = append(next, m)
+	}
+
+	if len(next) == 0 && len(k.markets) > 0 {
+		// Not an error. Every market being delisted is a thing an operator can
+		// legitimately do, and the keeper stays up so that listing one again
+		// is still just a transaction.
+		slog.Warn("keeper: no markets are listed, so there is nothing to drive")
+	}
+
+	k.markets = next
+	k.maxBackoff = backoffLimit(next)
+}
+
+// retireFinished drops delisted markets whose last round has settled.
+func (k *Keeper) retireFinished() {
+	if len(k.retiring) == 0 {
+		return
+	}
+	next := make([]*Market, 0, len(k.markets))
+	for _, m := range k.markets {
+		if k.retiring[m.Address] && !k.pending[m.Address] {
+			slog.Info("keeper: delisted market has settled its last round, dropping it", "market", m.String())
+			k.forgetMarket(m)
+			continue
+		}
+		next = append(next, m)
+	}
+	k.markets = next
+	k.maxBackoff = backoffLimit(next)
+}
+
+// forgetMarket drops every per-market map entry, so a keeper that outlives
+// many listings does not carry a row per market it ever saw.
+func (k *Keeper) forgetMarket(m *Market) {
+	delete(k.cursor, m.Address)
+	delete(k.notOwner, m.Address)
+	delete(k.refusal, m.Address)
+	delete(k.pending, m.Address)
+	delete(k.retiring, m.Address)
+	delete(k.rejected, m.Address)
+
+	prefix := m.Address.Hex() + "|"
+	for key := range k.retry {
+		if strings.HasPrefix(key, prefix) {
+			delete(k.retry, key)
 		}
 	}
 }
@@ -184,6 +380,7 @@ func (k *Keeper) tick(ctx context.Context) {
 			slog.Warn("keeper: market tick failed", "market", m.String(), "err", err)
 		}
 	}
+	k.retireFinished()
 }
 
 // chainTime is the timestamp the keeper's next transaction will execute
@@ -287,7 +484,13 @@ func (k *Keeper) driveMarket(ctx context.Context, m *Market, now uint64) error {
 		}
 	}
 
-	if !k.cfg.OpenRounds {
+	// Recorded only after a complete pass, so a market whose rounds could not
+	// be read keeps its previous answer. That is the safe direction: the one
+	// decision this feeds is whether a delisted market may be dropped, and
+	// dropping one because an RPC call failed would strand it.
+	k.pending[m.Address] = !advance
+
+	if !k.cfg.OpenRounds || k.retiring[m.Address] {
 		return nil
 	}
 	if !NeedsNewRound(latest, m.Timing.EntryCutoff, now) {
