@@ -33,9 +33,9 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 	const insertEntry = `
 		INSERT INTO ledger_entries (
 			chain_id, block_number, block_hash, block_time, tx_hash, log_index,
-			record_index, contract, event_name, kind, account, ledger, delta,
-			counterparty
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			record_index, contract, contract_address, event_name, kind, account,
+			ledger, delta, counterparty
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		-- Idempotent by construction: replaying a range is a no-op rather
 		-- than a double count.
 		ON CONFLICT (chain_id, tx_hash, log_index, record_index) DO NOTHING`
@@ -52,8 +52,8 @@ func (s *Store) Append(ctx context.Context, batch ledger.Batch, cursor ledger.Cu
 	for _, e := range batch.Entries {
 		queued.Queue(insertEntry,
 			e.ChainID, e.BlockNumber, e.BlockHash, e.BlockTime, e.TxHash, e.LogIndex,
-			e.RecordIndex, e.Contract, e.EventName, e.Kind, e.Account, e.Ledger,
-			e.Delta.String(), nullable(e.Counterparty),
+			e.RecordIndex, e.Contract, nullable(e.ContractAddress), e.EventName,
+			e.Kind, e.Account, e.Ledger, e.Delta.String(), nullable(e.Counterparty),
 		)
 	}
 	for _, e := range batch.Rounds {
@@ -244,14 +244,29 @@ func nullable(v string) any {
 // Nothing is cached and no balance is stored, so this cannot disagree with
 // the entries that produced it. Flow ledgers are excluded at the query, not
 // left to the caller to remember.
-func (s *Store) BalanceOf(ctx context.Context, chainID int64, account, ledger string) (*big.Int, error) {
+// A balance is always scoped to one deployment's contracts (GHO-51).
+//
+// Without `contracts` these three queries sum across every deployment that has
+// ever run on the chain: an old vault's shares added to a new vault's, an old
+// pool's debt to a new pool's. One number, no error, and wrong in the direction
+// that makes an insolvent position look healthy.
+//
+// Strict equality, not "or NULL". Rows written before migration 0009 carry no
+// address and are stamped at preflight by attributeExistingEntries, so the only
+// way to see a NULL here is a database with entries that no indexer has ever
+// booted against — at which point returning nothing is the honest answer, and
+// far better than adopting somebody else's rows on a guess.
+func (s *Store) BalanceOf(
+	ctx context.Context, chainID int64, account, ledger string, contracts []string,
+) (*big.Int, error) {
 	const q = `
 		SELECT COALESCE(SUM(delta), 0)::TEXT
 		FROM ledger_entries
-		WHERE chain_id = $1 AND account = $2 AND ledger = $3 AND kind = 'balance'`
+		WHERE chain_id = $1 AND account = $2 AND ledger = $3 AND kind = 'balance'
+		  AND contract_address = ANY($4)`
 
 	var raw string
-	if err := s.pool.QueryRow(ctx, q, chainID, account, ledger).Scan(&raw); err != nil {
+	if err := s.pool.QueryRow(ctx, q, chainID, account, ledger, contracts).Scan(&raw); err != nil {
 		return nil, fmt.Errorf("balance of %s/%s: %w", account, ledger, err)
 	}
 	value, ok := new(big.Int).SetString(raw, 10)
@@ -262,14 +277,17 @@ func (s *Store) BalanceOf(ctx context.Context, chainID int64, account, ledger st
 }
 
 // BalancesOf derives every book an account holds.
-func (s *Store) BalancesOf(ctx context.Context, chainID int64, account string) (map[string]*big.Int, error) {
+func (s *Store) BalancesOf(
+	ctx context.Context, chainID int64, account string, contracts []string,
+) (map[string]*big.Int, error) {
 	const q = `
 		SELECT ledger, SUM(delta)::TEXT
 		FROM ledger_entries
 		WHERE chain_id = $1 AND account = $2 AND kind = 'balance'
+		  AND contract_address = ANY($3)
 		GROUP BY ledger`
 
-	rows, err := s.pool.Query(ctx, q, chainID, account)
+	rows, err := s.pool.Query(ctx, q, chainID, account, contracts)
 	if err != nil {
 		return nil, fmt.Errorf("balances of %s: %w", account, err)
 	}
@@ -323,17 +341,20 @@ func (s *Store) CountEntries(ctx context.Context, chainID int64) (int64, error) 
 // has to fall somewhere, and it should fall on the smallest positions: a
 // borrower with dust is not the one whose default matters, and a liquidator
 // reading a truncated list should be missing the trivia rather than the risk.
-func (s *Store) BorrowersByExposure(ctx context.Context, chainID int64, limit int) ([]string, error) {
+func (s *Store) BorrowersByExposure(
+	ctx context.Context, chainID int64, contracts []string, limit int,
+) ([]string, error) {
 	const q = `
 		SELECT account
 		FROM ledger_entries
 		WHERE chain_id = $1 AND ledger = $2 AND kind = 'balance'
+		  AND contract_address = ANY($3)
 		GROUP BY account
 		HAVING SUM(delta) > 0
 		ORDER BY SUM(delta) DESC
-		LIMIT $3`
+		LIMIT $4`
 
-	rows, err := s.pool.Query(ctx, q, chainID, ledger.DebtScaled, limit)
+	rows, err := s.pool.Query(ctx, q, chainID, ledger.DebtScaled, contracts, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list borrowers: %w", err)
 	}
@@ -348,4 +369,64 @@ func (s *Store) BorrowersByExposure(ctx context.Context, chainID int64, limit in
 		out = append(out, account)
 	}
 	return out, rows.Err()
+}
+
+// AdoptCursor renames a stream, and refuses to overwrite.
+//
+// The GHO-51 rename could not live in the migration the way 0003's did: the
+// new stream name carries the contract fingerprint, and SQL cannot know which
+// contracts a process watches. So it happens at preflight, where it does.
+//
+// Returns false rather than erroring when there is nothing to adopt — a fresh
+// database and an already-adopted one are both normal, and neither is a
+// problem worth a boot failure.
+func (s *Store) AdoptCursor(ctx context.Context, from, to string) (bool, error) {
+	// `WHERE NOT EXISTS` rather than a plain rename. If something already sits
+	// under the new name it is this deployment's real position, and the legacy
+	// row is an older deployment's — clobbering it would move the cursor
+	// backwards or forwards to a block this deployment never read.
+	const q = `
+		UPDATE indexer_cursor SET stream = $2, updated_at = now()
+		WHERE stream = $1
+		  AND NOT EXISTS (SELECT 1 FROM indexer_cursor WHERE stream = $2)`
+
+	tag, err := s.pool.Exec(ctx, q, from, to)
+	if err != nil {
+		return false, fmt.Errorf("adopt cursor %s -> %s: %w", from, to, err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// UnattributedEntries counts rows written before entries carried an address.
+func (s *Store) UnattributedEntries(ctx context.Context, chainID int64) (int64, error) {
+	const q = `
+		SELECT count(*) FROM ledger_entries
+		WHERE chain_id = $1 AND contract_address IS NULL`
+
+	var n int64
+	if err := s.pool.QueryRow(ctx, q, chainID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count unattributed entries: %w", err)
+	}
+	return n, nil
+}
+
+// AttributeEntries fills the address in for one named contract.
+//
+// Keyed on the contract *name*, which is the only thing those rows carry — and
+// it is enough here in a way it is not in general. `ledger_entries` only ever
+// holds vault and pool events (round events go to their own table, which has
+// carried a market address since GHO-43), and there is exactly one vault and
+// one pool per deployment. So "every row that says CollateralVault was written
+// by this deployment's vault" is a fact whenever a single deployment's rows are
+// present, which is the only situation this runs in.
+func (s *Store) AttributeEntries(ctx context.Context, chainID int64, contract, address string) (int64, error) {
+	const q = `
+		UPDATE ledger_entries SET contract_address = $3
+		WHERE chain_id = $1 AND contract = $2 AND contract_address IS NULL`
+
+	tag, err := s.pool.Exec(ctx, q, chainID, contract, address)
+	if err != nil {
+		return 0, fmt.Errorf("attribute %s entries: %w", contract, err)
+	}
+	return tag.RowsAffected(), nil
 }

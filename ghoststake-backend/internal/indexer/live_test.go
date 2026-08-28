@@ -2,6 +2,7 @@ package indexer_test
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"os"
 	"testing"
 	"time"
@@ -81,7 +82,17 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 		}
 	}
 
-	balances, err := st.BalancesOf(ctx, 31337, seededBorrower)
+	// Scoped to this deployment's contracts (GHO-51). Passing the addresses
+	// rather than letting the query span every deployment on the chain is the
+	// whole point: two vaults' shares summed together is one number that
+	// describes neither.
+	deployment := []string{
+		common.HexToAddress(vault).Hex(),
+		common.HexToAddress(pool).Hex(),
+		common.HexToAddress(market).Hex(),
+	}
+
+	balances, err := st.BalancesOf(ctx, 31337, seededBorrower, deployment)
 	if err != nil {
 		t.Fatalf("balances: %v", err)
 	}
@@ -109,7 +120,7 @@ func TestLiveIndexerAgainstAnvil(t *testing.T) {
 
 	// The one exactly predictable figure: the seed deposits 10,000 mUSDC at
 	// six decimals, and Deposited carries the asset amount verbatim.
-	deposits, err := st.BalanceOf(ctx, 31337, seededBorrower, ledger.Deposits)
+	deposits, err := st.BalanceOf(ctx, 31337, seededBorrower, ledger.Deposits, deployment)
 	if err != nil {
 		t.Fatalf("deposits: %v", err)
 	}

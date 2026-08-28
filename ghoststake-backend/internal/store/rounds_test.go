@@ -364,7 +364,7 @@ func TestBothKindsCommitTogether(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	debt, err := st.BalanceOf(ctx, testChainID, acct, "debt_scaled")
+	debt, err := st.BalanceOf(ctx, testChainID, acct, "debt_scaled", deploymentA)
 	if err != nil {
 		t.Fatalf("balance: %v", err)
 	}
