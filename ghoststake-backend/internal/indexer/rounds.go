@@ -97,8 +97,8 @@ func decodeRound(name string, f *fields, _ types.Log) ledger.Batch {
 			Data: map[string]string{"recipient": f.addr("recipient")},
 		})
 	}
-	// RouterSet, FeesWithdrawn, OwnershipTransferred: administrative, and
-	// nothing a user's view of a round depends on.
+	// RouterSet, FeesWithdrawn, TreasurySet, OwnershipTransferred:
+	// administrative, and nothing a user's view of a round depends on.
 	return ledger.Batch{}
 }
 

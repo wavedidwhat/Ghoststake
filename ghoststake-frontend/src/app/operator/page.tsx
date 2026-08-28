@@ -5,6 +5,7 @@ import { useConnection, usePublicClient, useReadContract } from "wagmi";
 import { TxStatus } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
+import { FeesPanel } from "@/components/FeesPanel";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useNow } from "@/hooks/useNow";
@@ -99,6 +100,17 @@ function Console({ address }: { address: `0x${string}` }) {
 
   return (
     <div className="flex flex-col gap-10">
+      {/* First, because it is the question an operator arrives with that the
+          console could not previously answer at all. Everything below drives
+          rounds; this is the only thing on the page about money the protocol
+          has actually earned. See GHO-40. */}
+      <FeesPanel
+        markets={markets}
+        address={address}
+        decimals={position.decimals}
+        symbol={position.symbol}
+      />
+
       {markets.map((market: Market) => {
         const marketParams = params.byMarket.get(market.key);
         if (!marketParams) return null;
