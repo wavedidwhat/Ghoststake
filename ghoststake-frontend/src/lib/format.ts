@@ -99,6 +99,34 @@ export function formatApr(ratePerSecond: bigint, fractionDigits = 2): string {
   return formatPercent(ratePerSecond * SECONDS_PER_YEAR, fractionDigits);
 }
 
+/**
+ * A whole number of seconds as something readable: "15s", "2m", "1m 30s".
+ *
+ * The contract's timing immutables are all `uint64` seconds. Rendering an
+ * entry cutoff as "15" leaves the unit to be guessed, and the guesses that
+ * matter here — seconds against blocks — differ by an order of magnitude.
+ *
+ * Never abbreviates past the hour: a resolve deadline of 90 minutes reads
+ * better as "1h 30m" than as "1.5h", which invites the reader to wonder what
+ * was rounded.
+ */
+export function formatDuration(seconds: bigint): string {
+  if (seconds === 0n) return "0s";
+
+  const hours = seconds / 3600n;
+  const minutes = (seconds % 3600n) / 60n;
+  const rest = seconds % 60n;
+
+  const parts: string[] = [];
+  if (hours > 0n) parts.push(`${hours}h`);
+  if (minutes > 0n) parts.push(`${minutes}m`);
+  // Seconds are dropped once there is an hour on the front: "1h 0m 3s" is
+  // precision nobody asked for on a deadline measured in hours.
+  if (rest > 0n && hours === 0n) parts.push(`${rest}s`);
+
+  return parts.join(" ");
+}
+
 /** 0x1234…abcd, for wallet addresses in tight spaces. */
 export function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
