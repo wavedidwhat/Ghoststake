@@ -103,9 +103,20 @@ interface ISettlementSink {
 ///
 /// Schedule rounds, whitelist routers, withdraw collected rake (bounded by
 /// the fee ledger, never by the token balance), and unwind a locked round
-/// nobody could settle once `resolveDeadline` has passed. There is no pause,
-/// no upgrade path, and the oracle is immutable — the owner cannot change
-/// what a round settles against, pay anyone, or pick a winner.
+/// nobody could settle once `resolveDeadline` has passed.
+///
+/// There is no upgrade path and the oracle is immutable, so the owner cannot
+/// change what a round settles against, pay anyone, or pick a winner. GHO-52
+/// weighed making the contracts upgradeable and declined, for those reasons
+/// among others — the sentence above is a promise, not an accident.
+///
+/// Since GHO-31 there *is* a pause, and it is a separate role from this one:
+/// the guardian can refuse new rounds and new positions and can do nothing
+/// else. It cannot stop a round already open from locking, resolving or
+/// paying out, which is what keeps a halt from becoming a way to hold a
+/// settled bet hostage. This paragraph used to say "there is no pause" and
+/// was left stale by that change — the kind of comment an auditor reads as a
+/// guarantee.
 ///
 /// The one real power in that list is the last: after the deadline, a round
 /// that *was* still settleable can be refunded instead of paid out. The
