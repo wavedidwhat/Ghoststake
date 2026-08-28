@@ -48,6 +48,11 @@ type KeeperConfig struct {
 	// does not cover.
 	MaxUncalendaredRound time.Duration
 
+	// RefreshInterval is how often the registry is re-read for listing
+	// changes. Ignored when there is no registry, since a configured list of
+	// addresses cannot change without a restart anyway.
+	RefreshInterval time.Duration
+
 	MinGasBalanceWei *big.Int
 }
 
@@ -74,6 +79,7 @@ func LoadKeeper() (KeeperConfig, error) {
 		Horizon:      uint64(envInt64("KEEPER_HORIZON", 3600)),
 
 		MaxUncalendaredRound: envDuration("KEEPER_MAX_UNCALENDARED_ROUND", 15*time.Minute),
+		RefreshInterval:      envDuration("KEEPER_REGISTRY_REFRESH_INTERVAL", time.Minute),
 	}
 
 	statusFeeds, err := parseStatusFeeds(env("KEEPER_MARKET_STATUS_FEEDS", ""))
@@ -115,6 +121,9 @@ func LoadKeeper() (KeeperConfig, error) {
 
 	if c.MaxUncalendaredRound <= 0 {
 		return KeeperConfig{}, fmt.Errorf("KEEPER_MAX_UNCALENDARED_ROUND must be positive")
+	}
+	if c.RefreshInterval <= 0 {
+		return KeeperConfig{}, fmt.Errorf("KEEPER_REGISTRY_REFRESH_INTERVAL must be positive")
 	}
 
 	balance, ok := new(big.Int).SetString(strings.TrimSpace(env("KEEPER_MIN_GAS_BALANCE_WEI", "10000000000000000")), 10)
