@@ -6,6 +6,7 @@ import { Card, Stat } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { Figure } from "@/components/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
+import { Landing } from "@/components/Landing";
 import { PipelineSummary } from "@/components/PipelineSummary";
 import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
@@ -269,19 +270,14 @@ function Skeleton() {
   return <div className="h-8 w-32 animate-pulse rounded bg-raised" />;
 }
 
+/**
+ * Replaced by `Landing`. The old card asked for a wallet and said nothing
+ * about what the wallet would be connecting to — so the app's entire public
+ * surface was a button, and a first visitor formed their whole impression of
+ * the protocol from a sidebar subtitle. See GHO-44.
+ */
 function Disconnected() {
-  return (
-    <Card className="mx-auto mt-16 max-w-md text-center">
-      <h2 className="text-lg font-semibold">Connect a wallet</h2>
-      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-        GhostStake reads your position straight from the chain. Connecting is
-        read-only — nothing is signed, and no transaction is proposed.
-      </p>
-      <div className="mt-5 flex justify-center">
-        <ConnectButton />
-      </div>
-    </Card>
-  );
+  return <Landing />;
 }
 
 /**

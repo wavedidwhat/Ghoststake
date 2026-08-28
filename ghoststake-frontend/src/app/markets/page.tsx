@@ -1,28 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useConnection } from "wagmi";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useMarketParams, useRounds } from "@/hooks/useRounds";
-import { useVaultPosition } from "@/hooks/useVaultPosition";
+import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
 import { formatAmount } from "@/lib/format";
 import { Phase, Side, entryClosesAt, formatCountdown, multipleFor } from "@/lib/rounds";
 
+/**
+ * Readable without a wallet, deliberately.
+ *
+ * This page used to render "Connect a wallet" to anyone who had not, which
+ * made the app's entire public surface a button. Everything on it — pools,
+ * multiples, phase, countdown — is public chain state that reads perfectly
+ * well without knowing who is looking, and every comparable platform lets you
+ * read a market before you have an account, because the market *is* the pitch.
+ *
+ * `useRounds` was already built for this: the per-address batch is separately
+ * gated and simply yields undefined stakes, so a disconnected visitor gets the
+ * pools and no "your position" line. The only thing that needed a connection
+ * was the asset's decimals, and those were being fetched through
+ * `useVaultPosition` — a per-address hook asked a question that is not about
+ * an address. See GHO-44.
+ */
 export default function RoundsPage() {
-  const connection = useConnection();
-
   return (
     <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
-      ) : connection.status !== "connected" ? (
-        <NeedsWallet what="Positions are tied to your address, so a wallet is needed to see or open one." />
       ) : (
         <RoundsScreen />
       )}
@@ -44,7 +55,7 @@ function RoundsScreen() {
   const params = useMarketParams(markets);
   const feeds = useMarketFeeds(markets);
   const { rounds, isLoading, isError } = useRounds(markets);
-  const position = useVaultPosition();
+  const asset = useVaultAsset();
 
   if (isError || marketsError) {
     return (
@@ -57,7 +68,7 @@ function RoundsScreen() {
     );
   }
 
-  if (marketsLoading || isLoading || position.decimals === undefined) {
+  if (marketsLoading || isLoading || asset.decimals === undefined) {
     return (
       <Card>
         <div className="h-24 animate-pulse rounded bg-raised" />
@@ -106,8 +117,8 @@ function RoundsScreen() {
               key={summary.market.key}
               summary={summary}
               feed={feeds.byMarket.get(summary.market.key)}
-              decimals={position.decimals!}
-              symbol={position.symbol}
+              decimals={asset.decimals!}
+              symbol={asset.symbol}
               now={now}
             />
           ))}
