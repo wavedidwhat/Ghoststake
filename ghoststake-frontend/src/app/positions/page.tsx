@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { useConnection } from "wagmi";
@@ -522,7 +523,15 @@ function Row({
             sharing a feed is not a local quirk: nothing stops a second market
             on the same pair at a different horizon, which is exactly what the
             registry was built to allow. */}
-        <span className="text-ink">{feed ?? "Market"}</span>
+        {/* Linked to the round's own page (GHO-41). Without it this table was
+            a dead end: a settled position naming a round that existed nowhere
+            you could open. */}
+        <Link
+          href={`/markets/${position.round.market}/${position.round.id}`}
+          className="text-ink underline-offset-2 hover:underline"
+        >
+          {feed ?? "Market"}
+        </Link>
         <span className="ml-2 font-mono text-xs text-ink-faint">
           {shortHash(position.round.market, 6, 4)}
         </span>

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { formatAmount } from "@/lib/format";
 import {
   Phase,
@@ -36,6 +38,7 @@ export function RoundCard({
   yourUp,
   yourDown,
   onStake,
+  href,
   children,
 }: {
   id: bigint;
@@ -50,6 +53,8 @@ export function RoundCard({
   yourUp?: bigint;
   yourDown?: bigint;
   onStake?: (side: SideValue) => void;
+  /** Where this round lives on its own (GHO-41). Omitted on the round's own page. */
+  href?: string;
   children?: React.ReactNode;
 }) {
   const canEnter = now !== undefined && entryOpen(round, entryCutoff, now);
@@ -68,7 +73,19 @@ export function RoundCard({
     <article className="rounded-card border border-border bg-surface p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-ink">Round {id.toString()}</span>
+          {/* The round's permalink. A card and not a link before GHO-41,
+              which meant the smallest shareable thing in the product — one
+              round, one outcome — had no address at all. */}
+          {href ? (
+            <Link
+              href={href}
+              className="text-sm font-medium text-ink underline-offset-2 hover:underline"
+            >
+              Round {id.toString()}
+            </Link>
+          ) : (
+            <span className="text-sm font-medium text-ink">Round {id.toString()}</span>
+          )}
           <PhaseChip phase={phase} />
           {youAreIn && (
             <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
