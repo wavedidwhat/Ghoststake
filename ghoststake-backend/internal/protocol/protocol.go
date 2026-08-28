@@ -139,7 +139,25 @@ func (r *Reader) VaultParams(ctx context.Context) (finance.VaultParams, error) {
 	if err != nil {
 		return finance.VaultParams{}, err
 	}
-	params := finance.VaultParams{MaxLTV: maxLTV, LiquidationThreshold: threshold}
+	// The two below are only used to quote a liquidation (GHO-42), and are
+	// read here rather than on demand because they are `immutable` in
+	// Solidity like the other two — a separate lazy read would be a second
+	// cache of constants, with a second chance to be stale about them.
+	bonus, err := r.vault.CallBig(ctx, nil, "liquidationBonus")
+	if err != nil {
+		return finance.VaultParams{}, err
+	}
+	closeFactor, err := r.vault.CallBig(ctx, nil, "closeFactor")
+	if err != nil {
+		return finance.VaultParams{}, err
+	}
+
+	params := finance.VaultParams{
+		MaxLTV:               maxLTV,
+		LiquidationThreshold: threshold,
+		LiquidationBonus:     bonus,
+		CloseFactor:          closeFactor,
+	}
 
 	r.mu.Lock()
 	r.vaultP = &params
@@ -287,6 +305,100 @@ func (r *Reader) Health(ctx context.Context, account string) (finance.Health, Sn
 	// The block's own timestamp, not time.Now(): this is the clock the
 	// contract would use if it computed the same figure in this block.
 	return finance.Describe(state, params, snap.Time.Unix()), snap, nil
+}
+
+// HealthBatch reads several accounts' positions, all pinned to one block.
+//
+// Not a loop over Health, and the difference is most of the cost. Of the reads
+// Health makes, five are about the pool rather than the account — the block,
+// its header, the borrow index, the borrow rate and the last accrual time —
+// and repeating them per account multiplies the expensive part of the call by
+// the number of borrowers for no additional information. Hoisted, an account
+// costs four reads instead of nine.
+//
+// One block for all of them, which matters more here than it does for a single
+// account. This produces a *ranking*, and a list ordered by health factors
+// sampled at different blocks is ordered by nothing in particular — the rate
+// advances every second, so the account read last would look marginally
+// sicker than the one read first purely for being read later.
+//
+// The returned slice is aligned with `accounts`. An account that cannot be
+// parsed is an input error and fails the whole call rather than being silently
+// dropped, because a caller ranking positions by risk must not be handed a
+// list that is quietly missing one.
+func (r *Reader) HealthBatch(ctx context.Context, accounts []string) ([]finance.Health, Snapshot, error) {
+	params, err := r.VaultParams(ctx)
+	if err != nil {
+		return nil, Snapshot{}, err
+	}
+	snap, block, err := r.snapshot(ctx)
+	if err != nil {
+		return nil, Snapshot{}, err
+	}
+	if len(accounts) == 0 {
+		return nil, snap, nil
+	}
+
+	borrowIndex, err := r.pool.CallBig(ctx, block, "borrowIndex")
+	if err != nil {
+		return nil, Snapshot{}, err
+	}
+	borrowRate, err := r.pool.CallBig(ctx, block, "borrowRatePerSecond")
+	if err != nil {
+		return nil, Snapshot{}, err
+	}
+	lastAccrual, err := r.pool.CallBig(ctx, block, "lastAccrualTime")
+	if err != nil {
+		return nil, Snapshot{}, err
+	}
+
+	out := make([]finance.Health, 0, len(accounts))
+	for _, account := range accounts {
+		address, err := chain.ParseAddress(account)
+		if err != nil {
+			return nil, Snapshot{}, err
+		}
+
+		position, err := r.vault.CallAt(ctx, block, "positions", address)
+		if err != nil {
+			return nil, Snapshot{}, err
+		}
+		if len(position) != 4 {
+			return nil, Snapshot{}, fmt.Errorf("protocol: positions returned %d values, want 4", len(position))
+		}
+		shares, err := r.vault.CallBig(ctx, block, "balanceOf", address)
+		if err != nil {
+			return nil, Snapshot{}, err
+		}
+		sharesValue, err := r.vault.CallBig(ctx, block, "convertToAssets", shares)
+		if err != nil {
+			return nil, Snapshot{}, err
+		}
+		scaledDebt, err := r.pool.CallBig(ctx, block, "scaledDebt", address)
+		if err != nil {
+			return nil, Snapshot{}, err
+		}
+
+		startTime, ok := position[1].(*big.Int)
+		if !ok {
+			return nil, Snapshot{}, fmt.Errorf("protocol: positions.startTime returned %T", position[1])
+		}
+
+		out = append(out, finance.Describe(finance.VaultState{
+			Principal:     asBig(position[0]),
+			StartTime:     startTime.Int64(),
+			RatePerSecond: asBig(position[2]),
+			SettledYield:  asBig(position[3]),
+			SharesValue:   sharesValue,
+			ScaledDebt:    scaledDebt,
+			BorrowIndex:   borrowIndex,
+
+			BorrowRatePerSecond: borrowRate,
+			LastAccrualTime:     lastAccrual.Int64(),
+		}, params, snap.Time.Unix()))
+	}
+
+	return out, snap, nil
 }
 
 func asBig(v any) *big.Int {

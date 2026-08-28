@@ -366,3 +366,79 @@ func TestRecordsInRangeCountsBothTablesInclusively(t *testing.T) {
 		t.Fatalf("counted another chain's records: got %d", n)
 	}
 }
+
+// The query GHO-42 needed: who has debt at all. Every other view in the system
+// is per-address, which is why a liquidator could never find anyone.
+func TestBorrowersByExposureListsDebtorsLargestFirst(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	small := account(t, "small")
+	large := account(t, "large")
+	repaid := account(t, "repaid")
+	supplier := account(t, "supplier")
+
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
+		entryOn(chainID, small, ledger.DebtScaled, 100, 10, "0xbe1", 0, 0),
+		entryOn(chainID, large, ledger.DebtScaled, 900, 11, "0xbe2", 0, 0),
+
+		// Borrowed and then paid off in full: the sum is zero, so this address
+		// is not a borrower any more and must not be offered to a liquidator.
+		entryOn(chainID, repaid, ledger.DebtScaled, 500, 12, "0xbe3", 0, 0),
+		entryOn(chainID, repaid, ledger.DebtScaled, -500, 13, "0xbe4", 0, 0),
+
+		// A supplier is not a borrower. The book is what separates them, and
+		// the index this query relies on leads with it.
+		entryOn(chainID, supplier, ledger.SupplyScaled, 5_000, 14, "0xbe5", 0, 0),
+	}}, cursorOn(t, chainID, 14)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	got, err := st.BorrowersByExposure(ctx, chainID, 10)
+	if err != nil {
+		t.Fatalf("borrowers: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want the two live borrowers, got %v", got)
+	}
+	// Largest first, which is what makes the limit fall on the smallest
+	// positions rather than on an arbitrary set.
+	if got[0] != large || got[1] != small {
+		t.Fatalf("want [%s %s], got %v", large, small, got)
+	}
+
+	// Another chain's borrowers are not ours.
+	other, err := st.BorrowersByExposure(ctx, chainID+1, 10)
+	if err != nil {
+		t.Fatalf("borrowers on another chain: %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("counted another chain's borrowers: %v", other)
+	}
+}
+
+// The limit is a bound on chain reads, not on rows, so it has to bite on the
+// smallest exposures — a truncated list should be missing the trivia rather
+// than the risk.
+func TestBorrowersByExposureDropsTheSmallestFirst(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	chainID := chainOf(t)
+	tiny, mid, big := account(t, "tiny"), account(t, "mid"), account(t, "big")
+
+	if err := st.Append(ctx, ledger.Batch{Entries: []ledger.Entry{
+		entryOn(chainID, tiny, ledger.DebtScaled, 1, 10, "0xbd1", 0, 0),
+		entryOn(chainID, mid, ledger.DebtScaled, 50, 11, "0xbd2", 0, 0),
+		entryOn(chainID, big, ledger.DebtScaled, 900, 12, "0xbd3", 0, 0),
+	}}, cursorOn(t, chainID, 12)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	got, err := st.BorrowersByExposure(ctx, chainID, 2)
+	if err != nil {
+		t.Fatalf("borrowers: %v", err)
+	}
+	if len(got) != 2 || got[0] != big || got[1] != mid {
+		t.Fatalf("want the two largest, got %v", got)
+	}
+}

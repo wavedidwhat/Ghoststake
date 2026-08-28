@@ -250,6 +250,74 @@ paths:
                         items: { $ref: "#/components/schemas/Position" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /api/v1/positions/at-risk:
+    get:
+      tags: [market]
+      summary: Borrowers close to liquidation, sickest first
+      description: |
+        The discovery step liquidation was missing. `liquidate` is
+        permissionless, which is what keeps the protocol solvent — but every
+        other view is per-address, so a liquidator had to already know whose
+        position was underwater before they could act on it.
+
+        Two sources, each asked what only it can answer. The **ledger** supplies
+        the names: it holds every borrow and repayment, and the chain has no
+        borrower enumeration at all. The **chain** supplies the numbers: a health
+        factor is scaled debt times an index that advances every second and
+        emits nothing, so there is no event to index for it. Every figure here
+        is read at `block`, which is the chain head, not at `indexedBlock`.
+
+        Ordered by `healthFactor` ascending. Anything below `1e18` is
+        liquidatable now; above it is a watchlist.
+
+        `profitable` is the field to act on. Past the point where collateral
+        covers debt plus the liquidation bonus, no repayment size leaves a
+        liquidator ahead — those rows carry `writeOffCandidate: true` and are
+        closed with `writeOffBadDebt`, not with `liquidate`.
+
+        Rate limited to 120 requests per minute per IP.
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            How many borrowers to read, default 50, maximum 200. A bound on
+            `eth_call`s rather than on rows: each borrower costs four chain
+            reads. When the cap bites, the borrowers scanned are those with the
+            largest debt — a truncated list should be missing the trivia rather
+            than the risk — and `truncated` says so.
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Borrowers carrying debt, ordered by health factor.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/IndexedEnvelope"
+                  - type: object
+                    properties:
+                      block:
+                        type: integer
+                        description: |
+                          The chain block every figure below was read at. One
+                          block for all of them: this is a ranking, and health
+                          factors sampled at different blocks are ordered by
+                          nothing in particular.
+                      scanned: { type: integer }
+                      truncated:
+                        type: boolean
+                        description: The cap was reached; there may be more.
+                      positions:
+                        type: array
+                        items: { $ref: "#/components/schemas/AtRiskPosition" }
+        "503":
+          description: The service was started without a chain connection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/v1/activity/{address}:
     get:
       tags: [market]
@@ -520,6 +588,57 @@ components:
           type: string
           format: date-time
           description: When the response was rendered. Always UTC.
+
+    AtRiskPosition:
+      type: object
+      description: |
+        One borrower, and what closing their position would cost and pay. Every
+        figure mirrors `CollateralVault.liquidate` step for step.
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        collateral: { $ref: "#/components/schemas/Uint256" }
+        debt:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            Includes interest pending since the pool last accrued, because a
+            liquidator's transaction accrues before it reads the health factor.
+            This is the debt they would actually find.
+        healthFactor:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: WAD. Below 1e18 is liquidatable.
+        ltv: { $ref: "#/components/schemas/Uint256" }
+        band:
+          type: string
+          enum: [none, safe, caution, danger]
+          description: The same bands the dashboard uses, so "at risk" means one thing.
+        liquidatable: { type: boolean }
+        maxRepay:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            The most one call may clear: the close factor applied to the debt,
+            lifted to the whole lien once the position is far enough under.
+        seized:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: |
+            Collateral that repayment takes, bonus included and capped at what
+            the position holds. The cap is why `profitable` can be false.
+        bonus:
+          allOf: [{ $ref: "#/components/schemas/Uint256" }]
+          description: Seized less repaid. Zero, never negative — see `profitable`.
+        profitable:
+          type: boolean
+          description: |
+            Whether a rational liquidator would call. False is not an edge
+            case: past the point where collateral covers debt plus bonus, the
+            caller is out of pocket, which is why these positions sit.
+        fullLiquidation:
+          type: boolean
+          description: The close factor has lifted, so one call clears the whole lien.
+        writeOffCandidate:
+          type: boolean
+          description: |
+            Owes more than it holds. No liquidation can close it; `writeOffBadDebt`
+            can, and pays nothing for doing so.
 
     Round:
       type: object
