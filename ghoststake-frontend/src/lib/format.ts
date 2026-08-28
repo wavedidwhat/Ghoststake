@@ -127,6 +127,27 @@ export function formatDuration(seconds: bigint): string {
   return parts.join(" ");
 }
 
+/**
+ * Formats a value that may not have loaded yet, or undefined if it has not.
+ *
+ * Exists because the idiomatic `value && format(value)` is wrong for every
+ * quantity in this app: for `0n` it evaluates to `0n` rather than to a string,
+ * so a zero renders as a raw bigint. Zero is a legitimate setting for several
+ * contract terms — a market may be listed with no rake, a vault deployed with
+ * no liquidation bonus — so "falsy" and "not loaded yet" are genuinely
+ * different questions, and a loading skeleton must never stand in for a real
+ * value of zero.
+ *
+ * `tsc` catches the `&&` version at the call site. This is what to write
+ * instead.
+ */
+export function formatOptional(
+  value: bigint | undefined,
+  format: (v: bigint) => string,
+): string | undefined {
+  return value === undefined ? undefined : format(value);
+}
+
 /** 0x1234…abcd, for wallet addresses in tight spaces. */
 export function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useConnection } from "wagmi";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { MarketBlock } from "@/components/MarketBlock";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
@@ -31,16 +31,19 @@ export function MarketScreen({ market }: { market: string }) {
     >
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
-      ) : connection.status !== "connected" ? (
-        <NeedsWallet what="Positions are tied to your address, so a wallet is needed to see or open one." />
       ) : (
+        // No wallet gate. GHO-41 made a market's address its URL precisely so
+        // it could be shared, and a shared link that answers with "connect a
+        // wallet" defeats the point of having one — the recipient cannot see
+        // the thing they were sent. Taking a position still needs a wallet;
+        // reading one never did.
         <Body market={market} address={connection.address} />
       )}
     </AppShell>
   );
 }
 
-function Body({ market, address }: { market: string; address: `0x${string}` }) {
+function Body({ market, address }: { market: string; address: `0x${string}` | undefined }) {
   const now = useNow();
   const { markets, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);

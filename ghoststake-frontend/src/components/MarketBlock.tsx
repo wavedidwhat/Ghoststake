@@ -5,6 +5,7 @@ import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
 import { Card } from "@/components/Card";
+import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
 import type { MarketFeed } from "@/hooks/useMarketFeeds";
 import type { MarketRound } from "@/hooks/useRounds";
@@ -44,7 +45,9 @@ export function MarketBlock({
   params: { entryCutoff: bigint; minSidePool: bigint; rake: bigint } | undefined;
   feed: MarketFeed | undefined;
   rounds: MarketRound[];
-  address: `0x${string}`;
+  /** Undefined when nobody is connected: the market still reads, and only
+   *  the actions need an address. See GHO-44. */
+  address: `0x${string}` | undefined;
   position: ReturnType<typeof useVaultPosition>;
   now: bigint | undefined;
   taking: { key: string; id: bigint; side: SideValue } | null;
@@ -74,23 +77,33 @@ export function MarketBlock({
       onStake={withClaim ? undefined : (side) => setTaking({ key: market.key, id: r.id, side })}
     >
       {withClaim ? (
-        <ClaimRow
-          market={market}
-          roundId={r.id}
-          claimable={r.claimable}
-          claimed={r.isClaimed}
-          positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
-          decimals={position.decimals!}
-          symbol={position.symbol}
-          address={address}
-          onDone={() => {
-            refetch();
-            position.refetch();
-          }}
-        />
+        // Nothing to claim without an address, and a claim row for a
+        // settled round a visitor was never in would be a control that
+        // cannot do anything.
+        address && (
+          <ClaimRow
+            market={market}
+            roundId={r.id}
+            claimable={r.claimable}
+            claimed={r.isClaimed}
+            positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
+            decimals={position.decimals!}
+            symbol={position.symbol}
+            address={address}
+            onDone={() => {
+              refetch();
+              position.refetch();
+            }}
+          />
+        )
       ) : (
         taking?.key === market.key &&
-        taking.id === r.id && (
+        taking.id === r.id &&
+        // The side buttons stay live for a visitor, and answer with the
+        // connect prompt rather than being disabled. A disabled control
+        // explains nothing; this says what is missing at the moment they
+        // reached for it, which is the moment the ask makes sense.
+        (address ? (
           <PositionForm
             market={market}
             roundId={r.id}
@@ -104,7 +117,9 @@ export function MarketBlock({
               position.refetch();
             }}
           />
-        )
+        ) : (
+          <ConnectToTake onClose={() => setTaking(null)} />
+        ))
       )}
     </RoundCard>
   );
@@ -475,6 +490,35 @@ function HealthPreview({
  * A win states the amount and offers the claim. A loss states the size of
  * the position and stops — no encouragement to try again, and nothing dressed up.
  */
+/**
+ * What a disconnected visitor gets when they reach for a side.
+ *
+ * Deliberately at the point of action rather than at the door. The old
+ * behaviour put "Connect a wallet" in front of the whole page, so the ask came
+ * before any reason to say yes; here it arrives after they have seen the pool,
+ * the multiple and the countdown — with the ask itself stating the one thing
+ * that makes this protocol unusual.
+ */
+function ConnectToTake({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-raised/40 px-4 py-3">
+      <p className="text-xs leading-relaxed text-ink-muted">
+        Taking a side needs a wallet. Your stake keeps earning while the position is open — it
+        is borrowed against, not sold.
+      </p>
+      <div className="flex items-center gap-2">
+        <ConnectButton />
+        <button
+          onClick={onClose}
+          className="text-xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ClaimRow({
   market,
   roundId,

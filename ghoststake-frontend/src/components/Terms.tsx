@@ -6,6 +6,7 @@ import {
   formatAmount,
   formatApr,
   formatDuration,
+  formatOptional,
   formatPercent,
   shortenAddress,
 } from "@/lib/format";
@@ -31,19 +32,6 @@ import type { Market } from "@/lib/markets";
  * pool carries no directional risk for the protocol. All three are arguments
  * for the protocol and none of them were on screen.
  */
-/**
- * Formats a term, or undefined while it is still loading.
- *
- * Explicitly rather than `value && format(value)`, which evaluates to `0n` for
- * a zero-valued term and renders a raw bigint. Zero is a legitimate setting
- * for several of these — a market may be listed with no rake, and a vault may
- * be deployed with no liquidation bonus — so "falsy" and "not loaded yet" are
- * genuinely different questions here.
- */
-function shown(value: bigint | undefined, format: (v: bigint) => string): string | undefined {
-  return value === undefined ? undefined : format(value);
-}
-
 export function Terms({
   markets,
   decimals,
@@ -74,7 +62,7 @@ export function Terms({
           <Group title="Staking">
             <Term
               name="Yield rate"
-              value={shown(lending.yieldRatePerSecond, formatApr)}
+              value={formatOptional(lending.yieldRatePerSecond, formatApr)}
             >
               Simple, not compounding — yield never folds back into the earning
               base, so what you earn is a function of stake and time and nothing
@@ -88,13 +76,13 @@ export function Terms({
           </Group>
 
           <Group title="Borrowing">
-            <Term name="Max LTV" value={shown(lending.maxLTV, formatPercent)}>
+            <Term name="Max LTV" value={formatOptional(lending.maxLTV, formatPercent)}>
               The most you may borrow against your stake. A borrow that would
               cross this is refused rather than allowed and then liquidated.
             </Term>
             <Term
               name="Liquidation threshold"
-              value={shown(lending.liquidationThreshold, formatPercent)}
+              value={formatOptional(lending.liquidationThreshold, formatPercent)}
             >
               {lending.maxLTV && lending.liquidationThreshold ? (
                 <>
@@ -112,7 +100,7 @@ export function Terms({
             </Term>
             <Term
               name="Utilization kink"
-              value={shown(lending.kink, formatPercent)}
+              value={formatOptional(lending.kink, formatPercent)}
             >
               Where the borrow rate stops rising gently and starts rising
               steeply, so lenders are paid to refill a pool that is running dry.
@@ -122,14 +110,14 @@ export function Terms({
           <Group title="If you are liquidated">
             <Term
               name="Close factor"
-              value={shown(lending.closeFactor, formatPercent)}
+              value={formatOptional(lending.closeFactor, formatPercent)}
             >
               The most of your debt one liquidation may clear. It caps what a
               single price dip costs you — the rest of the position survives it.
             </Term>
             <Term
               name="Liquidator bonus"
-              value={shown(lending.liquidationBonus, formatPercent)}
+              value={formatOptional(lending.liquidationBonus, formatPercent)}
             >
               The discount a liquidator takes on the collateral they seize, paid
               out of your position. It is what makes anyone show up to close an
@@ -137,7 +125,7 @@ export function Terms({
             </Term>
             <Term
               name="Full liquidation below"
-              value={shown(lending.fullLiquidationThreshold, formatHealthLine)}
+              value={formatOptional(lending.fullLiquidationThreshold, formatHealthLine)}
             >
               Below this health factor the close-factor cap is lifted and the
               whole lien may be cleared at once. It is derived on chain from the
