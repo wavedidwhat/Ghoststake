@@ -168,7 +168,7 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 		cfg:         cfg,
 		contracts:   contracts,
 		addresses:   addresses,
-		stream:      ledger.StreamName(cfg.ChainID),
+		stream:      ledger.StreamName(cfg.ChainID, ledger.Fingerprint(addressHexes)),
 		fingerprint: ledger.Fingerprint(addressHexes),
 		publisher:   cfg.Publisher,
 	}, nil
@@ -185,16 +185,29 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 // Preflight refuses to start against a cursor built by reading different
 // contracts.
 //
-// The stream is chain-scoped, so a redeployment inherits the previous
-// deployment's cursor. That cursor is at the old contracts' head, which is
-// past the new ones' start block — so the loop would resume *ahead* of the
-// new deployment's history and never backfill it. Every symptom of that is a
-// non-symptom: no error, no gap, the cursor advancing normally, and empty
+// The stream was chain-scoped until GHO-51, so a redeployment inherited the
+// previous deployment's cursor. That cursor is at the old contracts' head,
+// which is past the new ones' start block — so the loop resumed *ahead* of the
+// new deployment's history and never backfilled it. Every symptom of that was
+// a non-symptom: no error, no gap, the cursor advancing normally, and empty
 // tables. It cost an afternoon once already.
+//
+// The stream is deployment-scoped now, so there is nothing to inherit: a new
+// address set is a new stream, starting at its own start block, with the
+// previous deployment's cursor and rows left intact beside it.
 //
 // Called before the loop rather than inside it, so the answer is a refusal to
 // boot instead of a warning repeating every poll interval.
 func (ix *Indexer) Preflight(ctx context.Context) error {
+	// Before the cursor is looked at by anything else: a deployment that
+	// predates GHO-51 has its position filed under the old chain-scoped name,
+	// and every check below would otherwise see a stream that has never run.
+	if err := ix.adoptLegacyCursor(ctx); err != nil {
+		return err
+	}
+	if err := ix.attributeExistingEntries(ctx); err != nil {
+		return err
+	}
 	if err := ix.checkCursorContracts(ctx); err != nil {
 		return err
 	}
@@ -280,6 +293,95 @@ func (ix *Indexer) replayForNewDecoders(ctx context.Context) error {
 	return ix.repo.ReplayFrom(ctx, ix.stream, ix.cfg.StartBlock)
 }
 
+// adoptLegacyCursor moves a pre-GHO-51 cursor onto this deployment's stream.
+//
+// The stream name was chain-scoped and is now deployment-scoped, so a running
+// deployment's position sits under a name nothing looks for any more. Left
+// alone it is not lost — it is worse than lost, it is *invisible*: the indexer
+// would see a stream that has never run, start again at StartBlock, and
+// re-read the entire range. Every insert is idempotent so no data would be
+// harmed, but on a pruned RPC that re-read returns nothing (GHO-50) and the
+// operator watches an indexer walk tens of thousands of blocks to arrive
+// exactly where it already was.
+//
+// Adopted only when the legacy cursor's own fingerprint matches ours. A cursor
+// left behind by a *different* deployment is not ours to take, and taking it
+// would put this deployment's stream at a block it never read — the precise
+// failure the fingerprint check was written for in GHO-17.
+func (ix *Indexer) adoptLegacyCursor(ctx context.Context) error {
+	legacy := ledger.StreamName(ix.cfg.ChainID, "")
+	if legacy == ix.stream {
+		return nil
+	}
+
+	cursor, found, err := ix.repo.LoadCursor(ctx, legacy)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil // fresh database, or already adopted
+	}
+	// A cursor predating the fingerprint column cannot prove it is ours. It is
+	// adopted anyway, for the same reason checkCursorContracts adopts one:
+	// refusing would strand every deployment that upgraded through a version
+	// which did not record it. Logged, because it is an assumption.
+	if cursor.Contracts != "" && cursor.Contracts != ix.fingerprint {
+		slog.Info("leaving a previous deployment's cursor where it is",
+			"stream", legacy, "its_contracts", cursor.Contracts, "ours", ix.fingerprint)
+		return nil
+	}
+
+	adopted, err := ix.repo.AdoptCursor(ctx, legacy, ix.stream)
+	if err != nil {
+		return err
+	}
+	if adopted {
+		slog.Info("adopted the pre-deployment-scoped cursor",
+			"from", legacy, "to", ix.stream, "last_block", cursor.LastBlock)
+	}
+	return nil
+}
+
+// attributeExistingEntries fills in the contract address on rows indexed
+// before there was a column for it.
+//
+// Migration 0009 added it and could not populate it: SQL has no access to
+// which addresses this process was configured with. So the repair lands here,
+// where they are in scope — the same argument, and the same shape, as
+// attributeExistingRounds below.
+//
+// It is safer than that one, and worth saying why. Round events needed a
+// refusal when several markets were configured, because the rows could have
+// belonged to any of them. Ledger entries cannot: they only ever come from the
+// vault and the pool, and a deployment has exactly one of each. The name on
+// the row therefore identifies the contract uniquely, so there is no ambiguity
+// to refuse over.
+func (ix *Indexer) attributeExistingEntries(ctx context.Context) error {
+	pending, err := ix.repo.UnattributedEntries(ctx, ix.cfg.ChainID)
+	if err != nil {
+		return err
+	}
+	if pending == 0 {
+		return nil
+	}
+
+	for _, c := range ix.contracts {
+		if c.name != abis.CollateralVault && c.name != abis.BorrowLiquidityPool {
+			continue
+		}
+		updated, err := ix.repo.AttributeEntries(ctx, ix.cfg.ChainID, c.name, c.address.Hex())
+		if err != nil {
+			return err
+		}
+		if updated > 0 {
+			slog.Info("attributed ledger entries indexed before deployments were distinguished",
+				"chain_id", ix.cfg.ChainID, "contract", c.name,
+				"address", c.address.Hex(), "rows", updated)
+		}
+	}
+	return nil
+}
+
 func (ix *Indexer) checkCursorContracts(ctx context.Context) error {
 	cursor, found, err := ix.repo.LoadCursor(ctx, ix.stream)
 	if err != nil {
@@ -300,13 +402,24 @@ func (ix *Indexer) checkCursorContracts(ctx context.Context) error {
 	}
 
 	if cursor.Contracts != ix.fingerprint {
+		// Unreachable since GHO-51, and kept as an assertion rather than
+		// deleted. The stream name now contains the fingerprint, so a cursor
+		// found under this name was written by these contracts by
+		// construction — reaching here means the two derivations of the
+		// fingerprint have diverged, which is a code bug and not an operator
+		// one.
+		//
+		// The old advice for this error was "DELETE FROM ledger_entries;
+		// DELETE FROM round_events; DELETE FROM indexer_cursor;". That is
+		// precisely what GHO-51 exists to stop anyone ever having to type: a
+		// redeployment now starts a new stream beside the old one, and every
+		// row of the previous deployment's history is kept.
 		return fmt.Errorf(
 			"indexer: cursor for stream %s was built from contracts %s but this process watches %s. "+
-				"The contracts were redeployed: resuming would skip the new deployment's history "+
-				"(cursor is at block %d, start block is %d) and index nothing while reporting healthy. "+
-				"Reset the derived index to re-read from the start:\n"+
-				"  DELETE FROM ledger_entries; DELETE FROM round_events; DELETE FROM indexer_cursor;",
-			ix.stream, cursor.Contracts, ix.fingerprint, cursor.LastBlock, ix.cfg.StartBlock)
+				"The stream name is derived from the fingerprint, so these cannot disagree unless "+
+				"ledger.Fingerprint and ledger.StreamName have drifted apart. This is a bug, not a "+
+				"configuration problem — do NOT delete the derived index",
+			ix.stream, cursor.Contracts, ix.fingerprint)
 	}
 	return nil
 }

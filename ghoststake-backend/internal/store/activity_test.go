@@ -325,7 +325,7 @@ func TestReReadingAfterAReplayAddsOnlyTheNewRecords(t *testing.T) {
 	// The balance must not have doubled — that is the whole risk of a replay,
 	// and it is why new records are appended after the existing record
 	// indices rather than inserted before them.
-	balance, err := st.BalanceOf(ctx, chainID, acct, ledger.SupplyScaled)
+	balance, err := st.BalanceOf(ctx, chainID, acct, ledger.SupplyScaled, deploymentA)
 	if err != nil {
 		t.Fatalf("balance: %v", err)
 	}
