@@ -5,6 +5,7 @@ import {
   formatAmount,
   formatApr,
   formatDuration,
+  formatOptional,
   formatHealthFactor,
   formatPercent,
   hasDebt,
@@ -188,3 +189,22 @@ describe("formatDuration", () => {
     expect(formatDuration(0n)).toBe("0s");
   });
 })
+
+describe("formatOptional", () => {
+  it("formats a value that has loaded", () => {
+    expect(formatOptional(WAD / 2n, formatPercent)).toBe("50.00%");
+  });
+
+  it("is undefined for a value that has not", () => {
+    expect(formatOptional(undefined, formatPercent)).toBeUndefined();
+  });
+
+  /**
+   * The whole reason this exists. `value && format(value)` returns `0n` here,
+   * which renders as a raw bigint — and zero is a real setting, not a missing
+   * read, so the loading skeleton must not stand in for it.
+   */
+  it("formats zero rather than treating it as absent", () => {
+    expect(formatOptional(0n, formatPercent)).toBe("0.00%");
+  });
+});
