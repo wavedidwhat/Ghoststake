@@ -6,6 +6,12 @@ import "math/big"
 type VaultParams struct {
 	MaxLTV               *big.Int
 	LiquidationThreshold *big.Int
+
+	// The two below are only needed to quote a liquidation, so they may be
+	// nil on a params value built for a health read alone. `LiquidationQuote`
+	// is the one thing that requires them and says so.
+	LiquidationBonus *big.Int
+	CloseFactor      *big.Int
 }
 
 // VaultState is the raw state of one user's vault position, as the chain
@@ -298,5 +304,83 @@ func Describe(s VaultState, p VaultParams, nowUnix int64) Health {
 		HasDebt:            hasDebt,
 		Liquidatable:       Liquidatable(hf, hasDebt),
 		Band:               BandOf(hf, hasDebt),
+	}
+}
+
+// Quote is what a liquidator would get for closing a position right now.
+//
+// Every figure mirrors `CollateralVault.liquidate`, and the point of deriving
+// them here rather than in the handler is that they are the numbers a caller
+// decides on. A discovery endpoint that lists underwater positions without
+// saying what they pay is a list of names.
+type Quote struct {
+	// MaxRepay is the largest lien a single liquidation may clear: the close
+	// factor applied to the debt, lifted to the whole lien once the position
+	// is far enough under.
+	MaxRepay *big.Int
+	// Seized is the collateral that repayment takes, bonus included and
+	// capped at what the position actually holds.
+	Seized *big.Int
+	// Bonus is what the liquidator keeps: seized less repaid. Zero rather
+	// than negative when the collateral cannot cover the repayment — see
+	// Profitable.
+	Bonus *big.Int
+	// Profitable is whether a rational liquidator would call at all.
+	//
+	// False is not an edge case, it is the state GHO-45 exists for: past the
+	// point where collateral covers debt plus bonus, every liquidation leaves
+	// the caller out of pocket, so nobody makes it and the position sits.
+	// A discovery surface that showed these alongside the profitable ones
+	// without distinguishing them would be sending liquidators to lose money.
+	Profitable bool
+	// FullLiquidation is whether the close factor has lifted, so one call can
+	// clear the whole lien.
+	FullLiquidation bool
+}
+
+// LiquidationQuote derives what closing this position pays.
+//
+// Mirrors the contract step for step, including the order of the min: the
+// contract caps the seizure at the collateral that exists and repays the full
+// amount regardless, which is exactly how a liquidator ends up out of pocket.
+// Computing the bonus first and capping afterwards would quietly report a
+// profit the chain would not pay.
+func LiquidationQuote(collateral, debt, healthFactor *big.Int, p VaultParams) Quote {
+	empty := Quote{MaxRepay: new(big.Int), Seized: new(big.Int), Bonus: new(big.Int)}
+	if healthFactor == nil || p.CloseFactor == nil || p.LiquidationBonus == nil {
+		return empty
+	}
+	if healthFactor.Cmp(WAD) >= 0 {
+		return empty // healthy: nothing to liquidate
+	}
+
+	// The close factor lifts to 100% below `liquidationThreshold x (1 + bonus)`
+	// — the line under which a capped liquidation makes the position *less*
+	// healthy, so capping it spirals instead of finishing.
+	full := MulDiv(p.LiquidationThreshold, new(big.Int).Add(WAD, p.LiquidationBonus), WAD)
+	closeFactor := p.CloseFactor
+	fullLiquidation := healthFactor.Cmp(full) < 0
+	if fullLiquidation {
+		closeFactor = WAD
+	}
+
+	repay := MulDiv(or0(debt), closeFactor, WAD)
+	wanted := new(big.Int).Add(repay, MulDiv(repay, p.LiquidationBonus, WAD))
+	seized := wanted
+	if or0(collateral).Cmp(wanted) < 0 {
+		seized = or0(collateral)
+	}
+
+	bonus := new(big.Int)
+	if seized.Cmp(repay) > 0 {
+		bonus = new(big.Int).Sub(seized, repay)
+	}
+
+	return Quote{
+		MaxRepay:        repay,
+		Seized:          seized,
+		Bonus:           bonus,
+		Profitable:      seized.Cmp(repay) > 0,
+		FullLiquidation: fullLiquidation,
 	}
 }
