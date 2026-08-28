@@ -67,6 +67,10 @@ export function useVaultPosition() {
     contracts: [
       { ...vault, functionName: "collateralValue", args },
       { ...vault, functionName: "accruedYield", args },
+      // The ledger's own figure, beside the capped one. The two together are
+      // the only way the UI can tell "you have earned this" from "the ledger
+      // credits this and nothing funds it" — see lib/stake.ts and GHO-55.
+      { ...vault, functionName: "totalLedgerValue", args },
       { ...vault, functionName: "lienOf", args },
       { ...vault, functionName: "healthFactor", args },
       { ...vault, functionName: "maxBorrowable", args },
@@ -89,8 +93,18 @@ export function useVaultPosition() {
     },
   });
 
-  const [collateral, yieldAccrued, lien, healthFactor, maxBorrowable, liquidatable, shares, threshold, yieldRate] =
-    query.data ?? [];
+  const [
+    collateral,
+    yieldAccrued,
+    ledgerValue,
+    lien,
+    healthFactor,
+    maxBorrowable,
+    liquidatable,
+    shares,
+    threshold,
+    yieldRate,
+  ] = query.data ?? [];
 
   return {
     enabled,
@@ -104,6 +118,7 @@ export function useVaultPosition() {
     symbol: asset.symbol,
     collateralValue: collateral?.result as bigint | undefined,
     accruedYield: yieldAccrued?.result as bigint | undefined,
+    totalLedgerValue: ledgerValue?.result as bigint | undefined,
     lien: lien?.result as bigint | undefined,
     healthFactor: healthFactor?.result as bigint | undefined,
     maxBorrowable: maxBorrowable?.result as bigint | undefined,

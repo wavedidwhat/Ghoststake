@@ -16,6 +16,7 @@ import { useRounds } from "@/hooks/useRounds";
 import { Phase } from "@/lib/rounds";
 import { contractsConfigured } from "@/lib/env";
 import { formatAmount, formatApr, formatPercent } from "@/lib/format";
+import { stakeStanding } from "@/lib/stake";
 import { activeChain } from "@/lib/wagmi";
 
 export default function DashboardPage() {
@@ -55,6 +56,7 @@ export default function DashboardPage() {
 
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
   const { decimals, symbol } = position;
+  const standing = stakeStanding(position.totalLedgerValue, position.collateralValue, decimals);
 
   // Undefined until decimals are known: formatting against a guessed scale
   // produces a plausible number that is wrong by orders of magnitude.
@@ -69,7 +71,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
           numbers is the product. Health factor follows as the detail behind
           the middle step. */}
       <div className="lg:col-span-3">
-        <PipelineStrip position={position} />
+        <PipelineStrip position={position} standing={standing} />
       </div>
 
       <div className="lg:col-span-2">
@@ -83,8 +85,19 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         <PendingFigure value={amount(position.collateralValue)} unit={symbol} />
       </Stat>
 
-      <Stat label="Accrued yield" hint="since last checkpoint">
-        <PendingFigure value={amount(position.accruedYield)} unit={symbol} tone="positive" />
+      {/* Not toned positive while the ledger is unfunded. Green beside a
+          balance says "you gained this", and the panel above has just
+          finished explaining that nothing stands behind it — the two would be
+          arguing with each other on the same screen. See GHO-55. */}
+      <Stat
+        label="Accrued yield"
+        hint={standing && !standing.backed ? "credited, not redeemable" : "since last checkpoint"}
+      >
+        <PendingFigure
+          value={amount(position.accruedYield)}
+          unit={symbol}
+          tone={standing && !standing.backed ? "muted" : "positive"}
+        />
       </Stat>
 
       {/* Accounting parentheses: a claim against the position, not a
@@ -124,7 +137,13 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
  * Reads the user's open positions so the summary can say what the borrowed
  * money is actually doing, rather than stopping at "you have debt".
  */
-function PipelineStrip({ position }: { position: ReturnType<typeof useVaultPosition> }) {
+function PipelineStrip({
+  position,
+  standing,
+}: {
+  position: ReturnType<typeof useVaultPosition>;
+  standing: ReturnType<typeof stakeStanding>;
+}) {
   // Every market, not just the listed ones: a position in a market the owner
   // has since delisted is still the user's money at risk, and leaving it out
   // of this summary would understate what is at stake.
@@ -148,6 +167,7 @@ function PipelineStrip({ position }: { position: ReturnType<typeof useVaultPosit
     <PipelineSummary
       staked={position.collateralValue}
       yieldRate={position.yieldRatePerSecond}
+      standing={standing}
       accrued={position.accruedYield}
       borrowed={position.lien}
       healthFactor={position.healthFactor}
