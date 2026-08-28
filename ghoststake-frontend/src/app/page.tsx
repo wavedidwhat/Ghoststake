@@ -9,6 +9,7 @@ import { HealthFactorCard } from "@/components/HealthFactor";
 import { PipelineSummary } from "@/components/PipelineSummary";
 import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
+import { Terms } from "@/components/Terms";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { usePoolStats } from "@/hooks/usePoolStats";
 import { useMarkets } from "@/hooks/useMarkets";
@@ -116,6 +117,14 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
       <div className="lg:col-span-3">
         <PoolStats decimals={decimals} symbol={symbol} />
       </div>
+
+      {/* Last, because it is reference rather than state — but on this page
+          rather than behind a link, because "what are the terms" is the first
+          question anyone asks a lending protocol and a page nobody clicks does
+          not answer it. See GHO-30. */}
+      <div className="lg:col-span-3">
+        <TermsSection decimals={decimals} symbol={symbol} />
+      </div>
     </div>
   );
 }
@@ -158,6 +167,15 @@ function PipelineStrip({ position }: { position: ReturnType<typeof useVaultPosit
       symbol={position.symbol}
     />
   );
+}
+
+/** Markets are read here rather than in `Terms` so the panel stays a
+ *  presentation component and the two market-reading hooks keep one caller. */
+function TermsSection({ decimals, symbol }: { decimals: number | undefined; symbol: string }) {
+  // The listed ones. Terms are reference material for a decision a user is
+  // about to make, and a delisted market is not one they can enter.
+  const { listed } = useMarkets();
+  return <Terms markets={listed} decimals={decimals} symbol={symbol} />;
 }
 
 function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol: string }) {

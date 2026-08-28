@@ -4,6 +4,7 @@ import {
   WAD,
   formatAmount,
   formatApr,
+  formatDuration,
   formatHealthFactor,
   formatPercent,
   hasDebt,
@@ -165,3 +166,25 @@ describe("apr", () => {
     expect(formatApr(0n)).toBe("0.00%");
   });
 });
+
+describe("formatDuration", () => {
+  it("names the unit, because 15 alone could be blocks", () => {
+    expect(formatDuration(15n)).toBe("15s");
+  });
+
+  it("renders whole minutes without a trailing zero", () => {
+    expect(formatDuration(120n)).toBe("2m");
+    expect(formatDuration(90n)).toBe("1m 30s");
+  });
+
+  it("drops seconds once there is an hour on the front", () => {
+    expect(formatDuration(3600n)).toBe("1h");
+    expect(formatDuration(5400n)).toBe("1h 30m");
+    expect(formatDuration(3603n)).toBe("1h");
+  });
+
+  /** A zero timing immutable is a real configuration, not a missing read. */
+  it("renders zero rather than an empty string", () => {
+    expect(formatDuration(0n)).toBe("0s");
+  });
+})
