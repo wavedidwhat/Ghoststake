@@ -295,7 +295,7 @@ contract AttackMarketTest is Test {
         assertEq(token.balanceOf(address(market)), 200 ether, "stakes are sitting in the contract");
         vm.expectRevert();
         vm.prank(owner);
-        market.withdrawFees(owner, 1 ether);
+        market.withdrawFees(1 ether);
     }
 
     /// @dev H6 — open a position on someone's behalf without being a router.

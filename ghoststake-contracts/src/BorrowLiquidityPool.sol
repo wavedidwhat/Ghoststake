@@ -5,6 +5,8 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+
+import { Treasured } from "./Treasured.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { EntryPausable } from "./EntryPausable.sol";
 
@@ -61,7 +63,7 @@ import { EntryPausable } from "./EntryPausable.sol";
 /// without a cumulative product, which is what the index *is*. Aave and
 /// Compound both live with the same residue. `test_accrueCadenceEffectIsNegligible`
 /// pins the magnitude so a future change can't quietly widen it.
-contract BorrowLiquidityPool is Ownable, ReentrancyGuard, EntryPausable {
+contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
     using SafeERC20 for IERC20;
 
     /// @dev Index precision. Higher than WAD because indices compound and
@@ -167,7 +169,7 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard, EntryPausable {
         uint256 reserveFactor_,
         address initialOwner,
         address pauseGuardian_
-    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) {
+    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) Treasured() {
         if (kink_ == 0 || kink_ >= WAD || reserveFactor_ >= WAD) revert InvalidCurve();
 
         asset = asset_;
@@ -519,9 +521,14 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard, EntryPausable {
     /// The floor keeps enough cash to cover every supplier claim that is not
     /// currently lent out, so reserves can only ever be drawn from genuine
     /// surplus.
-    function withdrawReserves(address to, uint256 amount) external onlyOwner nonReentrant {
+    ///
+    /// The destination is `treasury`, not a parameter — see `Treasured`. That
+    /// matters more here than for the rake: reserves are subordinated to
+    /// suppliers by the floor below, and a claim that is both subordinated and
+    /// payable to an address chosen at call time is a strange thing to ask
+    /// anybody to supply against.
+    function withdrawReserves(uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (to == address(0)) revert ZeroAddress();
         if (amount > totalReserves) revert InsufficientSupplyBalance(amount, totalReserves);
 
         // Reserves are only real once there is cash left over after every
@@ -536,6 +543,7 @@ contract BorrowLiquidityPool is Ownable, ReentrancyGuard, EntryPausable {
         uint256 withdrawable = balance > supplied ? balance - supplied : 0;
         if (amount > withdrawable) revert ReservesSeniorToSuppliers(amount, withdrawable);
 
+        address to = treasury;
         totalReserves -= amount;
         asset.safeTransfer(to, amount);
         emit ReservesWithdrawn(to, amount);

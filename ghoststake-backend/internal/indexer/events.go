@@ -373,7 +373,7 @@ func decodePool(name string, f *fields, _ types.Log) []ledger.Entry {
 			Delta: neg(f.amount("scaledAmount")), Counterparty: f.addr("payer"),
 		}}
 	}
-	// Accrued, BorrowModuleSet, ReservesWithdrawn, OwnershipTransferred:
-	// protocol-level, not per-account.
+	// Accrued, BorrowModuleSet, ReservesWithdrawn, TreasurySet,
+	// OwnershipTransferred: protocol-level, not per-account.
 	return nil
 }

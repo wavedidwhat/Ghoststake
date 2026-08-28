@@ -5,6 +5,8 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+
+import { Treasured } from "./Treasured.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { EntryPausable } from "./EntryPausable.sol";
 
@@ -130,7 +132,7 @@ interface ISettlementSink {
 /// own payout. Pushing to a list of winners would put an unbounded loop on
 /// the resolution path, which is how prediction markets brick themselves the
 /// moment a round gets popular.
-contract ParimutuelRound is Ownable, ReentrancyGuard, EntryPausable {
+contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
     using SafeERC20 for IERC20;
 
     /// @dev Ratio precision. 1e18 = 100%.
@@ -287,7 +289,7 @@ contract ParimutuelRound is Ownable, ReentrancyGuard, EntryPausable {
         uint256 minSidePool_,
         address initialOwner,
         address pauseGuardian_
-    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) {
+    ) Ownable(initialOwner) EntryPausable(pauseGuardian_) Treasured() {
         if (address(stakeAsset_) == address(0) || address(oracle_) == address(0)) revert ZeroAddress();
         if (rake_ > MAX_RAKE) revert InvalidParameters();
         // A zero floor would let a round resolve with an empty winning side
@@ -705,16 +707,21 @@ contract ParimutuelRound is Ownable, ReentrancyGuard, EntryPausable {
         emit RouterSet(router, allowed);
     }
 
-    /// @notice Withdraw collected rake.
+    /// @notice Withdraw collected rake to the treasury.
     /// @dev Bounded by `protocolFees` rather than by the token balance, so
     /// the owner can never reach into stakes that are still owed to users —
     /// including the stakes of a round that is open, locked, or resolved but
     /// unclaimed.
-    function withdrawFees(address to, uint256 amount) external onlyOwner nonReentrant {
-        if (to == address(0)) revert ZeroAddress();
+    ///
+    /// The destination is `treasury` rather than a parameter. It used to be a
+    /// parameter, which meant the answer to "where does the rake go" was
+    /// "wherever the owner types", decided inside the transaction that moved
+    /// it. See `Treasured`. Repointing it is `setTreasury`, which emits.
+    function withdrawFees(uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0) revert ZeroAmount();
         if (amount > protocolFees) revert InsufficientFees(amount, protocolFees);
 
+        address to = treasury;
         protocolFees -= amount;
         stakeAsset.safeTransfer(to, amount);
 
