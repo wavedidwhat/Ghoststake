@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Connector } from "wagmi";
 import { useConnection, useConnect, useConnectors, useDisconnect } from "wagmi";
 import { shortenAddress } from "@/lib/format";
+import { orderWallets } from "@/lib/wallets";
 import { useSession } from "@/hooks/useSession";
 
 /**
@@ -15,22 +16,18 @@ import { useSession } from "@/hooks/useSession";
  */
 
 /**
- * Every wallet the browser announced, as something a person can choose from.
+ * Every way to connect, as something a person can choose from.
  *
  * EIP-6963 gives one connector per installed wallet. Taking `connectors[0]`
  * silently picks whichever announced first, so a machine with three wallets
  * can only ever reach one of them — and which one looks arbitrary, because it
- * is.
- *
- * The generic `injected` connector is dropped whenever a discovered wallet
- * exists: it targets whatever claimed `window.ethereum`, which is already one
- * of the entries below, so keeping it lists the same wallet twice under two
- * names.
+ * is. The ordering and de-duplication rules live in `orderWallets`.
  */
-function useWallets(): Connector[] {
+function useWallets() {
   const connectors = useConnectors();
-  const discovered = connectors.filter((c) => c.id !== "injected");
-  return discovered.length > 0 ? discovered : [...connectors];
+  const hasInjectedProvider =
+    typeof window !== "undefined" && "ethereum" in window && window.ethereum !== undefined;
+  return orderWallets(connectors, hasInjectedProvider);
 }
 
 export function ConnectButton() {
@@ -73,60 +70,43 @@ export function ConnectButton() {
   }
 
   if (connection.status === "disconnected") {
-    if (wallets.length === 0) {
-      return (
-        <a
-          href="https://ethereum.org/en/wallets/find-wallet/"
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted hover:text-ink"
-        >
-          No wallet detected
-        </a>
-      );
-    }
+    const all = [...wallets.detected, ...wallets.other];
 
-    // One wallet needs no menu; a menu of one is a pointless extra click.
-    if (wallets.length === 1) {
-      return (
-        <ConnectAction
-          label="Connect wallet"
-          onClick={() => connect({ connector: wallets[0] })}
-          error={error}
-        />
-      );
-    }
+    const pick = (wallet: Connector) => {
+      setPicking(false);
+      connect({ connector: wallet });
+    };
 
+    // The markup must not depend on how many options there are. The server
+    // has no WalletConnect connector (see wagmi.ts) and so counts one fewer
+    // than the browser; branching the element on the count was a hydration
+    // mismatch (React #418). The count decides what a click does instead —
+    // one option connects directly, since a menu of one is a pointless click.
     return (
       <div className="relative" ref={menuRef}>
         <ConnectAction
           label="Connect wallet"
-          onClick={() => setPicking((open) => !open)}
+          onClick={() => (all.length === 1 ? pick(all[0]) : setPicking((open) => !open))}
           error={error}
           expanded={picking}
         />
         {picking && (
           <div
             role="menu"
-            className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-card border border-border bg-surface shadow-xl"
+            className="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-card border border-border bg-surface shadow-xl"
           >
-            <p className="border-b border-border px-3 py-2 text-xs tracking-wide text-ink-faint uppercase">
-              {wallets.length} wallets detected
-            </p>
-            {wallets.map((wallet) => (
-              <button
-                key={wallet.uid}
-                role="menuitem"
-                onClick={() => {
-                  setPicking(false);
-                  connect({ connector: wallet });
-                }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-ink transition hover:bg-raised"
-              >
-                <WalletIcon connector={wallet} />
-                <span className="truncate">{wallet.name}</span>
-              </button>
-            ))}
+            {wallets.detected.length > 0 && (
+              <WalletGroup label="In this browser" wallets={wallets.detected} onPick={pick} />
+            )}
+            {wallets.other.length > 0 && (
+              <WalletGroup
+                // Said plainly, because on a phone this group is the only way
+                // in and "WalletConnect" alone means nothing to most people.
+                label={wallets.detected.length > 0 ? "Other wallets" : "Connect a mobile wallet"}
+                wallets={wallets.other}
+                onPick={pick}
+              />
+            )}
           </div>
         )}
       </div>
@@ -195,6 +175,33 @@ function ConnectAction({
             : "Could not connect"}
         </span>
       )}
+    </div>
+  );
+}
+
+function WalletGroup({
+  label,
+  wallets,
+  onPick,
+}: {
+  label: string;
+  wallets: Connector[];
+  onPick: (wallet: Connector) => void;
+}) {
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <p className="px-3 pt-2 pb-1 text-xs tracking-wide text-ink-faint uppercase">{label}</p>
+      {wallets.map((wallet) => (
+        <button
+          key={wallet.uid}
+          role="menuitem"
+          onClick={() => onPick(wallet)}
+          className="flex min-h-11 w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-ink transition hover:bg-raised"
+        >
+          <WalletIcon connector={wallet} />
+          <span className="truncate">{wallet.name}</span>
+        </button>
+      ))}
     </div>
   );
 }
