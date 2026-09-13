@@ -131,6 +131,7 @@ contract DemoPriceFeed is Ownable, AggregatorV3Interface {
     /// reaches `ParimutuelRound` as "wait", never as a failed transaction.
     function getRoundData(uint80 roundId) external view returns (uint80, int256, uint256, uint256, uint80) {
         Round memory round = _rounds[roundId];
+        // slither-disable-next-line incorrect-equality -- "no such round" sentinel
         if (round.updatedAt == 0) revert NoData();
         return (roundId, round.answer, round.updatedAt, round.updatedAt, roundId);
     }
@@ -138,6 +139,7 @@ contract DemoPriceFeed is Ownable, AggregatorV3Interface {
     function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
         uint80 roundId = latestRoundId;
         Round memory round = _rounds[roundId];
+        // slither-disable-next-line incorrect-equality -- "no such round" sentinel
         if (round.updatedAt == 0) revert NoData();
         return (roundId, round.answer, round.updatedAt, round.updatedAt, roundId);
     }

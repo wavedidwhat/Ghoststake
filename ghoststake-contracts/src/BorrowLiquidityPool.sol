@@ -233,6 +233,7 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
     /// @notice Fraction of the pool currently lent out. WAD.
     function utilization() public view returns (uint256) {
         uint256 borrowed = totalBorrowed();
+        // slither-disable-next-line incorrect-equality -- divide-by-zero guard, not a balance check
         if (borrowed == 0) return 0;
         return Math.mulDiv(borrowed, WAD, availableLiquidity() + borrowed);
     }
@@ -271,12 +272,14 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
     /// is ever priced at a stale index.
     function accrue() public {
         uint256 elapsed = block.timestamp - lastAccrualTime;
+        // slither-disable-next-line incorrect-equality -- same-block no-op; time cannot be nudged past it
         if (elapsed == 0) return;
 
         uint256 u = utilization();
         uint256 borrowGrowth = _borrowRateAt(u) * elapsed;
         uint256 supplyGrowth = _supplyRateAt(u) * elapsed;
 
+        // slither-disable-next-line uninitialized-local -- zero is the intended value when no interest accrues
         uint256 reservesAdded;
         if (borrowGrowth != 0) {
             // Reserve cut is taken from the interest borrowers actually owe
@@ -394,6 +397,7 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
         // debt than was paid for; full repayment is handled exactly.
         uint256 scaled = Math.mulDiv(amount, RAY, borrowIndex);
         uint256 owed = scaledDebt[onBehalfOf];
+        // slither-disable-next-line incorrect-equality -- exact full repayment; debt is not donation-movable
         if (amount == debt || scaled >= owed) {
             scaled = owed;
             scaledDebt[onBehalfOf] = 0;
@@ -448,6 +452,7 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
         accrue();
 
         loss = balanceOfDebt(user);
+        // slither-disable-next-line incorrect-equality -- guard against absorbing nothing
         if (loss == 0) revert NoDebtToAbsorb(user);
 
         // Cleared before anything else, so the position stops accruing and
@@ -460,10 +465,12 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
 
         uint256 remainder = loss - fromReserves;
         uint256 indexBefore = supplyIndex;
+        // slither-disable-next-line uninitialized-local -- stays zero when reserves cover the loss
         uint256 socialised;
 
         if (remainder != 0) {
             uint256 supplied = totalSupplied();
+            // slither-disable-next-line incorrect-equality -- empty-pool branch; also a divide-by-zero guard
             if (supplied == 0) {
                 // Nobody to charge. Recorded rather than dropped, and
                 // deliberately NOT carried forward onto whoever supplies next:
@@ -492,6 +499,7 @@ contract BorrowLiquidityPool is Treasured, ReentrancyGuard, EntryPausable {
                 // well inside uint256 — `mulDiv` carries the intermediate
                 // product at 512 bits — so the floor costs nothing but the
                 // failure mode.
+                // slither-disable-next-line incorrect-equality -- index floor; see comment above
                 supplyIndex = next == 0 ? 1 : next;
 
                 // A loss larger than everything suppliers hold has nowhere

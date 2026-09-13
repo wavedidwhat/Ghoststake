@@ -238,6 +238,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard, EntryPausable {
     function accruedYield(address user) public view returns (uint256) {
         Position storage position = positions[user];
         uint256 elapsed = block.timestamp - position.startTime;
+        // slither-disable-next-line incorrect-equality,timestamp -- no-op guards
         if (elapsed == 0 || position.principal == 0) return 0;
         // mulDiv carries the intermediate in 512 bits, so a large principal
         // cannot overflow the multiply. That matters because `_settle` sits on
@@ -527,6 +528,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard, EntryPausable {
     /// supplies *next*, and the protocol's own solvency reporting. In practice
     /// the keeper calls it; a caller bounty is an open question, not a
     /// decision made here.
+    // slither-disable-next-line reentrancy-no-eth -- the call is accrue() on the immutable pool: no callback, and nonReentrant
     function writeOffBadDebt(address user) external nonReentrant {
         if (address(lienSource) == address(0)) revert NoLienSource();
 
@@ -546,6 +548,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard, EntryPausable {
         // uncollectable while there were still assets behind them.
         if (debt <= collateral) revert PositionIsRecoverable(user, debt, collateral);
 
+        // slither-disable-next-line uninitialized-local -- stays zero when there is no collateral to seize
         uint256 recovered;
         if (collateral != 0) {
             // Everything, at no bonus. A liquidator is paid to take this risk
