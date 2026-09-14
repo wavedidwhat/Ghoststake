@@ -191,6 +191,7 @@ contract ChainlinkRoundOracle is IRoundOracle {
         return startedAt <= at;
     }
 
+    // slither-disable-next-line unused-return -- only answer and startedAt matter for uptime
     function _sequencerStatus() private view returns (bool ok, int256 answer, uint256 startedAt) {
         try sequencerUptimeFeed.latestRoundData() returns (uint80, int256 answer_, uint256 startedAt_, uint256, uint80)
         {
@@ -230,6 +231,7 @@ contract ChainlinkRoundOracle is IRoundOracle {
     // Wrapped feed reads
     // ------------------------------------------------------------------
 
+    // slither-disable-next-line unused-return -- only the fields this adapter uses are destructured
     function _latestRound() private view returns (bool ok, uint80 roundId, int256 answer, uint256 updatedAt) {
         try feed.latestRoundData() returns (uint80 id, int256 answer_, uint256, uint256 updatedAt_, uint80) {
             return (true, id, answer_, updatedAt_);
@@ -238,6 +240,7 @@ contract ChainlinkRoundOracle is IRoundOracle {
         }
     }
 
+    // slither-disable-next-line unused-return -- only the fields this adapter uses are destructured
     function _round(uint80 roundId) private view returns (bool ok, int256 answer, uint256 updatedAt) {
         try feed.getRoundData(roundId) returns (uint80, int256 answer_, uint256, uint256 updatedAt_, uint80) {
             return (true, answer_, updatedAt_);

@@ -9,7 +9,16 @@ optimizer = true
 optimizer_runs = 200
 via_ir = false
 gas_reports = ["*"]
+# The invariant suite's opt-in coverage log (GHO19_COVERAGE=1) and nothing else.
+fs_permissions = [{ access = "write", path = "./cache/invariant-coverage.txt" }]
 remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
+
+# GHO-19. `fail_on_revert` is load-bearing: every handler action filters its
+# own preconditions, so an unexpected revert is a finding rather than noise.
+[invariant]
+runs = 64
+depth = 128
+fail_on_revert = true
 
 [fmt]
 line_length = 120

@@ -46,9 +46,8 @@ jobs:
         run: forge test -vvv
 
   slither:
-    name: slither (non-blocking)
+    name: slither
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,9 +62,19 @@ jobs:
           # tell contributors to `foundryup --version <tag>` in sync.
           version: v1.2.3
 
+      # Blocking since GHO-19, which triaged every finding above informational
+      # to zero. Each suppression is inline at its site with the reason, so a
+      # new finding of the same kind still fails here.
+      #
+      # `timestamp` is the one detector excluded wholesale. It flags every
+      # comparison against block.timestamp, and in a protocol whose product is
+      # time windows that is all thirty of them. The real question behind it —
+      # how far Arbitrum's sequencer may skew block.timestamp against a
+      # 15-second entry cutoff — is an open decision in the runbook, not
+      # something this detector can answer.
       - name: Run Slither
         uses: crytic/slither-action@v0.4.0
         with:
           target: ghoststake-contracts
-          slither-args: --filter-paths "lib/"
-          fail-on: none
+          slither-args: --filter-paths "lib/|test/|script/" --exclude timestamp
+          fail-on: low
