@@ -71,7 +71,25 @@ export const env = {
    * every deployment did until now.
    */
   registryAddress: optionalAddress(process.env.NEXT_PUBLIC_REGISTRY_ADDRESS),
+
+  /**
+   * Reown (WalletConnect) project id. Public by design — what stops a clone
+   * site reusing it is the allowed-origins list in the Reown dashboard, not
+   * secrecy. Optional so local dev works without one; WalletConnect is simply
+   * not offered.
+   */
+  walletConnectProjectId: optionalProjectId(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID),
 } as const;
+
+function optionalProjectId(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  // Throws for the same reason addresses do: a typo'd id fails only when a
+  // user taps WalletConnect on a phone, which is the last place to find it.
+  if (!/^[0-9a-f]{32}$/.test(value)) {
+    throw new Error(`Invalid NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${value}`);
+  }
+  return value;
+}
 
 export const contractsConfigured = Boolean(env.vaultAddress && env.poolAddress);
 

@@ -33,6 +33,9 @@ services:
         # list comes from the chain, and adding a market is a transaction
         # rather than a rebuild of this image (GHO-34).
         NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-0xec64d918d12fb0ce59c26e72b1a234a18e983c68}
+        # Reown (WalletConnect) project id. Public, like everything here; the
+        # Reown dashboard's allowed-origins list is what stops reuse (GHO-60).
+        NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-f7da3a436480ac37fb519c982b6923c7}
     image: ghoststake-frontend
     # No host port publishing: on the VPS, Traefik (coolify-proxy) reaches this
     # container directly over the shared `coolify` network using the port below.
