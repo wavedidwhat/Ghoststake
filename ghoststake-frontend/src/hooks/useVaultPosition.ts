@@ -12,8 +12,14 @@ import { activeChain } from "@/lib/wagmi";
  *
  * Note this cannot use the vault's own `decimals()`: it is an ERC-4626, so
  * that returns share decimals (the asset's plus a 6-place offset).
+ *
+ * Exported because it is the only part of a "position" that has nothing to do
+ * with who is asking. The market list needs decimals to render a pool, and it
+ * used to get them by calling `useVaultPosition`, which meant the public
+ * browsing surface depended on a hook whose whole purpose is per-address state
+ * — and so on a wallet being connected. See GHO-44.
  */
-function useUnderlyingAsset() {
+export function useVaultAsset() {
   const asset = useReadContract({
     address: env.vaultAddress,
     abi: collateralVaultAbi,
@@ -53,7 +59,7 @@ function useUnderlyingAsset() {
  */
 export function useVaultPosition() {
   const { address } = useConnection();
-  const asset = useUnderlyingAsset();
+  const asset = useVaultAsset();
   const enabled = Boolean(address) && contractsConfigured;
 
   const vault = {
