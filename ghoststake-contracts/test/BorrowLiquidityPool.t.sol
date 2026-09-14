@@ -276,10 +276,10 @@ contract BorrowLiquidityPoolTest is Test {
         uint256 reserves = pool.totalReserves();
         vm.prank(alice);
         vm.expectRevert();
-        pool.withdrawReserves(alice, reserves);
+        pool.withdrawReserves(reserves);
 
         vm.prank(owner);
-        pool.withdrawReserves(owner, reserves);
+        pool.withdrawReserves(reserves);
         assertEq(pool.totalReserves(), 0);
     }
 
@@ -504,7 +504,7 @@ contract BorrowLiquidityPoolTest is Test {
         // Almost all cash is lent out; nothing is genuinely surplus.
         vm.prank(owner);
         vm.expectRevert();
-        pool.withdrawReserves(owner, reserves);
+        pool.withdrawReserves(reserves);
     }
 
     function test_reservesAreWithdrawableOnceGenuinelySurplus() public {
@@ -523,7 +523,7 @@ contract BorrowLiquidityPoolTest is Test {
         uint256 reserves = pool.totalReserves();
         assertGt(reserves, 0);
         vm.prank(owner);
-        pool.withdrawReserves(owner, reserves);
+        pool.withdrawReserves(reserves);
         assertEq(pool.totalReserves(), 0, "surplus reserves are drawable");
     }
 }

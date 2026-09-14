@@ -176,7 +176,7 @@ contract AttackLiquidationTest is AttackHarness {
         uint256 reserves = pool.totalReserves();
         vm.expectRevert();
         vm.prank(owner);
-        pool.withdrawReserves(owner, reserves);
+        pool.withdrawReserves(reserves);
     }
 
     /// @dev E3 — mint supply out of rounding by repeating 1-wei supplies and
