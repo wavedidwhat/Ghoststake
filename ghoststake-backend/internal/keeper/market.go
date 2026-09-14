@@ -66,6 +66,27 @@ type Market struct {
 	Description string
 }
 
+// SessionLabel names this market's gating in a log line, because "why did
+// this market not open a round all weekend" should be answerable from the
+// line that announced it.
+func (m *Market) SessionLabel() string {
+	if m.Session == nil {
+		return "24/7"
+	}
+	return "US market hours"
+}
+
+// HeartbeatLabel reports the feed's measured cadence, which is what decides
+// whether a market opens rounds at all. "not measured" explains a market that
+// never gates, and a heartbeat wildly unlike the feed's documented one
+// explains a market that gates too often.
+func (m *Market) HeartbeatLabel() string {
+	if !m.Liveness.Known {
+		return "not measured (too few rounds)"
+	}
+	return m.Liveness.Heartbeat.String()
+}
+
 func (m *Market) String() string {
 	if m.Description == "" {
 		return m.Address.Hex()

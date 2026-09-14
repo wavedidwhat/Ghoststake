@@ -74,7 +74,12 @@ func run() error {
 		return err
 	}
 
-	markets, err := keeper.Discover(ctx, client, cfg.RegistryAddress, cfg.MarketAddresses, nyse, cfg.StatusFeeds)
+	// The source, rather than a one-off read. GHO-34 made listing a market a
+	// transaction; reading the registry once at boot meant it was a
+	// transaction and a restart, and the restart is the half that gets
+	// forgotten. See Keeper.refreshMarkets.
+	source := keeper.NewSource(client, cfg.RegistryAddress, cfg.MarketAddresses, nyse, cfg.StatusFeeds)
+	markets, err := source.Markets(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,43 +90,24 @@ func run() error {
 			"entry_cutoff_s", m.Timing.EntryCutoff,
 			"lock_window_s", m.Timing.LockWindow,
 			"resolve_deadline_s", m.Timing.ResolveDeadline,
-			"session", sessionLabel(m),
-			"feed_heartbeat", heartbeatLabel(m))
+			"session", m.SessionLabel(),
+			"feed_heartbeat", m.HeartbeatLabel())
 	}
 
-	k, err := keeper.New(client, signer, markets, keeper.Config{
+	k, err := keeper.New(client, signer, source, markets, keeper.Config{
 		PollInterval:         cfg.PollInterval,
 		OpenRounds:           cfg.OpenRounds,
 		Lead:                 cfg.Lead,
 		EntryWindow:          cfg.EntryWindow,
 		Horizon:              cfg.Horizon,
 		MaxUncalendaredRound: cfg.MaxUncalendaredRound,
+		RefreshInterval:      cfg.RefreshInterval,
 		MinGasBalance:        cfg.MinGasBalanceWei,
 	})
 	if err != nil {
 		return err
 	}
 	return k.Run(ctx)
-}
-
-// sessionLabel names the gating in the startup log, because "why did this
-// market not open a round all weekend" should be answerable from line one.
-func sessionLabel(m *keeper.Market) string {
-	if m.Session == nil {
-		return "24/7"
-	}
-	return "US market hours"
-}
-
-// heartbeatLabel reports the feed's measured cadence, which is now what
-// decides whether a market opens rounds at all. Worth a startup line: "not
-// measured" explains a market that never gates, and a heartbeat wildly unlike
-// the feed's documented one explains a market that gates too often.
-func heartbeatLabel(m *keeper.Market) string {
-	if !m.Liveness.Known {
-		return "not measured (too few rounds)"
-	}
-	return m.Liveness.Heartbeat.String()
 }
 
 func setupKeeperLogger(cfg config.KeeperConfig) {
