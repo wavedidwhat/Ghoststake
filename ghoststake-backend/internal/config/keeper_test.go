@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/config"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
 )
 
 const (

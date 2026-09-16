@@ -22,9 +22,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
 )
 
 // Reader reads the deployed protocol.

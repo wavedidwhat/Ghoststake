@@ -3,7 +3,7 @@ package ledger_test
 import (
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 func TestFingerprintIgnoresOrderAndCase(t *testing.T) {

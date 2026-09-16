@@ -1,4 +1,4 @@
-module github.com/wavedidwhat/ghoststake
+module forge.wavedidwhat.com/wave/ghoststake
 
 go 1.27.0
 

@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 // A feed as a map from round id to publication time, plus a count of how many

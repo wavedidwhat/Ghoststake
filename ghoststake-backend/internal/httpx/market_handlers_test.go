@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/wavedidwhat/ghoststake/internal/config"
-	"github.com/wavedidwhat/ghoststake/internal/finance"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
 )
 
 func testParams() protocol.MarketParams {

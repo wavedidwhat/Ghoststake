@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/wavedidwhat/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 )
 
 // Config is what an operator chooses; everything else the keeper reads off

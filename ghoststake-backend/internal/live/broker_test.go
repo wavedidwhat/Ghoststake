@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/live"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
 )
 
 const (

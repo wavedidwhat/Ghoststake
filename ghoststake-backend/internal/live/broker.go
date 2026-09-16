@@ -10,7 +10,7 @@ package live
 import (
 	"sync"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // Update is one committed indexing range, summarised.

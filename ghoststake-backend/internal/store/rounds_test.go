@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // Round ids are namespaced per test so these can run against a shared

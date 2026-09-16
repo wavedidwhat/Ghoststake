@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/wavedidwhat/ghoststake/migrations"
+	"forge.wavedidwhat.com/wave/ghoststake/migrations"
 )
 
 type Store struct{ pool *pgxpool.Pool }

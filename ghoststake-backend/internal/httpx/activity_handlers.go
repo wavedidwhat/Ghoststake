@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // How many activity rows a page returns by default and at most.

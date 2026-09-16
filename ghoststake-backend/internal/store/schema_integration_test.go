@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/wavedidwhat/ghoststake/internal/store"
-	"github.com/wavedidwhat/ghoststake/migrations"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/migrations"
 )
 
 // Proves the wiring the pure test cannot: that Migrate reads the real applied

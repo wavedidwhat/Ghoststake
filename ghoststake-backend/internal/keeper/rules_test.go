@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 // The market the tests drive: entry stops 30s before lock, a lock may land up

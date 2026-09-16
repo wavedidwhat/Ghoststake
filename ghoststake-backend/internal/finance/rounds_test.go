@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
 )
 
 // A worked parimutuel payout.

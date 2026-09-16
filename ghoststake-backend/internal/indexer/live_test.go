@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/indexer"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/indexer"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
 // The seed script's borrower, in the checksummed form both auth and the

@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/finance"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
 )
 
 // The seed script's borrower — a deposit and a live debt, which is what makes

@@ -16,12 +16,12 @@ import (
 	"github.com/go-chi/httprate"
 	"github.com/gorilla/websocket"
 
-	"github.com/wavedidwhat/ghoststake/internal/auth"
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/config"
-	"github.com/wavedidwhat/ghoststake/internal/live"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
-	"github.com/wavedidwhat/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
 type Server struct {

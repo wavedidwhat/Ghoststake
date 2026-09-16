@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // A fresh database has no cursor to disagree with.
