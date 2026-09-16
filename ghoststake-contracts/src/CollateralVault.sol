@@ -753,6 +753,7 @@ contract CollateralVault is ERC4626, ReentrancyGuard, EntryPausable {
             uint256 fromShares = balanceOf(from);
             // Let `super._update` raise ERC20InsufficientBalance rather than
             // dividing by zero here.
+            // slither-disable-next-line incorrect-equality -- zero-balance guard before a division, not a balance check an attacker can steer
             if (fromShares == 0) {
                 super._update(from, to, value);
                 return;
