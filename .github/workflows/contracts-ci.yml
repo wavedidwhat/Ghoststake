@@ -25,7 +25,7 @@ jobs:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: https://github.com/foundry-rs/foundry-toolchain@v1
         with:
           # Pinned so `forge fmt` agrees with local dev machines — different
           # forge versions format borderline lines differently, which turns
@@ -54,7 +54,7 @@ jobs:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: https://github.com/foundry-rs/foundry-toolchain@v1
         with:
           # Pinned so `forge fmt` agrees with local dev machines — different
           # forge versions format borderline lines differently, which turns
@@ -73,7 +73,7 @@ jobs:
       # 15-second entry cutoff — is an open decision in the runbook, not
       # something this detector can answer.
       - name: Run Slither
-        uses: crytic/slither-action@v0.4.0
+        uses: https://github.com/crytic/slither-action@v0.4.0
         with:
           target: ghoststake-contracts
           slither-args: --filter-paths "lib/|test/|script/" --exclude timestamp
