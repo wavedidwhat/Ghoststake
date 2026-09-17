@@ -15,6 +15,7 @@ import (
 	"forge.wavedidwhat.com/wave/ghoststake/internal/indexer"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/redact"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
@@ -53,7 +54,7 @@ func run() error {
 		return err
 	}
 	defer ch.Close()
-	slog.Info("chain connected", "chain_id", ch.ChainID(), "rpc", cfg.RPCURL)
+	slog.Info("chain connected", "chain_id", ch.ChainID(), "rpc", redact.Host(cfg.RPCURL))
 
 	go sweepNonces(ctx, st)
 
@@ -92,7 +93,9 @@ func setupLogger(cfg config.Config) {
 	// JSON in production so log aggregators can parse it; text locally so it
 	// stays readable in a terminal.
 	var h slog.Handler
-	opts := &slog.HandlerOptions{Level: level}
+	// The RPC URL carries the provider key, and transport errors quote it in
+	// full, so every line is scrubbed rather than trusting each call site.
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: redact.ReplaceAttr(redact.Secrets(cfg.RPCURL))}
 	if cfg.IsDev() {
 		h = slog.NewTextHandler(os.Stdout, opts)
 	} else {
