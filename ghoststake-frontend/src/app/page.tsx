@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { useConnection } from "wagmi";
+import { AppShell } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
-import { ConnectButton } from "@/components/ConnectButton";
 import { Figure } from "@/components/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { Landing } from "@/components/Landing";
 import { PipelineSummary } from "@/components/PipelineSummary";
-import { NetworkGuard } from "@/components/NetworkGuard";
-import { Sidebar } from "@/components/Sidebar";
 import { Terms } from "@/components/Terms";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { usePoolStats } from "@/hooks/usePoolStats";
@@ -25,34 +23,21 @@ export default function DashboardPage() {
   const connection = useConnection();
   const position = useVaultPosition();
 
+  // This page carried its own copy of the shell — the exact duplication
+  // `AppShell` was extracted to stop. It went unnoticed until GHO-59 added a
+  // phone tab bar to the shell and the home page, alone, didn't have one.
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <NetworkGuard />
-
-        <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
-          <div>
-            <h1 className="text-lg font-semibold">Overview</h1>
-            <p className="text-xs text-ink-faint">{activeChain.name}</p>
-          </div>
-          <ConnectButton />
-        </header>
-
-        <main className="flex-1 p-6">
-          {connection.status === "disconnected" ? (
-            <Disconnected />
-          ) : !contractsConfigured ? (
-            <NotDeployed />
-          ) : position.isError ? (
-            <ReadFailed onRetry={() => position.refetch()} />
-          ) : (
-            <Position position={position} />
-          )}
-        </main>
-      </div>
-    </div>
+    <AppShell title="Overview">
+      {connection.status === "disconnected" ? (
+        <Disconnected />
+      ) : !contractsConfigured ? (
+        <NotDeployed />
+      ) : position.isError ? (
+        <ReadFailed onRetry={() => position.refetch()} />
+      ) : (
+        <Position position={position} />
+      )}
+    </AppShell>
   );
 }
 
