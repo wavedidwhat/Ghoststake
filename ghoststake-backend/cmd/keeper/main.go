@@ -27,6 +27,7 @@ import (
 	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/redact"
 )
 
 func main() {
@@ -115,7 +116,9 @@ func setupKeeperLogger(cfg config.KeeperConfig) {
 	if cfg.IsDev() {
 		level = slog.LevelDebug
 	}
-	opts := &slog.HandlerOptions{Level: level}
+	// The RPC URL carries the provider key, and transport errors quote it in
+	// full (a failed startup read logs "fatal" with that error).
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: redact.ReplaceAttr(redact.Secrets(cfg.RPCURL))}
 	var h slog.Handler = slog.NewJSONHandler(os.Stdout, opts)
 	if cfg.IsDev() {
 		h = slog.NewTextHandler(os.Stdout, opts)
