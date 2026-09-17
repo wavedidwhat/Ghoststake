@@ -31,52 +31,58 @@ export function MobileNav() {
   return (
     <>
       {/*
-       * `pb-[env(safe-area-inset-bottom)]` keeps the row above the iOS home
-       * bar. Without it the last few pixels of every tab sit under the
-       * system gesture area, where a tap either does nothing or goes home.
+       * A floating pill rather than a bar welded to the bottom edge: it
+       * reads as a control sitting on the page instead of chrome the page
+       * has to work around, and the gap under it is where the iOS home bar
+       * goes. The safe-area inset is added to that gap, so the pill rises on
+       * a notched phone rather than sitting under the system gesture area,
+       * where a tap either does nothing or goes home.
        */}
       <nav
         aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+        className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-40 rounded-card border border-border bg-raised md:hidden"
       >
-        <ul className="flex">
+        <ul className="grid grid-cols-5">
           {TAB_LINKS.map((item) => {
             const current = isCurrent(pathname, item.href);
             return (
-              <li key={item.href} className="flex-1">
+              <li key={item.href} className="min-w-0">
                 <Link
                   href={item.href}
                   aria-current={current ? "page" : undefined}
-                  className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs transition-colors ${
-                    current ? "text-ink" : "text-ink-muted"
+                  className={`m-1 flex min-h-[3rem] flex-col items-center justify-center gap-1 rounded-control px-0.5 py-2 text-xs transition-colors ${
+                    current ? "bg-ground text-ink" : "text-ink-muted"
                   }`}
                 >
-                  {/* The current tab is marked by a rule above the label as
-                      well as by colour, so it still reads in greyscale. */}
+                  {/* The current tab is marked by its own filled panel and a
+                      rule above the label, not by colour alone, so it still
+                      reads in greyscale. */}
                   <span
                     aria-hidden="true"
-                    className={`h-0.5 w-6 ${current ? "bg-brand" : "bg-transparent"}`}
+                    className={`h-0.5 w-5 rounded-full ${current ? "bg-brand" : "bg-transparent"}`}
                   />
-                  <span className="display text-[0.8rem] uppercase">{item.label}</span>
+                  <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">
+                    {item.short ?? item.label}
+                  </span>
                 </Link>
               </li>
             );
           })}
 
-          <li className="flex-1">
+          <li className="min-w-0">
             <button
               type="button"
               onClick={() => setMoreOpen(true)}
               aria-expanded={moreOpen}
-              className={`flex min-h-[3.25rem] w-full cursor-pointer flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs transition-colors ${
-                moreIsCurrent ? "text-ink" : "text-ink-muted"
+              className={`m-1 flex min-h-[3rem] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-control px-0.5 py-2 text-xs transition-colors ${
+                moreIsCurrent ? "bg-ground text-ink" : "text-ink-muted"
               }`}
             >
               <span
                 aria-hidden="true"
-                className={`h-0.5 w-6 ${moreIsCurrent ? "bg-brand" : "bg-transparent"}`}
+                className={`h-0.5 w-5 rounded-full ${moreIsCurrent ? "bg-brand" : "bg-transparent"}`}
               />
-              <span className="display text-[0.8rem] uppercase">More</span>
+              <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">More</span>
             </button>
           </li>
         </ul>

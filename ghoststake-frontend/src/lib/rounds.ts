@@ -121,3 +121,23 @@ export function formatCountdown(seconds: bigint): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
+
+/**
+ * How the pool is split, as a percentage on the Up side (GHO-59 layout).
+ *
+ * This is the number the odds bar draws, and it is the shape of the market
+ * before any figure is read: a bar that is mostly green says the crowd is on
+ * Up, which is also why Up pays less.
+ *
+ * Returns null when nothing is staked. An empty round is not 50/50 — it has
+ * no split at all, and drawing a half-and-half bar would invent a crowd.
+ */
+export function upShare(round: Round): number | null {
+  const total = round.upPool + round.downPool;
+  if (total === 0n) return null;
+
+  // Percent with one decimal of headroom before rounding, so a side holding
+  // 0.4% of the pool renders as 0% rather than being rounded up to 1% and
+  // looking like it has real money behind it.
+  return Number((round.upPool * 1000n) / total) / 10;
+}

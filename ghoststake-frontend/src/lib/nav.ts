@@ -43,6 +43,13 @@ export type NavLink = {
    */
   ready?: boolean;
   /**
+   * What the phone tab bar calls this, when the sidebar's word is too long
+   * for a fifth of a 390px screen. "Overview" and "Positions" truncated to
+   * "OVERVI…" and "POSITIO…", which looks broken and reads worse than a
+   * shorter word chosen on purpose.
+   */
+  short?: string;
+  /**
    * Shown in the phone tab bar rather than behind "More". Five is the limit:
    * past that the targets drop under 44px on a 390px screen.
    *
@@ -58,7 +65,7 @@ export type NavSection = { section: string; items: NavLink[] };
 export const NAV: NavSection[] = [
   {
     section: "Overview",
-    items: [{ href: "/", label: "Overview", ready: true, tab: true }],
+    items: [{ href: "/", label: "Overview", short: "Home", ready: true, tab: true }],
   },
   {
     section: "Take a view",
@@ -66,7 +73,14 @@ export const NAV: NavSection[] = [
       { href: "/stake", label: "Stake", note: "earn", ready: true, tab: true },
       { href: "/borrow", label: "Borrow", note: "against it", ready: true },
       { href: "/markets", label: "Markets", note: "take a view", ready: true, tab: true },
-      { href: "/positions", label: "Positions", note: "how they went", ready: true, tab: true },
+      {
+        href: "/positions",
+        label: "Positions",
+        short: "Bets",
+        note: "how they went",
+        ready: true,
+        tab: true,
+      },
       { href: "/activity", label: "Activity", note: "everything you did", ready: true },
     ],
   },

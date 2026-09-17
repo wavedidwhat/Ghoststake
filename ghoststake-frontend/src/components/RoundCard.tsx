@@ -13,6 +13,7 @@ import {
   formatCountdown,
   multipleFor,
   phaseLabel,
+  upShare,
   willVoidOnLock,
   type PhaseValue,
   type Round,
@@ -71,43 +72,50 @@ export function RoundCard({
   const youAreIn = (yourUp ?? 0n) > 0n || (yourDown ?? 0n) > 0n;
 
   return (
-    <article className="rounded-card border border-border bg-surface p-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+    <article className="rounded-card border border-border bg-surface p-4">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* The round's permalink. A card and not a link before GHO-41,
               which meant the smallest shareable thing in the product — one
               round, one outcome — had no address at all. */}
           {href ? (
-            <Link
-              href={href}
-              className="text-sm font-medium text-ink underline-offset-2 hover:underline"
-            >
+            <Link href={href} className="display text-base uppercase underline-offset-4 hover:underline">
               Round {id.toString()}
             </Link>
           ) : (
-            <span className="text-sm font-medium text-ink">Round {id.toString()}</span>
+            <span className="display text-base uppercase">Round {id.toString()}</span>
           )}
           <PhaseChip phase={phase} />
           {youAreIn && (
-            <span className="rounded-sm bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
+            <span className="display rounded-control bg-brand-soft px-2 py-0.5 text-xs text-brand uppercase">
               You&rsquo;re in
             </span>
           )}
         </div>
 
+        {/*
+         * The countdown is the loudest thing in the header, and it fills with
+         * the brand colour once entry is about to close. That is the one
+         * moment urgency is real — after it, no amount of wanting to join
+         * changes anything — so it is the one moment the app shows any.
+         */}
         {live && remaining !== undefined && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs text-ink-faint">
-              {phase === Phase.Open
-                ? "entry closes in"
+          <span
+            className={`tabular rounded-control px-2.5 py-1 text-base ${
+              phase === Phase.Cutoff
+                ? "bg-brand text-brand-ink"
+                : "bg-raised text-ink"
+            }`}
+            title={
+              phase === Phase.Open
+                ? "until entry closes"
                 : phase === Phase.Cutoff
-                  ? "locks in"
-                  : "settles in"}
-            </span>
-            <span className="tabular text-sm font-medium text-ink">
-              {formatCountdown(remaining)}
-            </span>
-          </div>
+                  ? "until the start price is taken"
+                  : "until it settles"
+            }
+          >
+            {formatCountdown(remaining)}
+          </span>
         )}
       </header>
 
@@ -127,29 +135,29 @@ export function RoundCard({
         </p>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <SideBlock
+      <OddsBar round={round} decimals={decimals} symbol={symbol} />
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <SideButton
           side={Side.Up}
           round={round}
           rake={rake}
+          yours={yourUp}
           decimals={decimals}
           symbol={symbol}
-          yours={yourUp}
           won={round.status === Status.Resolved && round.winner === Side.Up}
-          lost={round.status === Status.Resolved && round.winner !== Side.Up}
-          canEnter={canEnter}
+          disabled={!canEnter}
           onStake={onStake}
         />
-        <SideBlock
+        <SideButton
           side={Side.Down}
           round={round}
           rake={rake}
+          yours={yourDown}
           decimals={decimals}
           symbol={symbol}
-          yours={yourDown}
           won={round.status === Status.Resolved && round.winner === Side.Down}
-          lost={round.status === Status.Resolved && round.winner !== Side.Down}
-          canEnter={canEnter}
+          disabled={!canEnter}
           onStake={onStake}
         />
       </div>
@@ -195,83 +203,134 @@ function PhaseChip({ phase }: { phase: PhaseValue }) {
   );
 }
 
-function SideBlock({
+/**
+ * The split of the pool, as a bar (GHO-59 layout).
+ *
+ * This is the whole point of the card: where the split sits *is* the
+ * information, and it reads before any figure does. A bar that is mostly
+ * green says the crowd is on Up, which is also why Up pays less — the two
+ * facts are the same fact, and putting them next to each other is the
+ * cheapest explanation of parimutuel odds this app can give.
+ *
+ * Nothing is drawn when no money is in: an empty round has no split, and a
+ * half-and-half bar would invent a crowd.
+ */
+function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; symbol: string }) {
+  const share = upShare(round);
+  if (share === null) {
+    return (
+      <p className="mt-3 text-xs text-ink-faint">
+        Nothing staked yet — the first side in sets the odds.
+      </p>
+    );
+  }
+
+  const up = Math.round(share);
+  const label = (n: number) => `${n}%`;
+
+  return (
+    <div className="mt-3">
+      <div
+        className="flex h-9 overflow-hidden rounded-control bg-raised"
+        role="img"
+        aria-label={`${label(up)} of the pool is on Up, ${label(100 - up)} on Down`}
+      >
+        {/* Each side is at least wide enough to hold its own label, so a
+            lopsided round still says which way it is lopsided. */}
+        <div
+          className="display flex min-w-16 items-center gap-1.5 bg-up px-2.5 text-sm text-up-ink"
+          style={{ width: `${share}%` }}
+        >
+          <SideArrow up className="size-2.5" />
+          {label(up)}
+        </div>
+        <div className="display flex min-w-16 flex-1 items-center justify-end gap-1.5 bg-down px-2.5 text-sm text-down-ink">
+          {label(100 - up)}
+          <SideArrow up={false} className="size-2.5" />
+        </div>
+      </div>
+
+      <div className="tabular mt-1.5 flex justify-between text-xs text-ink-faint">
+        <span>
+          {formatAmount(round.upPool, decimals, 2)} {symbol} up
+        </span>
+        <span>
+          {formatAmount(round.downPool, decimals, 2)} {symbol} down
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One side, as a button you press (GHO-59 layout).
+ *
+ * The multiple lives on the button rather than beside it, because it is what
+ * the press is worth: "Up, pays 1.84×" is one thought. The 4px solid edge
+ * underneath is the only depth in the design and the only thing saying
+ * "pressable" — no gradient, no glow, no blur.
+ */
+function SideButton({
   side,
   round,
   rake,
+  yours,
   decimals,
   symbol,
-  yours,
   won,
-  lost,
-  canEnter,
+  disabled,
   onStake,
 }: {
   side: SideValue;
   round: Round;
   rake: bigint;
+  yours: bigint | undefined;
   decimals: number;
   symbol: string;
-  yours: bigint | undefined;
   won: boolean;
-  lost: boolean;
-  canEnter: boolean;
+  disabled: boolean;
   onStake?: (side: SideValue) => void;
 }) {
-  const pool = side === Side.Up ? round.upPool : round.downPool;
-  const multiple = multipleFor(round, side, rake);
   const isUp = side === Side.Up;
+  const multiple = multipleFor(round, side, rake);
+  const mine = yours !== undefined && yours > 0n;
 
-  // A settled round marks the winning side and leaves the other plain. The
-  // losing side is not coloured red: the outcome is already stated, and
-  // painting a loss is a nudge, not information.
-  const border = won ? "border-positive/50" : "border-border";
+  const tone = isUp
+    ? "bg-up text-up-ink [--edge:var(--color-up-edge)]"
+    : "bg-down text-down-ink [--edge:var(--color-down-edge)]";
 
   return (
-    <div className={`rounded-sm border bg-raised/40 p-4 ${border}`}>
-      <div className="flex items-center justify-between">
-        {/* Arrow, word and colour together (GHO-58): the colour is never the
-            only thing telling Up from Down. */}
-        <span
-          className={`display flex items-center gap-1.5 text-base uppercase ${isUp ? "text-up" : "text-down"}`}
-        >
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={onStake ? () => onStake(side) : undefined}
+        disabled={disabled || !onStake}
+        className={`pressable display flex min-h-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-control px-3 py-3 text-lg uppercase focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${tone}`}
+      >
+        <span className="flex items-center gap-1.5">
           <SideArrow up={isUp} className="size-3" />
           {isUp ? "Up" : "Down"}
         </span>
-        {won && <span className="text-xs font-medium text-positive">Won</span>}
-      </div>
-
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="tabular text-lg font-medium text-ink">
-          {multiple === null ? "—" : `${formatAmount(multiple, 18, 2)}×`}
+        <span className="tabular text-xs font-normal normal-case opacity-80">
+          {multiple === null ? "no odds yet" : `pays ${formatAmount(multiple, 18, 2)}×`}
         </span>
-        <span className="text-xs text-ink-faint">if it wins</span>
-      </div>
+      </button>
 
-      <p className="mt-1 text-xs text-ink-muted">
-        <span className="tabular">{formatAmount(pool, decimals, 2)}</span> {symbol} on this side
+      {/* Whether you are in, and how much, under the button that would add to
+          it. A settled winner says so here too, so the result is attached to
+          the side rather than only to the round. */}
+      <p className="text-center text-xs text-ink-faint">
+        {won && <span className="text-positive">Won · </span>}
+        {mine ? (
+          <>
+            yours <span className="tabular text-ink">{formatAmount(yours!, decimals, 2)}</span>{" "}
+            {symbol}
+          </>
+        ) : (
+          <span className="opacity-0">—</span>
+        )}
       </p>
-
-      {yours !== undefined && yours > 0n && (
-        <p className="mt-2 text-xs text-ink">
-          Your position <span className="tabular">{formatAmount(yours, decimals, 2)}</span> {symbol}
-        </p>
-      )}
-
-      {canEnter && onStake && (
-        <button
-          onClick={() => onStake(side)}
-          className={`display mt-3 w-full cursor-pointer rounded-sm px-3 py-2.5 text-base text-ground uppercase transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
-            isUp ? "bg-up hover:bg-action-strong" : "bg-down hover:brightness-110"
-          }`}
-        >
-          Take {isUp ? "Up" : "Down"}
-        </button>
-      )}
-
-      {/* Deliberately silent when a stake lost. The round result is stated
-          once, at the top; repeating it per side is piling on. */}
-      {lost && null}
     </div>
   );
 }
+

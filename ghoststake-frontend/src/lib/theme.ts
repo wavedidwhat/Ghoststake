@@ -7,7 +7,7 @@
  * is read by the operating system to paint a splash screen. Both would show a
  * white band above an olive app if they were missing.
  *
- * Keep in step with `--color-surface` and `--color-ground`.
+ * Keep in step with `--color-ground`.
  */
-export const THEME_COLOR = "#253122";
-export const BACKGROUND_COLOR = "#1d2719";
+export const THEME_COLOR = "#0d0f0e";
+export const BACKGROUND_COLOR = "#0d0f0e";

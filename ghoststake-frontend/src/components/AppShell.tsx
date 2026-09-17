@@ -68,11 +68,12 @@ export function AppShell({
         </header>
 
         {/*
-         * `pb-24` clears the fixed tab bar. Without it the last control on
-         * every page sits under the nav, which is the single most common way
-         * a retrofitted bottom bar breaks a form.
+         * Clears the floating tab bar, including the gap it leaves for the
+         * home bar. Without it the last control on every page sits under the
+         * nav, which is the single most common way a retrofitted bottom bar
+         * breaks a form.
          */}
-        <main className="flex-1 px-4 py-4 pb-24 md:p-6">{children}</main>
+        <main className="flex-1 px-4 py-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:p-6 md:pb-6">{children}</main>
       </div>
 
       <MobileNav />

@@ -7,6 +7,7 @@ import {
   entryOpen,
   formatCountdown,
   multipleFor,
+  upShare,
   willVoidOnLock,
   type Round,
 } from "../rounds";
@@ -125,5 +126,32 @@ describe("countdown", () => {
   it("clamps at zero rather than counting into the negative", () => {
     // A deadline that has passed shows 00:00, not "-00:07".
     expect(formatCountdown(-7n)).toBe("00:00");
+  });
+});
+
+describe("upShare", () => {
+  const round = (up: bigint, down: bigint) =>
+    ({ upPool: up, downPool: down }) as Parameters<typeof upShare>[0];
+
+  it("is null when nothing is staked, rather than 50/50", () => {
+    // An empty round has no split. Drawing half and half would invent a crowd
+    // that is not there.
+    expect(upShare(round(0n, 0n))).toBeNull();
+  });
+
+  it("gives the share of the pool on the up side", () => {
+    expect(upShare(round(1240n, 1070n))).toBeCloseTo(53.6, 1);
+    expect(upShare(round(1n, 3n))).toBe(25);
+  });
+
+  it("does not round a dust side up to a visible share", () => {
+    // 0.4% must not render as 1%: a side with nothing in it should look like
+    // it has nothing in it.
+    expect(upShare(round(4n, 996n))).toBe(0.4);
+  });
+
+  it("survives pools far past Number's safe range", () => {
+    const huge = 10n ** 30n;
+    expect(upShare(round(huge, huge))).toBe(50);
   });
 });

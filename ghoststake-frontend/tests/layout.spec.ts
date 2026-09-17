@@ -76,14 +76,34 @@ test.describe("phone", () => {
     }
   });
 
+  test("no tab label is clipped", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("h1")).toBeVisible();
+
+    // Five tabs across 390px leaves about 70px each, and Nippo sets wide, so
+    // a label one word too long silently becomes "MARKE…". That happened to
+    // Overview, Positions and Markets in turn; the first two got shorter
+    // names and the type got smaller.
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll("nav[aria-label='Primary'] span")]
+        .filter((el) => el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.textContent?.trim()),
+    );
+    expect(clipped).toEqual([]);
+  });
+
   test("the tab bar sits above the page, and More reaches everything else", async ({ page }) => {
     await page.goto("/");
 
     const tabs = page.getByRole("navigation", { name: "Primary" });
     const bar = (await tabs.boundingBox())!;
     const viewport = page.viewportSize()!;
-    // Fixed to the bottom edge: a tab bar that scrolls away is a header.
-    expect(bar.y + bar.height).toBeCloseTo(viewport.height, 0);
+    // Pinned to the bottom of the screen, not welded to its edge: the pill
+    // floats with a gap under it, which is where the iOS home bar goes. What
+    // matters is that it stays in the thumb zone rather than scrolling away.
+    const gap = viewport.height - (bar.y + bar.height);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(40);
 
     await page.getByRole("button", { name: "More" }).click();
     const sheet = page.getByRole("dialog");
