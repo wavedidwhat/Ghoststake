@@ -228,7 +228,7 @@ function Balance({
           than as "the treasury" — the word is not the thing, and the whole
           point of GHO-40 is that the destination should be knowable in
           advance. */}
-      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-raised/40 px-4 py-3">
+      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-sm border border-border bg-raised/40 px-4 py-3">
         {predatesTreasury ? (
           <span className="text-xs text-warning">
             This contract was deployed before the stored treasury and has no{" "}
@@ -265,7 +265,7 @@ function Balance({
             onChange={(e) => setNextTreasury(e.target.value)}
             placeholder="0x…"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-ground px-3 py-1.5 font-mono text-xs text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="min-w-0 flex-1 rounded-sm border border-border bg-ground px-3 py-1.5 font-mono text-xs text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
           />
           <button
             disabled={!/^0x[0-9a-fA-F]{40}$/.test(nextTreasury.trim())}
@@ -282,7 +282,7 @@ function Balance({
                 onDone();
               }
             }}
-            className="cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs text-ink transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-sm border border-border px-3 py-1.5 text-xs text-ink transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
             Set destination
           </button>
@@ -320,7 +320,7 @@ function Balance({
                   onDone();
                 }
               }}
-              className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Working…" : "Withdraw"}
             </button>

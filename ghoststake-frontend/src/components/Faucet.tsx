@@ -73,7 +73,7 @@ export function Faucet({
             });
             if (ok) onMinted();
           }}
-          className="cursor-pointer rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-border-strong hover:bg-raised focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-sm border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-border-strong hover:bg-raised focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Minting…" : `Get ${formatAmount(amount, decimals, 0)} ${symbol}`}
         </button>

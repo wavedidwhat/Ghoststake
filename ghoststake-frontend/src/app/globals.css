@@ -2,37 +2,93 @@
 @import "./typeset.css";
 
 /*
- * Design tokens. Dark ground, violet accent, single theme — components only
- * ever have to work against one background.
+ * Design tokens (GHO-58). Single dark theme — components only ever have to
+ * work against one ground.
+ *
+ * The palette is Sanzo Wada's combination 332 from A Dictionary of Color
+ * Combinations (1933): Scarlet, Coral Red, Deep Slate Olive, Dusky Green.
+ * It replaced the violet `#8b7cf6` scaffold accent, which was the statistical
+ * average of "modern dark web app". Wada pairs red with greens that are
+ * nearly grey rather than with a true green, which is what stops red and
+ * green reading as Christmas.
+ *
+ * The one rule that shapes the whole file: `brand` is scarlet and never
+ * appears on a button. A red button on a betting screen reads as "you lost".
+ * Money-spending buttons take the colour of the side being taken (`up` /
+ * `down`) or the neutral `action` green.
+ *
+ * Why not green for the brand: green is the loud colour on every sportsbook,
+ * and if the brand were green then "Take Up" and "Up is winning" would look
+ * like the same statement.
+ *
+ * See DESIGN.md for the rules that use these, and ADR 0052 for what was
+ * rejected.
  */
 @theme {
-  /* Grounds, darkest to lightest. `raised` is for a card sitting on a card. */
-  --color-ground: #0a0a0b;
-  --color-surface: #131315;
-  --color-raised: #1a1a1e;
-  --color-border: #232327;
-  --color-border-strong: #34343a;
+  /* Grounds, darkest to lightest. `raised` is for a surface on a surface. */
+  --color-ground: #1d2719;
+  --color-surface: #253122;
+  --color-raised: #2e3b29;
+  --color-border: #3a4a36;
+  --color-border-strong: #53604a;
 
-  /* Violet accent. `accent` for fills, `accent-soft` for tinted backgrounds. */
-  --color-accent: #8b7cf6;
-  --color-accent-strong: #a594f9;
-  --color-accent-soft: #8b7cf61f;
+  /* Dusky Green (Wada 332), for a filled side or a lifted panel. */
+  --color-dusky: #004f46;
 
-  /* Semantic. Green/red are for deltas and P/L, never for decoration. */
-  --color-positive: #3fcf8e;
-  --color-negative: #f0616d;
-  --color-warning: #f5a524;
-  --color-positive-soft: #3fcf8e1f;
-  --color-negative-soft: #f0616d1f;
-  --color-warning-soft: #f5a5241f;
+  /* Scarlet (Wada 332). Brand only: top bar, phase chip, wordmark. */
+  --color-brand: #cb2f43;
+  --color-brand-strong: #dd4257;
+  --color-brand-soft: #cb2f4326;
+
+  /*
+   * `action` is for buttons that are not a market side — stake, borrow,
+   * repay, supply. Cobalt Green, so it never competes with the brand.
+   */
+  --color-action: #96d1aa;
+  --color-action-strong: #aadfbc;
+  --color-action-soft: #96d1aa1f;
+
+  /*
+   * Market sides. These carry an arrow and a word as well, so the colour is
+   * never the only signal (GHO-57 rule 2, and colour-blind users).
+   * Cobalt Green and Coral Red differ in lightness as well as hue.
+   */
+  --color-up: #96d1aa;
+  --color-down: #f58e84;
+  --color-up-soft: #96d1aa1f;
+  --color-down-soft: #f58e841f;
+
+  /* Semantic. Deltas and P/L only, never decoration. Same pair as the sides
+     so a winning round and a positive balance agree. */
+  --color-positive: #96d1aa;
+  --color-negative: #f58e84;
+  --color-warning: #e2b540;
+  --color-positive-soft: #96d1aa1f;
+  --color-negative-soft: #f58e841f;
+  --color-warning-soft: #e2b54026;
+
+  /* Focus. Ocher, because a focus ring must not be mistaken for a side. */
+  --color-focus: #e2b540;
 
   /* Type. `faint` is for units and decimal tails, not for content. */
-  --color-ink: #ededed;
-  --color-ink-muted: #8a8a93;
-  --color-ink-faint: #5a5a63;
+  --color-ink: #f1eadb;
+  --color-ink-muted: #b3b8a4;
+  --color-ink-faint: #8b9182;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /*
+   * Three faces, each with one job (GHO-58):
+   *   display — Nippo, drawn from sports-jersey lettering. Wordmark, market
+   *             names, side labels, buttons. Never body text.
+   *   sans    — Technor, a squared technical sans. Everything you read.
+   *   mono    — Tabular, a monospace built for financial tables. Every
+   *             figure, countdown and address.
+   * All three are Fontshare (Indian Type Foundry), ITF FFL 2.0. See
+   * src/fonts/ITF-FFL-LICENSE.txt: self-hosting is allowed, subsetting and
+   * redistribution are not.
+   */
+  --font-display: var(--font-nippo), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-technor), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-tabular), ui-monospace, monospace;
 
   /* Type scale. Display sizes are for the one number a screen is about. */
   --text-display: 3.5rem;
@@ -42,7 +98,11 @@
   --text-figure--line-height: 1.1;
   --text-figure--letter-spacing: -0.02em;
 
-  --radius-card: 0.875rem;
+  /*
+   * Near-square. The old 0.875rem on every surface was the `rounded-lg`
+   * everywhere tell; a printed slip has corners.
+   */
+  --radius-card: 0.25rem;
 }
 
 :root {
@@ -59,8 +119,20 @@ body {
 /*
  * `tnum` gives every digit one advance width, so a value that updates in
  * place does not reflow around it. `zero` distinguishes 0 from O when small.
+ * Tabular is already monospaced; this keeps the guarantee if the font ever
+ * falls back to a system face.
  */
 .tabular {
   font-variant-numeric: tabular-nums slashed-zero;
   font-feature-settings: "tnum", "zero";
+}
+
+/*
+ * Nippo is a display face: it sets wide and needs its tracking closed up at
+ * the sizes we use it, and it is only ever seen in caps or short labels.
+ */
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }

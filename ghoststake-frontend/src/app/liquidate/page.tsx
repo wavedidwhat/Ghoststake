@@ -117,7 +117,7 @@ function Header({
       </div>
 
       {truncated && (
-        <p className="mt-3 rounded-lg border border-border bg-raised/50 px-3 py-2 text-xs text-ink-muted">
+        <p className="mt-3 rounded-sm border border-border bg-raised/50 px-3 py-2 text-xs text-ink-muted">
           The scan cap was reached, so there may be more borrowers than these. The ones shown are
           those with the largest debt — a truncated list is missing the trivia, not the risk.
         </p>
@@ -312,7 +312,7 @@ function ActionCell({
               });
               if (ok) onDone();
             }}
-            className="cursor-pointer rounded-lg border border-border px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-raised/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-raised/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Writing off…" : "Write off"}
           </button>
@@ -356,7 +356,7 @@ function ActionCell({
           });
           if (ok) onDone();
         }}
-        className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Liquidating…" : "Liquidate"}
       </button>
@@ -377,7 +377,7 @@ function Failed({ message, onRetry }: { message: string; onRetry: () => void }) 
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
+        className="mt-3 rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
       >
         Try again
       </button>

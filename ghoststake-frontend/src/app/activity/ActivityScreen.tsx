@@ -303,7 +303,7 @@ function Failed({ message, onRetry }: { message: string; onRetry: () => void }) 
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
+        className="mt-3 rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
       >
         Try again
       </button>

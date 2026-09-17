@@ -118,7 +118,7 @@ export function PipelineSummary({
           reads as volatile until you know it is 5% APR on 21,000, which is
           2.88 a day. */}
       {standing && !standing.backed && (
-        <p className="mt-5 rounded-xl border border-warning/30 bg-warning-soft/40 px-4 py-3 text-xs leading-relaxed text-ink-muted">
+        <p className="mt-5 rounded-sm border border-warning/30 bg-warning-soft/40 px-4 py-3 text-xs leading-relaxed text-ink-muted">
           Your ledger credits{" "}
           <span className="tabular text-ink">
             {formatAmount(standing.unbacked, decimals, 4)} {symbol}
@@ -135,7 +135,7 @@ export function PipelineSummary({
       {/* The consequence, stated plainly. A position funded by debt does not
           become someone else's problem when it loses. */}
       {hasDebt && (
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-raised/40 px-4 py-3">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-raised/40 px-4 py-3">
           <p className="text-xs text-ink-muted">
             {atRiskInMarkets > 0n ? (
               <>
@@ -211,7 +211,7 @@ function Step({
   return (
     <Link
       href={href}
-      className="group flex flex-col gap-1 rounded-xl border border-border bg-raised/30 p-4 transition-colors hover:border-border-strong hover:bg-raised/60 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+      className="group flex flex-col gap-1 rounded-sm border border-border bg-raised/30 p-4 transition-colors hover:border-border-strong hover:bg-raised/60 focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
     >
       <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">{label}</span>
       {value === undefined ? (

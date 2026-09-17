@@ -14,6 +14,7 @@ import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { borrowToPositionRouterAbi, collateralVaultAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env } from "@/lib/env";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
+import { SideArrow } from "@/components/icons";
 import type { Market } from "@/lib/markets";
 import { Phase, Side, type PhaseValue, type SideValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
@@ -173,17 +174,17 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
       }`}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-base font-semibold text-ink">{label}</h2>
+        <h2 className="display text-lg text-ink">{label}</h2>
         {demo ? (
-          <span className="rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
+          <span className="rounded-sm bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
             Demo feed
           </span>
         ) : knownFeed ? (
-          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+          <span className="rounded-sm bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
             Chainlink
           </span>
         ) : (
-          <span className="rounded-full bg-raised px-2.5 py-0.5 text-xs text-ink-faint">
+          <span className="rounded-sm bg-raised px-2.5 py-0.5 text-xs text-ink-faint">
             reading feed…
           </span>
         )}
@@ -345,14 +346,25 @@ function PositionForm({
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border-strong bg-raised/60 p-4">
+    <div className="mt-4 flex flex-col gap-4 rounded-sm border border-border-strong bg-raised/60 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-ink">
-          Take {side === Side.Up ? "Up" : "Down"} on round {roundId.toString()}
+        {/* The side is named with its arrow and its colour here too, so the
+            confirm step cannot be read as the other side (GHO-58). */}
+        <h3 className="flex items-center gap-2 text-sm font-medium text-ink">
+          Take
+          <span
+            className={`display flex items-center gap-1 uppercase ${
+              side === Side.Up ? "text-up" : "text-down"
+            }`}
+          >
+            <SideArrow up={side === Side.Up} className="size-3" />
+            {side === Side.Up ? "Up" : "Down"}
+          </span>
+          on round {roundId.toString()}
         </h3>
         <button
           onClick={onClose}
-          className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         >
           Cancel
         </button>
@@ -402,7 +414,7 @@ function PositionForm({
       <button
         onClick={submit}
         disabled={disabled}
-        className="cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy
           ? "Working…"
@@ -456,7 +468,7 @@ function HealthPreview({
     band === "danger" ? "text-negative" : band === "caution" ? "text-warning" : "text-positive";
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
+    <div className="flex flex-col gap-2 rounded-sm border border-border bg-surface p-3">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-xs text-ink-muted">Health factor after borrowing</span>
         <span className="flex items-baseline gap-2">
@@ -501,7 +513,7 @@ function HealthPreview({
  */
 function ConnectToTake({ onClose }: { onClose: () => void }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-raised/40 px-4 py-3">
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-raised/40 px-4 py-3">
       <p className="text-xs leading-relaxed text-ink-muted">
         Taking a side needs a wallet. Your stake keeps earning while the position is open — it
         is borrowed against, not sold.
@@ -579,7 +591,7 @@ function ClaimRow({
             });
             if (ok) onDone();
           }}
-          className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Claiming…" : "Claim"}
         </button>

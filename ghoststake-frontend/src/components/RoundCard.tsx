@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { formatAmount } from "@/lib/format";
+import { SideArrow } from "@/components/icons";
 import {
   Phase,
   Side,
@@ -88,7 +89,7 @@ export function RoundCard({
           )}
           <PhaseChip phase={phase} />
           {youAreIn && (
-            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+            <span className="rounded-sm bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
               You&rsquo;re in
             </span>
           )}
@@ -182,13 +183,13 @@ function PhaseChip({ phase }: { phase: PhaseValue }) {
       : phase === Phase.Cutoff
         ? "bg-warning-soft text-warning"
         : phase === Phase.Observation
-          ? "bg-accent-soft text-accent"
+          ? "bg-brand-soft text-brand"
           : phase === Phase.Void
             ? "bg-raised text-ink-muted"
             : "bg-raised text-ink-muted";
 
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>
+    <span className={`rounded-sm px-2.5 py-0.5 text-xs font-medium ${style}`}>
       {phaseLabel(phase)}
     </span>
   );
@@ -227,9 +228,14 @@ function SideBlock({
   const border = won ? "border-positive/50" : "border-border";
 
   return (
-    <div className={`rounded-xl border bg-raised/40 p-4 ${border}`}>
+    <div className={`rounded-sm border bg-raised/40 p-4 ${border}`}>
       <div className="flex items-center justify-between">
-        <span className={`text-sm font-medium ${isUp ? "text-positive" : "text-negative"}`}>
+        {/* Arrow, word and colour together (GHO-58): the colour is never the
+            only thing telling Up from Down. */}
+        <span
+          className={`display flex items-center gap-1.5 text-base uppercase ${isUp ? "text-up" : "text-down"}`}
+        >
+          <SideArrow up={isUp} className="size-3" />
           {isUp ? "Up" : "Down"}
         </span>
         {won && <span className="text-xs font-medium text-positive">Won</span>}
@@ -255,7 +261,9 @@ function SideBlock({
       {canEnter && onStake && (
         <button
           onClick={() => onStake(side)}
-          className="mt-3 w-full cursor-pointer rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-border-strong hover:bg-raised focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className={`display mt-3 w-full cursor-pointer rounded-sm px-3 py-2.5 text-base text-ground uppercase transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
+            isUp ? "bg-up hover:bg-action-strong" : "bg-down hover:brightness-110"
+          }`}
         >
           Take {isUp ? "Up" : "Down"}
         </button>

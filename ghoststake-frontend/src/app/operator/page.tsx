@@ -166,7 +166,7 @@ function MarketConsole({
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold text-ink">{label}</h2>
         {feed?.isDemo && (
-          <span className="rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
+          <span className="rounded-sm bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
             Demo feed
           </span>
         )}
@@ -273,7 +273,7 @@ function OpenRoundForm({
       </div>
 
       {schedule && (
-        <dl className="mt-4 grid gap-2 rounded-lg border border-border bg-raised/40 p-3 text-xs sm:grid-cols-3">
+        <dl className="mt-4 grid gap-2 rounded-sm border border-border bg-raised/40 p-3 text-xs sm:grid-cols-3">
           <Preview label="Opens" at={schedule.openTime} now={now} />
           <Preview label="Locks" at={schedule.lockTime} now={now} />
           <Preview label="Closes" at={schedule.closeTime} now={now} />
@@ -309,7 +309,7 @@ function OpenRoundForm({
             });
             if (ok) onDone();
           }}
-          className="cursor-pointer rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-sm bg-action px-4 py-2 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Opening…" : "Open round"}
         </button>
@@ -358,7 +358,7 @@ function RoundRow({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-ink">Round {round.id.toString()}</span>
-          <span className="rounded-full bg-raised px-2 py-0.5 text-xs text-ink-muted">
+          <span className="rounded-sm bg-raised px-2 py-0.5 text-xs text-ink-muted">
             {phaseLabel(phase)}
           </span>
           {decimals !== undefined && (
@@ -436,7 +436,7 @@ function SimpleAction({
           });
           if (ok) onDone();
         }}
-        className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Working…" : actionLabel(action)}
       </button>
@@ -570,7 +570,7 @@ function ResolveControl({
         <button
           disabled={searching || !feed.data}
           onClick={search}
-          className="cursor-pointer rounded-lg border border-border-strong px-3 py-1.5 text-sm text-ink transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-sm border border-border-strong px-3 py-1.5 text-sm text-ink transition-colors hover:border-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {searching ? "Searching the feed…" : "Find the closing feed round"}
         </button>
@@ -590,7 +590,7 @@ function ResolveControl({
       )}
 
       {result?.kind === "found" && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-raised/40 p-3">
+        <div className="flex flex-col gap-2 rounded-sm border border-border bg-raised/40 p-3">
           <p className="text-xs text-ink-muted">
             Feed round <span className="tabular text-ink">{result.feedRound.toString()}</span>{" "}
             settles this at{" "}
@@ -619,7 +619,7 @@ function ResolveControl({
                 });
                 if (ok) onDone();
               }}
-              className="w-fit cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-fit cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Resolving…" : "Resolve"}
             </button>
@@ -702,7 +702,7 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
             onChange={(e) => setPrice(e.target.value)}
             disabled={busy}
             inputMode="decimal"
-            className="tabular w-40 rounded-lg border border-border bg-ground px-3 py-2 text-sm text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="tabular w-40 rounded-sm border border-border bg-ground px-3 py-2 text-sm text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
           />
         </label>
 
@@ -718,7 +718,7 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
             });
             if (ok) void latestRoundId.refetch();
           }}
-          className="cursor-pointer rounded-lg bg-warning px-3 py-2 text-sm font-medium text-ground transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-sm bg-warning px-3 py-2 text-sm font-medium text-ground transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Publishing…" : "Publish"}
         </button>
@@ -771,7 +771,7 @@ function SecondsField({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           inputMode="numeric"
-          className="tabular w-full rounded-lg border border-border bg-ground px-3 py-2 text-sm text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className="tabular w-full rounded-sm border border-border bg-ground px-3 py-2 text-sm text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         />
         <span className="text-xs text-ink-faint">s</span>
       </div>
