@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
 const testChainID int64 = 421614

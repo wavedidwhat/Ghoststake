@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/auth"
-	"github.com/wavedidwhat/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
 type nonceRequest struct {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/migrations"
+	"forge.wavedidwhat.com/wave/ghoststake/migrations"
 )
 
 // The version this binary reports must be the highest file actually embedded.

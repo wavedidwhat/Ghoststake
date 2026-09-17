@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // The round reads are deliberately two steps: pick the round ids first, then

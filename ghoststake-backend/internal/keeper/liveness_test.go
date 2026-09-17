@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 func observe(t *testing.T, f *fakeFeed) keeper.Liveness {

@@ -24,9 +24,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/config"
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 func main() {

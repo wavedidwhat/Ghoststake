@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/config"
-	"github.com/wavedidwhat/ghoststake/internal/httpx"
-	"github.com/wavedidwhat/ghoststake/internal/indexer"
-	"github.com/wavedidwhat/ghoststake/internal/live"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
-	"github.com/wavedidwhat/ghoststake/internal/store"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/httpx"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/indexer"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/store"
 )
 
 func main() {

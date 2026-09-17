@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
 )
 
 // errNoChainReader is returned when an endpoint needs contract state and the

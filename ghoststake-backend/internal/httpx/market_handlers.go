@@ -11,10 +11,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/wavedidwhat/ghoststake/internal/auth"
-	"github.com/wavedidwhat/ghoststake/internal/finance"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
 )
 
 // How many rounds a listing returns by default and at most.

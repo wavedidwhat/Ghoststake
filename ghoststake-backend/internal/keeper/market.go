@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 )
 
 // Market is one ParimutuelRound and everything the keeper had to read off the

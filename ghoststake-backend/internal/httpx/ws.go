@@ -9,10 +9,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/wavedidwhat/ghoststake/internal/auth"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
-	"github.com/wavedidwhat/ghoststake/internal/live"
-	"github.com/wavedidwhat/ghoststake/internal/protocol"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
 )
 
 // Websocket timings.

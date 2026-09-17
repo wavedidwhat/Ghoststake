@@ -6,8 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // topicUint encodes an indexed uint256 — the round id — as a topic.

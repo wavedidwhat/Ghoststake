@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 func nyse(t *testing.T) *keeper.Session {

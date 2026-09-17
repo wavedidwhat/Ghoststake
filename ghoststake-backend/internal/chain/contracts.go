@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
 )
 
 // Contract is a bound address plus its ABI: enough to call a view on it.

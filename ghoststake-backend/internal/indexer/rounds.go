@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // decodeRound maps ParimutuelRound events to round records.

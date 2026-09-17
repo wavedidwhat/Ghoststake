@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 func lendingRow(book string, delta int64) ledger.Activity {

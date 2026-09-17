@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/ledger"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
 // EthClient is the slice of ethclient the indexer uses, named as an interface

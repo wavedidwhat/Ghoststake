@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wavedidwhat/ghoststake/internal/abis"
-	"github.com/wavedidwhat/ghoststake/internal/chain"
-	"github.com/wavedidwhat/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
 )
 
 // The keeper's rules are a Go restatement of guards written in Solidity, and
