@@ -46,14 +46,14 @@ export function AmountField({
             type="button"
             disabled={disabled}
             onClick={() => onChange(toDecimalString(max, decimals))}
-            className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed"
+            className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed"
           >
             {maxLabel} <span className="tabular">{formatAmount(max, decimals, 2)}</span>
           </button>
         )}
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-raised px-3 py-2 focus-within:border-border-strong">
+      <div className="flex items-center gap-2 rounded-sm border border-border bg-raised px-3 py-2 focus-within:border-border-strong">
         <input
           id={id}
           value={value}

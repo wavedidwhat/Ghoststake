@@ -135,7 +135,7 @@ function BorrowScreen({
 
       <div className="lg:col-span-3">
         <Card>
-          <div className="flex items-center gap-1 rounded-lg bg-raised p-1">
+          <div className="flex items-center gap-1 rounded-sm bg-raised p-1">
             {(["borrow", "repay"] as const).map((m) => (
               <button
                 key={m}
@@ -144,7 +144,7 @@ function BorrowScreen({
                   setAmount("");
                   tx.reset();
                 }}
-                className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none ${
+                className={`flex-1 cursor-pointer rounded-sm px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
                   mode === m ? "bg-surface text-ink" : "text-ink-muted hover:text-ink"
                 }`}
               >
@@ -169,7 +169,7 @@ function BorrowScreen({
               <button
                 onClick={submit}
                 disabled={disabled}
-                className="cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy
                   ? "Working…"
@@ -193,7 +193,7 @@ function BorrowScreen({
               <TxStatus state={tx.state} />
             </div>
 
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-raised/40 p-4">
+            <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-xs text-ink-muted">Health factor after</span>
                 <span className="flex items-baseline gap-2">

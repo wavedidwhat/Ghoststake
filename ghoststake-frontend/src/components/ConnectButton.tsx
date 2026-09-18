@@ -62,7 +62,7 @@ export function ConnectButton() {
     return (
       <button
         disabled
-        className="rounded-full bg-raised px-4 py-2 text-sm font-medium text-ink-muted"
+        className="rounded-sm bg-raised px-4 py-2 text-sm font-medium text-ink-muted"
       >
         Connecting…
       </button>
@@ -118,7 +118,7 @@ export function ConnectButton() {
       {sessionStatus === "anonymous" || sessionStatus === "error" ? (
         <button
           onClick={signIn}
-          className="rounded-full border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
+          className="rounded-sm border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
         >
           Sign in
         </button>
@@ -127,7 +127,7 @@ export function ConnectButton() {
       ) : sessionStatus === "authenticated" ? (
         <button
           onClick={signOut}
-          className="rounded-full border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
+          className="rounded-sm border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
         >
           Sign out
         </button>
@@ -136,7 +136,7 @@ export function ConnectButton() {
       <button
         onClick={() => disconnect()}
         title="Disconnect"
-        className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition hover:border-border-strong"
+        className="flex items-center gap-2 rounded-sm border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition hover:border-border-strong"
       >
         <span className="size-2 rounded-full bg-positive" />
         <span className="tabular">{shortenAddress(connection.address)}</span>
@@ -162,7 +162,7 @@ function ConnectAction({
         onClick={onClick}
         aria-haspopup={expanded === undefined ? undefined : "menu"}
         aria-expanded={expanded}
-        className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-ground transition hover:bg-accent-strong"
+        className="rounded-sm bg-action px-4 py-2 text-sm font-medium text-ground transition hover:bg-action-strong"
       >
         {label}
       </button>

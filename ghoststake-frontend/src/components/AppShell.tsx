@@ -31,7 +31,7 @@ export function AppShell({
 
         <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div>
-            <h1 className="text-lg font-semibold">{title}</h1>
+            <h1 className="display text-xl">{title}</h1>
             <p className="text-xs text-ink-faint">{subtitle ?? activeChain.name}</p>
           </div>
           <ConnectButton />

@@ -70,11 +70,16 @@ export function Sidebar() {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface">
       <div className="border-b border-border px-5 py-4">
+        {/*
+         * A wordmark set in Nippo, deliberately a placeholder until Enoch's
+         * mark lands (GHO-58). What it replaced — a letter "G" in a rounded
+         * square — is one of the most recognisable AI-UI tells there is, and
+         * it read as a logo, so nobody would have thought to replace it.
+         */}
         <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-lg bg-accent text-sm font-bold text-ground">
-            G
+          <span className="display text-lg tracking-wide text-brand uppercase">
+            GhostStake
           </span>
-          <span className="font-semibold text-ink">GhostStake</span>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-ink-faint">
           Stake earns. Borrow against it. Take a view — without unwinding.
@@ -94,7 +99,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-baseline justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex items-baseline justify-between rounded-sm px-3 py-2 text-sm transition-colors ${
                 pathname === item.href
                   ? "bg-raised font-medium text-ink"
                   : "text-ink-muted hover:bg-raised/60 hover:text-ink"
@@ -111,7 +116,7 @@ export function Sidebar() {
             // scaffolded is a live link to a 404.
             <span
               key={item.href}
-              className="flex cursor-not-allowed items-baseline justify-between rounded-lg px-3 py-2 text-sm text-ink-faint"
+              className="flex cursor-not-allowed items-baseline justify-between rounded-sm px-3 py-2 text-sm text-ink-faint"
             >
               <span>{item.label}</span>
               {"note" in item && item.note && <span className="text-[11px]">{item.note}</span>}

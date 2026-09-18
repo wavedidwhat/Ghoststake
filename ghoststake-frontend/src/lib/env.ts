@@ -31,6 +31,14 @@ function requiredChainId(value: string | undefined): number {
 export const env = {
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080",
 
+  /**
+   * Where this deployment is served from. Only used to make the Open Graph
+   * image URL absolute (GHO-58): a share card is fetched by someone else's
+   * server, so a relative path resolves against the wrong host and the
+   * preview silently comes back blank.
+   */
+  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+
   /** Must match the backend's CHAIN_ID: it is bound into the SIWE message,
    *  so a mismatch means signing for a different chain. 421614 = Arb Sepolia. */
   chainId: requiredChainId(process.env.NEXT_PUBLIC_CHAIN_ID),

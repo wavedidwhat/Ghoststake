@@ -165,18 +165,18 @@ function MarketRow({
   return (
     <Link
       href={`/markets/${market.address}`}
-      className="block cursor-pointer rounded-card border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+      className="block cursor-pointer rounded-card border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-sm font-medium text-ink">{label}</span>
           {demo && (
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warning uppercase">
+            <span className="rounded-sm bg-warning/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warning uppercase">
               Demo feed
             </span>
           )}
           {!market.enabled && (
-            <span className="rounded-full bg-raised px-2 py-0.5 text-[11px] text-ink-faint">
+            <span className="rounded-sm bg-raised px-2 py-0.5 text-[11px] text-ink-faint">
               delisted — you hold a position
             </span>
           )}
@@ -233,7 +233,7 @@ function SideSummary({
   symbol: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 rounded-lg bg-raised/40 px-3 py-2">
+    <div className="flex items-baseline justify-between gap-3 rounded-sm bg-raised/40 px-3 py-2">
       <span className="text-xs text-ink-muted">{name}</span>
       <span className="flex items-baseline gap-2">
         <span className="tabular text-xs text-ink-faint">

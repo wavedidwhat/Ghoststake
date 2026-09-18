@@ -41,7 +41,7 @@ export function Landing() {
           <ConnectButton />
           <Link
             href="/markets"
-            className="rounded-full border border-border px-4 py-2 text-sm text-ink transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="rounded-sm border border-border px-4 py-2 text-sm text-ink transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
           >
             Browse markets first →
           </Link>
@@ -148,7 +148,7 @@ function Step({
         {figure === undefined ? (
           <span className="h-6 w-16 animate-pulse rounded bg-raised" />
         ) : (
-          <span className="tabular text-lg font-medium text-accent">{figure}</span>
+          <span className="tabular text-lg font-medium text-brand">{figure}</span>
         )}
         <span className="text-[11px] text-ink-faint">{figureLabel}</span>
       </div>

@@ -77,7 +77,7 @@ export function HealthFactorCard({
         <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">
           Health factor
         </span>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${style.chip}`}>
+        <span className={`rounded-sm px-2.5 py-1 text-xs font-medium ${style.chip}`}>
           {copy.label}
         </span>
       </div>

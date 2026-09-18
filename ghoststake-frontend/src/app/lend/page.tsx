@@ -114,7 +114,7 @@ function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
           {warnings.map((w) => (
             <p
               key={w.code}
-              className="rounded-xl border border-border bg-raised/40 px-4 py-3 text-xs leading-relaxed text-ink-muted"
+              className="rounded-sm border border-border bg-raised/40 px-4 py-3 text-xs leading-relaxed text-ink-muted"
             >
               {w.text}
             </p>
@@ -319,7 +319,7 @@ function SupplyWithdraw({
 
   return (
     <Card>
-      <div className="flex items-center gap-1 rounded-lg bg-raised p-1">
+      <div className="flex items-center gap-1 rounded-sm bg-raised p-1">
         {(["supply", "withdraw"] as const).map((m) => (
           <button
             key={m}
@@ -328,7 +328,7 @@ function SupplyWithdraw({
               setAmount("");
               tx.reset();
             }}
-            className={`flex-1 cursor-pointer rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none ${
+            className={`flex-1 cursor-pointer rounded-sm px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
               mode === m ? "bg-surface text-ink" : "text-ink-muted hover:text-ink"
             }`}
           >
@@ -353,7 +353,7 @@ function SupplyWithdraw({
           <button
             onClick={submit}
             disabled={disabled}
-            className="cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-accent-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
               ? "Working…"
@@ -378,7 +378,7 @@ function SupplyWithdraw({
           <TxStatus state={tx.state} />
         </div>
 
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-raised/40 p-4">
+        <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-xs text-ink-muted">Utilization after</span>
             <span className="flex items-baseline gap-2">
@@ -418,7 +418,7 @@ function Line({
     tone === "positive" ? "text-positive" : tone === "warning" ? "text-warning" : "text-ink";
 
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border bg-raised/30 p-4">
+    <div className="flex flex-col gap-1 rounded-sm border border-border bg-raised/30 p-4">
       <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">{label}</span>
       {value === undefined ? (
         <div className="h-7 w-24 animate-pulse rounded bg-raised" />
@@ -452,7 +452,7 @@ function ReadFailed({ onRetry }: { onRetry: () => void }) {
       </p>
       <button
         onClick={onRetry}
-        className="mt-5 rounded-full border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
+        className="mt-5 rounded-sm border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
       >
         Try again
       </button>

@@ -219,7 +219,7 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
             script could join until GHO-39. */}
         <Link
           href="/lend"
-          className="text-xs text-ink-faint transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className="text-xs text-ink-faint transition-colors hover:text-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         >
           Supply into it →
         </Link>
@@ -328,7 +328,7 @@ function ReadFailed({ onRetry }: { onRetry: () => void }) {
       </p>
       <button
         onClick={onRetry}
-        className="mt-5 rounded-full border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
+        className="mt-5 rounded-sm border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
       >
         Try again
       </button>

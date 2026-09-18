@@ -24,7 +24,7 @@ export function NetworkGuard() {
       <button
         onClick={() => switchChain({ chainId: activeChain.id })}
         disabled={isPending}
-        className="rounded-full bg-warning px-3.5 py-1.5 text-sm font-medium text-ground transition hover:opacity-90 disabled:opacity-60"
+        className="rounded-sm bg-warning px-3.5 py-1.5 text-sm font-medium text-ground transition hover:opacity-90 disabled:opacity-60"
       >
         {isPending ? "Switching…" : `Switch to ${activeChain.name}`}
       </button>
