@@ -138,3 +138,53 @@ func TestATransportFailureIsNotAnAnswer(t *testing.T) {
 		t.Fatalf("got %v, want the transport error", err)
 	}
 }
+
+// GHO-76: the keeper already holds the latest round when it starts a search —
+// `latestRoundData` returned it — so FindCloseRoundFrom takes it rather than
+// reading it again. The saving is per poll, per round waiting to settle.
+func TestSearchingFromAKnownHeadSkipsTheRepeatedRead(t *testing.T) {
+	const closeTime = 101_000
+
+	whole := heartbeatFeed(5_000, 100, 100_000, 20)
+	want := find(t, whole, closeTime)
+
+	known := heartbeatFeed(5_000, 100, 100_000, 20)
+	latest, err := known.read(context.Background(), new(big.Int).SetUint64(known.latest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := known.reads
+
+	got, err := keeper.FindCloseRoundFrom(context.Background(), known.read,
+		new(big.Int).SetUint64(known.latest), latest, closeTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Cmp(want) != 0 {
+		t.Fatalf("FindCloseRoundFrom = %s, FindCloseRound = %s — they must agree", got, want)
+	}
+	if searched := known.reads - before; searched != whole.reads-1 {
+		t.Fatalf("searched with %d reads, want %d (one fewer than FindCloseRound's %d)",
+			searched, whole.reads-1, whole.reads)
+	}
+}
+
+// The state a round spends most of its wait in: closed, with a feed that has
+// not published past the close yet. There is nothing to find, and finding
+// that out must not cost a search — it is re-asked on every poll.
+func TestAFeedThatHasNotPassedTheCloseCostsNoReads(t *testing.T) {
+	f := heartbeatFeed(5_000, 100, 100_000, 20)
+	latest := &keeper.FeedRound{UpdatedAt: 101_980}
+
+	got, err := keeper.FindCloseRoundFrom(context.Background(), f.read,
+		new(big.Int).SetUint64(f.latest), latest, 102_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("got round %s, want nil — nothing has published after the close", got)
+	}
+	if f.reads != 0 {
+		t.Fatalf("made %d reads, want 0", f.reads)
+	}
+}
