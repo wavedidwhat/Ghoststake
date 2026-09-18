@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { MORE_SECTIONS, TAB_LINKS, isCurrent } from "@/lib/nav";
+import { TAB_LINKS, isCurrent, moreSections } from "@/lib/nav";
+import { useIsOperator } from "@/hooks/useIsOperator";
 import { Sheet } from "@/components/Sheet";
 
 /**
@@ -23,8 +24,11 @@ import { Sheet } from "@/components/Sheet";
 export function MobileNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  // The operator console is listed only for the wallet that owns a market
+  // (GHO-62). The route stays reachable by URL for everyone.
+  const sections = moreSections(useIsOperator());
 
-  const moreIsCurrent = MORE_SECTIONS.some((section) =>
+  const moreIsCurrent = sections.some((section) =>
     section.items.some((item) => isCurrent(pathname, item.href)),
   );
 
@@ -90,7 +94,7 @@ export function MobileNav() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Everything else">
         <div className="flex flex-col gap-5">
-          {MORE_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.section}>
               <p className="px-1 pb-2 text-[10px] font-medium tracking-wider text-ink-faint uppercase">
                 {section.section}

@@ -17,9 +17,10 @@ import { expect, test } from "@playwright/test";
 
 const ROUTES = [
   "/",
+  "/portfolio",
+  "/how-it-works",
   "/stake",
   "/borrow",
-  "/markets",
   "/positions",
   "/activity",
   "/lend",
@@ -145,9 +146,12 @@ test.describe("phone", () => {
       await page.getByRole("button", { name: "More" }).click();
       await expect(sheet).toBeVisible({ timeout: 1_000 });
     }).toPass({ timeout: 10_000 });
-    for (const label of ["Borrow", "Activity", "Lend", "Liquidate", "Operator"]) {
+    // Lend is a tab now (GHO-62) and Operator is hidden unless the connected
+    // wallet owns a market, so neither belongs in this list.
+    for (const label of ["Borrow", "Activity", "Liquidate", "How it works"]) {
       await expect(sheet.getByRole("link", { name: new RegExp(label) })).toBeVisible();
     }
+    await expect(sheet.getByRole("link", { name: /Operator/ })).toBeHidden();
 
     // Escape closes it. The sheet is a `<dialog>`, so this is the platform's
     // behaviour and not ours — worth pinning precisely because it is easy to
@@ -180,6 +184,24 @@ test.describe("phone", () => {
       // state — but never a table someone has to drag.
       await expect(page.locator("table")).toBeHidden();
     }
+  });
+});
+
+test.describe("routes", () => {
+  test("the old markets URL still lands on the feed", async ({ page }) => {
+    // The feed moved to `/` (GHO-62). Every link ever shared to `/markets`
+    // has to keep working, including a cached page's own sidebar.
+    await page.goto("/markets");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("h1")).toHaveText(/Markets/);
+  });
+
+  test("a shared round link is untouched", async ({ page }) => {
+    // GHO-41's shareable unit. A redirect that swallowed these would break
+    // every link anyone has posted.
+    const response = await page.goto("/markets/0x0000000000000000000000000000000000000001/1");
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/markets\/0x0{39}1\/1$/);
   });
 });
 

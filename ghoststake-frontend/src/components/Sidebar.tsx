@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { NAV, isCurrent } from "@/lib/nav";
+import { isCurrent, sidebarSections } from "@/lib/nav";
+import { useIsOperator } from "@/hooks/useIsOperator";
 
 /**
  * Primary navigation from `md` up. Below that it is hidden and `MobileNav`
@@ -15,6 +16,7 @@ import { NAV, isCurrent } from "@/lib/nav";
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const sections = sidebarSections(useIsOperator());
 
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -34,10 +36,9 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 p-3">
-        {NAV.map((section) => (
+        {sections.map((section) => (
           <div key={section.section} className="flex flex-col gap-0.5">
-            {/* Overview is one item and needs no heading over it. */}
-            {section.items.length > 0 && section.section !== "Overview" && (
+            {section.items.length > 0 && (
               <p className="mt-3 px-3 pb-1 text-[10px] font-medium tracking-wider text-ink-faint uppercase">
                 {section.section}
               </p>

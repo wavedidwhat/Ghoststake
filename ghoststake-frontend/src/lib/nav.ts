@@ -1,34 +1,31 @@
 /**
  * The one list of destinations, shared by the sidebar and the phone tab bar
- * (GHO-59).
+ * (GHO-59), ordered for the person who came to bet (GHO-62).
  *
  * It used to live inside `Sidebar.tsx`. Two navs reading two lists is how a
  * route ends up reachable on a desktop and invisible on a phone, so the list
  * moved here the moment there was a second nav.
  *
- * Ordered as the pipeline runs. Stake → Borrow → Markets is the product in
- * three words, and the order is load-bearing: the collateral is staked first
- * and never leaves, borrowing is secured against it, and only the borrowed
- * funds reach a market. A nav that lists these as unrelated destinations
- * describes a lending app that happens to ship a prediction market.
+ * ## Why this order
  *
- * On vocabulary: "stake" means the savings deposit here and nowhere else.
- * A side of a market is a "position". The two are opposite ends of the
- * pipeline and the app used the same word for both, which quietly erased the
- * half the product is named after.
+ * The old one followed the pipeline — Overview, Stake, Borrow, Markets,
+ * Positions, Activity, Lend, Liquidate, Operator. That order is the right
+ * explanation of the protocol and the wrong front door for a visitor: it led
+ * with a lending dashboard nobody disconnected could read, put Markets fourth,
+ * and listed Operator and Liquidate beside it for everyone.
  *
- * Activity sits at the end of the pipeline because that is what it is: the
- * record of having been through it. Positions sits beside it, and the pair is
- * named by what each one holds rather than by how old it is — Activity is the
- * lending ledger, Positions is the market ledger.
+ * What the pipeline argument got right is kept: staking and borrowing are one
+ * subject, and they sit together under "Your money". What it got wrong was
+ * treating the order of the *mechanism* as the order of the *screens*.
  *
- * Lend sits under its own heading rather than as a fourth pipeline step,
- * because it is not one. A lender funds the borrow, is paid by it, and never
- * stakes or takes a view.
+ * - **Markets** is home. It is the product, and it is readable with no wallet.
+ * - **Portfolio** is what you have riding: stake, borrow, health, positions.
+ * - **Stake** and **Borrow** are the money behind the bets.
+ * - **Lend** is the other side of the market, for people who never bet.
+ * - **Liquidate** and **Operator** are running the thing, not using it.
  *
- * Liquidate and Operator are last, separated by what they are rather than by
- * a permission check: liquidation is fully permissionless, and the contracts
- * say so louder than a hidden link would.
+ * Nothing was removed: everything outside the four tabs is one tap away
+ * behind More, and every route stays reachable by URL.
  */
 
 export type NavLink = {
@@ -44,56 +41,72 @@ export type NavLink = {
   ready?: boolean;
   /**
    * What the phone tab bar calls this, when the sidebar's word is too long
-   * for a fifth of a 390px screen. "Overview" and "Positions" truncated to
-   * "OVERVI…" and "POSITIO…", which looks broken and reads worse than a
-   * shorter word chosen on purpose.
+   * for a fifth of a 390px screen. "Positions" truncated to "POSITIO…", which
+   * looks broken and reads worse than a shorter word chosen on purpose.
    */
   short?: string;
   /**
-   * Shown in the phone tab bar rather than behind "More". Five is the limit:
-   * past that the targets drop under 44px on a 390px screen.
-   *
-   * Which five is GHO-62's decision, not this issue's. The set below is the
-   * pipeline's three verbs plus where your money is, which is the smallest
-   * set that lets someone bet and then check on it without opening More.
+   * Shown in the phone tab bar rather than behind "More". Four, plus More:
+   * 390 ÷ 5 = 78px per target, comfortably over the 44px minimum, while all
+   * nine destinations would be 43px each before a label is drawn.
    */
   tab?: boolean;
+  /**
+   * Hidden from both navs unless the connected wallet owns a market (GHO-62).
+   *
+   * Hidden, not blocked. Half of what the operator console does is
+   * permissionless and the page says so itself (GHO-28), so the route stays
+   * reachable by URL for anyone who wants to read it — what does not belong
+   * is an admin console sitting in a bettor's navigation.
+   */
+  operatorOnly?: boolean;
 };
 
 export type NavSection = { section: string; items: NavLink[] };
 
 export const NAV: NavSection[] = [
   {
-    section: "Overview",
-    items: [{ href: "/", label: "Overview", short: "Home", ready: true, tab: true }],
-  },
-  {
-    section: "Take a view",
+    section: "Bet",
     items: [
-      { href: "/stake", label: "Stake", note: "earn", ready: true, tab: true },
-      { href: "/borrow", label: "Borrow", note: "against it", ready: true },
-      { href: "/markets", label: "Markets", note: "take a view", ready: true, tab: true },
+      { href: "/", label: "Markets", note: "live rounds", ready: true, tab: true },
       {
-        href: "/positions",
-        label: "Positions",
+        href: "/portfolio",
+        label: "Portfolio",
         short: "Bets",
-        note: "how they went",
+        note: "what you have riding",
         ready: true,
         tab: true,
       },
-      { href: "/activity", label: "Activity", note: "everything you did", ready: true },
+    ],
+  },
+  {
+    section: "Your money",
+    items: [
+      { href: "/stake", label: "Stake", note: "earns while it sits", ready: true, tab: true },
+      { href: "/borrow", label: "Borrow", note: "against your stake", ready: true },
+      { href: "/activity", label: "Activity", note: "the raw ledger", ready: true },
     ],
   },
   {
     section: "Fund it",
-    items: [{ href: "/lend", label: "Lend", note: "earn the spread", ready: true }],
+    items: [{ href: "/lend", label: "Lend", note: "earn the spread", ready: true, tab: true }],
   },
   {
     section: "Run it",
     items: [
       { href: "/liquidate", label: "Liquidate", note: "close bad positions", ready: true },
-      { href: "/operator", label: "Operator", note: "run rounds", ready: true },
+      {
+        href: "/operator",
+        label: "Operator",
+        note: "run rounds",
+        ready: true,
+        operatorOnly: true,
+      },
     ],
+  },
+  {
+    section: "Learn",
+    items: [{ href: "/how-it-works", label: "How it works", note: "the pipeline", ready: true }],
   },
 ];
 
@@ -102,22 +115,43 @@ export const NAV_LINKS: NavLink[] = NAV.flatMap((section) => section.items);
 /** The four destinations in the phone tab bar, before the More tab. */
 export const TAB_LINKS: NavLink[] = NAV_LINKS.filter((link) => link.tab);
 
-/** Everything the tab bar doesn't show, grouped as the sidebar groups it. */
-export const MORE_SECTIONS: NavSection[] = NAV.map((section) => ({
-  ...section,
-  items: section.items.filter((link) => !link.tab),
-})).filter((section) => section.items.length > 0);
+/**
+ * Everything the tab bar doesn't show, grouped as the sidebar groups it.
+ *
+ * `isOperator` decides whether the operator console is listed. It is false
+ * for every visitor, including while the owner check is still loading: a
+ * console that appears a second after the page settles is worse than one that
+ * appears on the next navigation.
+ */
+export function moreSections(isOperator: boolean): NavSection[] {
+  return NAV.map((section) => ({
+    ...section,
+    items: section.items.filter((link) => !link.tab && visible(link, isOperator)),
+  })).filter((section) => section.items.length > 0);
+}
+
+/** The sidebar's sections, with the same visibility rule applied. */
+export function sidebarSections(isOperator: boolean): NavSection[] {
+  return NAV.map((section) => ({
+    ...section,
+    items: section.items.filter((link) => visible(link, isOperator)),
+  })).filter((section) => section.items.length > 0);
+}
+
+function visible(link: NavLink, isOperator: boolean): boolean {
+  return !link.operatorOnly || isOperator;
+}
 
 /**
  * Whether a nav entry is the current page.
  *
- * Prefix match for everything except Overview, whose href is `/` and would
+ * Prefix match for everything except Markets, whose href is `/` and would
  * otherwise be current on every page. The prefix matters for markets: a round
  * lives at `/markets/0x…/3`, and a tab bar showing nothing selected while you
  * stare at a market reads as "you are lost" rather than as "this is a
  * subpage".
  */
 export function isCurrent(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || pathname.startsWith("/markets");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
