@@ -49,7 +49,9 @@ func run() error {
 		return err
 	}
 
-	ch, err := chain.Dial(ctx, cfg.RPCURL, cfg.ChainID)
+	// Retried for the same reason as the keeper's: a restart during a provider
+	// rate limit would otherwise crash-loop the API too.
+	ch, err := chain.DialWithRetry(ctx, cfg.RPCURL, cfg.ChainID, chain.DefaultBackoff)
 	if err != nil {
 		return err
 	}
