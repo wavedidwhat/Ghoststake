@@ -34,23 +34,38 @@ for (const route of ROUTES) {
     // for an arbitrary timeout.
     await expect(page.locator("h1")).toBeVisible();
 
-    const overflow = await page.evaluate(() => {
-      const doc = document.documentElement;
-      return {
-        scrollWidth: doc.scrollWidth,
-        clientWidth: doc.clientWidth,
-        // Whatever is actually wider than the viewport, named, so a failure
-        // says which element to go and look at.
-        widest: [...document.querySelectorAll("body *")]
-          .filter((el) => el.getBoundingClientRect().right > doc.clientWidth + 1)
-          .slice(0, 3)
-          .map((el) => `${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 60)}`),
-      };
-    });
+    // Polled rather than measured once. These pages read the chain, so a
+    // figure can arrive after first paint and widen its row for a frame;
+    // against a slow local node that produced a failure that would not
+    // reproduce, which is worse than no test at all. What must hold is that
+    // the page settles without overflow, not that it never overflows mid-load.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(() => {
+            const doc = document.documentElement;
+            return {
+              over: doc.scrollWidth - doc.clientWidth,
+              // Whatever is actually wider than the viewport, named, so a
+              // failure says which element to go and look at.
+              widest: [...document.querySelectorAll("body *")]
+                .filter((el) => el.getBoundingClientRect().right > doc.clientWidth + 1)
+                .slice(0, 3)
+                .map(
+                  (el) =>
+                    `${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 60)}`,
+                ),
+            };
+          }),
+        { timeout: 5_000, message: `${route} overflows its viewport` },
+      )
+      // One pixel of slack: sub-pixel layout rounding is not a bug.
+      .toEqual({ over: expect.any(Number), widest: [] });
 
-    expect(overflow.widest).toEqual([]);
-    // One pixel of slack: sub-pixel layout rounding is not a bug.
-    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+    const over = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(over).toBeLessThanOrEqual(1);
   });
 }
 
@@ -96,18 +111,40 @@ test.describe("phone", () => {
     await page.goto("/");
 
     const tabs = page.getByRole("navigation", { name: "Primary" });
-    const bar = (await tabs.boundingBox())!;
     const viewport = page.viewportSize()!;
+
     // Pinned to the bottom of the screen, not welded to its edge: the pill
     // floats with a gap under it, which is where the iOS home bar goes. What
     // matters is that it stays in the thumb zone rather than scrolling away.
-    const gap = viewport.height - (bar.y + bar.height);
-    expect(gap).toBeGreaterThanOrEqual(0);
-    expect(gap).toBeLessThan(40);
+    //
+    // Polled, because the measurement raced the stylesheet. Before CSS
+    // applies, the nav is still in normal flow at the end of a long page —
+    // measured there it sat 447px below the fold, which reads as "the tab bar
+    // scrolled away" and is really "the test was early".
+    await expect
+      .poll(
+        async () => {
+          const bar = await tabs.boundingBox();
+          return bar === null ? null : viewport.height - (bar.y + bar.height);
+        },
+        { timeout: 5_000, message: "the tab bar never settled at the bottom of the screen" },
+      )
+      .toBeGreaterThanOrEqual(0);
 
-    await page.getByRole("button", { name: "More" }).click();
+    const bar = (await tabs.boundingBox())!;
+    expect(viewport.height - (bar.y + bar.height)).toBeLessThan(40);
+
+    // Clicked until it takes. Server-rendered HTML is interactive-looking
+    // before React attaches, so a tap that lands during hydration does
+    // nothing at all — under four parallel workers against a local chain that
+    // window is wide enough to fail the run about one time in three. This is
+    // the same race a real user hits on a slow phone, so retrying is the
+    // honest test rather than a sleep.
     const sheet = page.getByRole("dialog");
-    await expect(sheet).toBeVisible();
+    await expect(async () => {
+      await page.getByRole("button", { name: "More" }).click();
+      await expect(sheet).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
     for (const label of ["Borrow", "Activity", "Lend", "Liquidate", "Operator"]) {
       await expect(sheet.getByRole("link", { name: new RegExp(label) })).toBeVisible();
     }

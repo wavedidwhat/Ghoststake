@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -149,9 +150,22 @@ func Load() (Config, error) {
 		if c.AppDomain == "localhost:3000" || c.AppURI == "http://localhost:3000" {
 			return Config{}, fmt.Errorf("APP_DOMAIN and APP_URI must be set when APP_ENV=%s", c.Env)
 		}
-		for _, origin := range c.CORSOrigins {
-			if strings.HasPrefix(origin, "http://localhost") {
-				return Config{}, fmt.Errorf("CORS_ORIGINS must be set when APP_ENV=%s, got %q", c.Env, origin)
+		// A localhost origin is a mistake in production and the normal case on
+		// a remote dev box (APP_ENV=staging), where the API runs on the VPS
+		// under RDK and the frontend runs on the developer's laptop. Before
+		// this, that combination could not work at all: the deployment refused
+		// to boot with localhost in the list, so `pnpm dev` against the RDK API
+		// failed every request on CORS.
+		//
+		// Staging keeps every other guard — a real JWT secret, a real
+		// APP_DOMAIN — because it is a real deployment on a real domain. This
+		// is the one rule it relaxes, and only for origins that are literally
+		// loopback.
+		if c.IsProd() {
+			for _, origin := range c.CORSOrigins {
+				if isLoopbackOrigin(origin) {
+					return Config{}, fmt.Errorf("CORS_ORIGINS must not contain a loopback origin when APP_ENV=%s, got %q", c.Env, origin)
+				}
 			}
 		}
 	}
@@ -215,6 +229,27 @@ func envBool(k string, def bool) bool {
 }
 
 func (c Config) IsDev() bool { return c.Env == "development" }
+
+// IsProd is deliberately not `!IsDev()`: "staging" is a third thing. It is a
+// real deployment — real secret, real domain, real TLS — that a developer is
+// expected to point a local frontend at.
+func (c Config) IsProd() bool { return c.Env == "production" }
+
+// isLoopbackOrigin reports whether an origin refers to the machine the browser
+// is running on.
+//
+// Checked by host rather than by string prefix: `http://localhost.evil.com`
+// starts with "http://localhost" and is not loopback at all, which is exactly
+// the kind of origin an attacker would ask to have allowlisted.
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0"
+}
 
 func env(k, def string) string {
 	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
