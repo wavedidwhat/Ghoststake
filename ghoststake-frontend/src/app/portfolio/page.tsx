@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useConnection } from "wagmi";
 import { AppShell } from "@/components/AppShell";
+import { ClaimAllPanel } from "@/components/ClaimAllPanel";
 import { Card, Stat } from "@/components/Card";
 import { Figure } from "@/components/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
@@ -40,6 +41,25 @@ export default function PortfolioPage() {
   );
 }
 
+/**
+ * Everything this wallet can collect, across every market (GHO-69).
+ *
+ * Read from the chain rather than from the indexer: these figures fund a
+ * transaction about to be signed, and `claimableOf` five blocks stale can
+ * offer a claim that has already been collected. `useRounds` is already
+ * batching them for the market pages, so this costs no extra call.
+ */
+function useClaimables() {
+  const { markets } = useMarkets();
+  const rounds = useRounds(markets);
+
+  const claims = rounds.rounds
+    .filter((r) => (r.claimable ?? 0n) > 0n && r.isClaimed !== true)
+    .map((r) => ({ market: r.market.address, roundId: r.id, amount: r.claimable! }));
+
+  return { claims, refetch: rounds.refetch };
+}
+
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
   const { decimals, symbol } = position;
   const standing = stakeStanding(position.totalLedgerValue, position.collateralValue, decimals);
@@ -51,11 +71,32 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
       ? undefined
       : formatAmount(value, decimals);
 
+  const { address } = useConnection();
+  const claimables = useClaimables();
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {/* The pipeline leads, because the relationship between the three
-          numbers is the product. Health factor follows as the detail behind
-          the middle step. */}
+      {/* What can be collected leads. It is the only thing on this page that
+          is someone else's money until they press a button, and it used to be
+          findable only by visiting each market in turn. */}
+      {address && (
+        <div className="lg:col-span-3">
+          <ClaimAllPanel
+            claims={claimables.claims}
+            address={address}
+            decimals={position.decimals}
+            symbol={position.symbol}
+            onClaimed={() => {
+              claimables.refetch();
+              position.refetch();
+            }}
+          />
+        </div>
+      )}
+
+      {/* The pipeline follows, because the relationship between the three
+          numbers is the product. Health factor is the detail behind the
+          middle step. */}
       <div className="lg:col-span-3">
         <PipelineStrip position={position} standing={standing} />
       </div>
