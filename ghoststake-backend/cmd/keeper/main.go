@@ -116,6 +116,7 @@ func run() error {
 		Horizon:              cfg.Horizon,
 		MaxUncalendaredRound: cfg.MaxUncalendaredRound,
 		RefreshInterval:      cfg.RefreshInterval,
+		GasCheckInterval:     cfg.GasCheckInterval,
 		MinGasBalance:        cfg.MinGasBalanceWei,
 	})
 	if err != nil {
