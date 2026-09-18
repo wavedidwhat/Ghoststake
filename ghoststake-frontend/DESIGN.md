@@ -50,21 +50,30 @@ explicitly allowed. Three things are not:
 
 ## Colour
 
-The palette is Sanzo Wada's combination **332** from *A Dictionary of Color
-Combinations* (1933): Scarlet, Coral Red, Deep Slate Olive, Dusky Green. The
-tokens live in `src/app/globals.css` and nowhere else — **no component hardcodes
-a hex value.**
+Near-black ground; the only saturated colour on a screen belongs to a
+decision. The tokens live in `src/app/globals.css` and nowhere else — **no
+component hardcodes a hex value.**
 
 | Token | Value | Meaning |
 |---|---|---|
-| `ground` / `surface` / `raised` | `#1d2719` / `#253122` / `#2e3b29` | slate-olive grounds, darkest first |
-| `brand` | `#cb2f43` | Scarlet. Wordmark, phase chips, "you're in". |
-| `action` | `#96d1aa` | buttons that are not a market side: stake, borrow, repay, supply |
-| `up` / `down` | `#96d1aa` / `#f58e84` | the two sides of a market |
-| `positive` / `negative` | same pair | P/L and deltas, so a won round and a positive balance agree |
-| `warning` | `#e2b540` | Yellow Ocher. Thin sides, stale feeds, health. |
-| `focus` | `#e2b540` | focus rings, which must never be mistaken for a side |
-| `ink` / `ink-muted` / `ink-faint` | `#f1eadb` / `#b3b8a4` / `#8b9182` | `faint` is for units and decimal tails, not content |
+| `ground` / `surface` / `raised` | `#0d0f0e` / `#161a18` / `#1f2522` | grounds, darkest first |
+| `brand` | `#e8394f` | wordmark, live countdown, phase chip. Never a button. |
+| `brand-ink` | `#ffffff` | text on a brand-filled chip |
+| `action` | `#2fd07a` | buttons that are not a market side: stake, borrow, repay, supply |
+| `up` / `down` | `#2fd07a` / `#ff5470` | the two sides of a market |
+| `up-ink` / `down-ink` | `#04140b` / `#1e0409` | text on a filled side |
+| `up-edge` / `down-edge` | `#1c9c59` / `#c93a52` | the solid edge under a pressable button |
+| `positive` / `negative` | same pair as the sides | P/L and deltas, so a won round and a positive balance agree |
+| `warning` | `#ffc233` | thin sides, stale feeds, health |
+| `focus` | `#ffc233` | focus rings, which must never be mistaken for a side |
+| `ink` / `ink-muted` / `ink-faint` | `#f2f4f2` / `#a0aaa5` / `#6f7a75` | `faint` is for units and decimal tails, not content |
+
+**What this replaced, and why.** GHO-58 shipped Sanzo Wada's plate 332 — a
+slate-olive ground with a sage/salmon pair. It was defensible on paper and
+wrong on a phone: the ground and both side colours sat within a few points of
+the same lightness, so nothing separated from anything and the screen read as
+one soft murk. Dropping the ground to near-black and saturating the pair fixed
+it without changing a single rule below.
 
 Three rules that are not obvious:
 
@@ -73,20 +82,48 @@ Three rules that are not obvious:
    of the side being taken, or `action`.
 2. **Green is not the brand.** Green is the loud colour on every sportsbook,
    and if the brand were green then "Take Up" and "Up is winning" would look
-   like the same statement. Wada pairs red with greens that are nearly grey,
-   which is also what stops red-and-green reading as Christmas.
+   like the same statement. Red and green avoid reading as Christmas because
+   neither one is ever the ground: they sit on near-black, far apart in
+   lightness, and never touch each other.
 3. **Colour is never the only signal.** Up and Down always carry an arrow
    (`src/components/icons.tsx`) and the word. The two colours also differ in
    lightness, so the pair survives greyscale and colour blindness.
 
 ## Shape
 
-- `rounded-card` is `0.25rem`. Near-square: a printed slip has corners.
-- Radius is `rounded-sm` or nothing. `rounded-full` is for dots and meter
-  bars only, never a pill button.
+- `rounded-card` (`1.125rem`) for a card; `rounded-control` (`0.875rem`) for
+  something you press. Nothing else gets a radius by default.
 - **Not every surface is a bordered card.** Vary density: a rule and plain
   type beat a card, and tables are allowed.
-- No shadows, no blur, no glassmorphism, no gradient fills.
+- **No gradients, no blur, no glassmorphism, no glow.** Every surface is one
+  flat colour.
+- The **only** depth in the design is `.pressable`: a 4px solid edge under a
+  button, which moves down 3px when pressed. It is a hard offset, not a
+  blurred shadow, and it exists on things you press and nowhere else.
+
+GHO-58 set the radius near-square, arguing that a printed slip has corners.
+The layout that followed (GHO-59) is built on big pressable blocks, and a
+near-square block does not read as pressable at that size. The AI tell was
+never the radius on its own — it was one radius and one blurred shadow
+stamped on every surface.
+
+## Layout
+
+The phone screen is the design; the desktop is the same components with more
+room. Market screens follow one shape:
+
+1. **The odds bar is the card.** Where the split sits *is* the information,
+   and it reads before any figure. An empty round draws no bar — a
+   half-and-half bar would invent a crowd.
+2. **Each side is a button**, with what it pays on the button rather than
+   beside it. The multiple and the press are one thought.
+3. **The countdown fills with the brand colour only inside the entry cutoff**,
+   because that is the one moment the urgency is real.
+4. **The loss is stated at the same size as the win.** Losses weigh about
+   twice what gains do, so hiding the downside is both dishonest and less
+   convincing.
+5. **One decision per sheet**, with the consequence (a safety factor moving,
+   for instance) shown before the wallet opens.
 
 ## Icons
 

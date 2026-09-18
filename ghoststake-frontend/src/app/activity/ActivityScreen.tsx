@@ -2,6 +2,7 @@
 
 import { useConnection } from "wagmi";
 import { AppShell, NeedsWallet } from "@/components/AppShell";
+import { RowCard, RowField, RowList } from "@/components/Rows";
 import { Card } from "@/components/Card";
 import { useActivity, useActivityDecimals } from "@/hooks/useActivity";
 import {
@@ -145,8 +146,55 @@ function ActivityTable({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
+  const rows = events.map((event) => ({
+    event,
+    // Formatted once and shared by both layouts, so the phone and the desktop
+    // can never disagree about a figure.
+    formatted: formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol }),
+  }));
+
   return (
-    <div className="overflow-x-auto rounded-card border border-border bg-surface">
+    <>
+      <RowList>
+        {rows.map(({ event, formatted }) => (
+          <RowCard
+            key={event.id}
+            title={
+              <>
+                <span className="text-sm text-ink">{activityLabel(event)}</span>
+                {formatted.leveraged && (
+                  <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
+                    leveraged
+                  </span>
+                )}
+                <time
+                  dateTime={event.blockTime}
+                  className="mt-1 block text-xs text-ink-faint"
+                  title={`Block ${event.blockNumber.toLocaleString()}`}
+                >
+                  {new Date(event.blockTime).toLocaleString()}
+                </time>
+              </>
+            }
+            aside={
+              <span className={`tabular font-mono text-sm ${formatted.tone}`}>
+                {formatted.sign}
+                {formatted.amount}
+                <span className="ml-1 text-xs text-ink-faint">{formatted.unit}</span>
+              </span>
+            }
+          >
+            <RowField label="Detail">
+              <Detail event={event} />
+            </RowField>
+            <RowField label="Transaction">
+              <TxLink hash={event.txHash} />
+            </RowField>
+          </RowCard>
+        ))}
+      </RowList>
+
+      <div className="hidden overflow-x-auto rounded-card border border-border bg-surface sm:block">
       <table className="w-full min-w-[52rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
@@ -170,7 +218,67 @@ function ActivityTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Everything about an event that both layouts need to agree on.
+ *
+ * Shares and the underlying asset have different decimals — the vault's
+ * `_decimalsOffset()` is 6 — so one number formatted with the other's is
+ * wrong by a factor of a million and looks entirely plausible. Rendered as
+ * raw units until both are known rather than guessed at.
+ *
+ * The sign comes from the direction rather than from the number: the API
+ * sends absolute amounts so that nothing has to interpret a minus sign
+ * meaning "the balance went down" as "you lost this".
+ */
+function formatEvent(
+  event: ActivityEvent,
+  {
+    address,
+    assetDecimals,
+    shareDecimals,
+    assetSymbol,
+  }: {
+    address: string;
+    assetDecimals?: number;
+    shareDecimals?: number;
+    assetSymbol: string;
+  },
+) {
+  const direction = activityDirection(event);
+  const decimals = event.asset === "shares" ? shareDecimals : assetDecimals;
+
+  return {
+    amount: decimals === undefined ? "…" : formatAmount(BigInt(event.amount), decimals, 4),
+    unit: event.asset === "shares" ? "shares" : assetSymbol,
+    sign: direction === "in" ? "+" : direction === "out" ? "−" : "",
+    tone:
+      direction === "in" ? "text-positive" : direction === "out" ? "text-ink" : "text-ink-muted",
+    leveraged: wasLeveraged(event, address),
+  };
+}
+
+/** The hash, linked if this chain has an explorer. */
+function TxLink({ hash }: { hash: string }) {
+  const explorer = explorerTxUrl(hash);
+
+  return explorer ? (
+    <a
+      href={explorer}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+    >
+      {shortHash(hash)}
+    </a>
+  ) : (
+    // No explorer on this chain — a local anvil. The hash is still the useful
+    // thing; a link that goes nowhere is not.
+    <span className="font-mono text-ink-faint">{shortHash(hash)}</span>
   );
 }
 
@@ -187,17 +295,7 @@ function Row({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
-  const direction = activityDirection(event);
-  const explorer = explorerTxUrl(event.txHash);
-
-  // Shares and the underlying asset have different decimals — the vault's
-  // `_decimalsOffset()` is 6 — so one number formatted with the other's is
-  // wrong by a factor of a million and looks entirely plausible. Rendered as
-  // raw units until both are known rather than guessed at.
-  const decimals = event.asset === "shares" ? shareDecimals : assetDecimals;
-  const amount =
-    decimals === undefined ? "…" : formatAmount(BigInt(event.amount), decimals, 4);
-  const unit = event.asset === "shares" ? "shares" : assetSymbol;
+  const formatted = formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol });
 
   return (
     <tr className="border-b border-border/60 last:border-0">
@@ -209,47 +307,27 @@ function Row({
 
       <td className="px-4 py-3">
         <span className="text-ink">{activityLabel(event)}</span>
-        {wasLeveraged(event, address) && (
-          <span className="ml-2 rounded bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
+        {formatted.leveraged && (
+          <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
             leveraged
           </span>
         )}
       </td>
 
       <td className="px-4 py-3 text-right font-mono whitespace-nowrap">
-        {/* The sign is added here, from the direction, not from the number:
-            the API sends absolute amounts so that nothing has to interpret a
-            minus sign that means "the balance went down" as "you lost this". */}
-        <span
-          className={
-            direction === "in" ? "text-positive" : direction === "out" ? "text-ink" : "text-ink-muted"
-          }
-        >
-          {direction === "in" ? "+" : direction === "out" ? "−" : ""}
-          {amount}
+        <span className={formatted.tone}>
+          {formatted.sign}
+          {formatted.amount}
         </span>
-        <span className="ml-1 text-xs text-ink-faint">{unit}</span>
+        <span className="ml-1 text-xs text-ink-faint">{formatted.unit}</span>
       </td>
 
       <td className="px-4 py-3 text-ink-muted">
         <Detail event={event} />
       </td>
 
-      <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap">
-        {explorer ? (
-          <a
-            href={explorer}
-            target="_blank"
-            rel="noreferrer"
-            className="text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-          >
-            {shortHash(event.txHash)}
-          </a>
-        ) : (
-          // No explorer on this chain — a local anvil. The hash is still the
-          // useful thing; a link that goes nowhere is not.
-          <span className="text-ink-faint">{shortHash(event.txHash)}</span>
-        )}
+      <td className="px-4 py-3 text-right text-xs whitespace-nowrap">
+        <TxLink hash={event.txHash} />
       </td>
     </tr>
   );

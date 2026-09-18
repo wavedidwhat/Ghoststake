@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { env } from "@/lib/env";
+import { THEME_COLOR } from "@/lib/theme";
 
 /*
  * Three self-hosted faces from Fontshare (GHO-58). `next/font/local` serves
@@ -50,6 +51,24 @@ export const metadata: Metadata = {
   metadataBase: new URL(env.appUrl),
   title: "GhostStake",
   description: "Stake, borrow against it, and take a position — without unwinding.",
+};
+
+/**
+ * `viewportFit: "cover"` lets the app paint into the rounded corners and the
+ * home-bar strip on a notched phone; every fixed element then has to add the
+ * safe-area inset itself (the tab bar and the sheets do). `themeColor` is
+ * what iOS and Android tint the status bar with, and without it a standalone
+ * PWA gets a white band above an olive app.
+ *
+ * `maximumScale` is deliberately left alone: capping zoom is the oldest
+ * accessibility mistake in mobile web, and this app is full of figures
+ * someone may well want to enlarge.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: THEME_COLOR,
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

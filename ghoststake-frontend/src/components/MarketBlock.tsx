@@ -15,6 +15,7 @@ import { borrowToPositionRouterAbi, collateralVaultAbi, parimutuelRoundAbi } fro
 import { env } from "@/lib/env";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
 import { SideArrow } from "@/components/icons";
+import { Sheet } from "@/components/Sheet";
 import type { Market } from "@/lib/markets";
 import { Phase, Side, type PhaseValue, type SideValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
@@ -345,29 +346,35 @@ function PositionForm({
     if (ok) onDone();
   }
 
+  const sideLabel = side === Side.Up ? "Up" : "Down";
+
+  /*
+   * The ticket is a sheet, not an inline block (GHO-59).
+   *
+   * Inline, it appeared below the market and pushed the action off a phone
+   * screen: you tapped "Take Up", the form opened somewhere under your thumb,
+   * and the button that actually spends the money was below the fold. As a
+   * sheet it comes up from the bottom edge, where the thumb already is, and
+   * the same component centres itself on a desktop.
+   *
+   * `open` is always true because this component only mounts once a side has
+   * been chosen; closing it is the parent dropping it.
+   */
   return (
-    <div className="mt-4 flex flex-col gap-4 rounded-sm border border-border-strong bg-raised/60 p-4">
-      <div className="flex items-center justify-between">
+    <Sheet open onClose={onClose} title={`Take ${sideLabel} · round ${roundId.toString()}`}>
+      <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 text-sm text-ink">
         {/* The side is named with its arrow and its colour here too, so the
             confirm step cannot be read as the other side (GHO-58). */}
-        <h3 className="flex items-center gap-2 text-sm font-medium text-ink">
-          Take
-          <span
-            className={`display flex items-center gap-1 uppercase ${
-              side === Side.Up ? "text-up" : "text-down"
-            }`}
-          >
-            <SideArrow up={side === Side.Up} className="size-3" />
-            {side === Side.Up ? "Up" : "Down"}
-          </span>
-          on round {roundId.toString()}
-        </h3>
-        <button
-          onClick={onClose}
-          className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+        <span
+          className={`display flex items-center gap-1 text-base uppercase ${
+            side === Side.Up ? "text-up" : "text-down"
+          }`}
         >
-          Cancel
-        </button>
+          <SideArrow up={side === Side.Up} className="size-3" />
+          {sideLabel}
+        </span>
+        <span className="text-ink-muted">on round {roundId.toString()}</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -411,20 +418,29 @@ function PositionForm({
         </p>
       )}
 
+      {/*
+       * The commit button takes the colour of the side being taken, never the
+       * brand red (GHO-58), and it is the last thing in the sheet so it sits
+       * closest to the thumb. `min-h-12` keeps it well over the 44px minimum
+       * even with one line of label.
+       */}
       <button
         onClick={submit}
         disabled={disabled}
-        className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        className={`display min-h-12 cursor-pointer rounded-sm px-4 py-3 text-base text-ground uppercase transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+          side === Side.Up ? "bg-up hover:bg-action-strong" : "bg-down hover:brightness-110"
+        }`}
       >
         {busy
           ? "Working…"
           : needsTokenApproval || needsDelegation
-            ? `Approve and take position`
-            : `Take position · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
+            ? `Approve and take ${sideLabel}`
+            : `Take ${sideLabel} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
       </button>
 
       <TxStatus state={tx.state} />
-    </div>
+      </div>
+    </Sheet>
   );
 }
 

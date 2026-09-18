@@ -2,6 +2,7 @@
 
 import { useConnection } from "wagmi";
 import { AppShell, NotConfigured } from "@/components/AppShell";
+import { RowCard, RowField, RowList } from "@/components/Rows";
 import { Card } from "@/components/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { useAtRisk } from "@/hooks/useAtRisk";
@@ -139,8 +140,85 @@ function Table({
   symbol: string;
   onDone: () => void;
 }) {
+  const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
+
   return (
-    <div className="overflow-x-auto rounded-card border border-border bg-surface">
+    <>
+      {/* The phone form (GHO-59). Health leads, because that is the whole
+          reason to look at this page, and the quote only appears on rows
+          where there is actually a liquidation to quote. */}
+      <RowList>
+        {positions.map((position) => {
+          const action = actionFor(position);
+          const net = netToLiquidator(position);
+          const band = healthBand(BigInt(position.healthFactor));
+
+          return (
+            <RowCard
+              key={position.address}
+              title={
+                <a
+                  href={`/positions?address=${position.address}`}
+                  className="font-mono text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {shortHash(position.address, 8, 6)}
+                </a>
+              }
+              aside={
+                <span
+                  className={`tabular text-sm ${
+                    band === "danger"
+                      ? "text-negative"
+                      : band === "caution"
+                        ? "text-warning"
+                        : "text-ink"
+                  }`}
+                >
+                  {formatHealthFactor(BigInt(position.healthFactor)) ?? "—"}
+                  <span className="ml-1 text-xs text-ink-faint">health</span>
+                </span>
+              }
+            >
+              <RowField label="Collateral">
+                <span className="tabular">{fmt(BigInt(position.collateral))}</span>
+              </RowField>
+              <RowField label="Debt">
+                <span className="tabular">{fmt(BigInt(position.debt))}</span>
+              </RowField>
+
+              {action === "liquidate" && (
+                <>
+                  <RowField label="You repay">
+                    <span className="tabular text-ink">{fmt(BigInt(position.maxRepay))}</span>
+                  </RowField>
+                  <RowField label="You receive">
+                    <span className="tabular text-ink">{fmt(BigInt(position.seized))}</span>
+                  </RowField>
+                  <RowField label="Net">
+                    <span className={`tabular ${net > 0n ? "text-positive" : "text-negative"}`}>
+                      {net > 0n ? "+" : "−"}
+                      {fmt(net < 0n ? -net : net)} {symbol}
+                    </span>
+                  </RowField>
+                </>
+              )}
+
+              <div className="mt-2">
+                <ActionCell
+                  position={position}
+                  action={action}
+                  connected={connected}
+                  decimals={decimals}
+                  symbol={symbol}
+                  onDone={onDone}
+                />
+              </div>
+            </RowCard>
+          );
+        })}
+      </RowList>
+
+      <div className="hidden overflow-x-auto rounded-card border border-border bg-surface sm:block">
       <table className="w-full min-w-[58rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
@@ -167,7 +245,8 @@ function Table({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

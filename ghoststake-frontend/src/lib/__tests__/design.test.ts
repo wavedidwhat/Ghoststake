@@ -70,10 +70,12 @@ describe("design tokens", () => {
     // Tokens live in globals.css. A hex in a component is how a palette
     // drifts, and it is invisible in review.
     const hex = /#[0-9a-f]{3,8}\b/i;
-    // Both of these render outside the CSS, so they cannot read a token: an
-    // OG image is a PNG built by Satori, and a manifest's theme colour is
-    // read by the operating system.
-    const outsideCss = ["opengraph-image.tsx", "manifest.ts"];
+    // Two files render outside the CSS and so cannot read a token: an OG
+    // image is a PNG built by Satori, and `lib/theme.ts` holds the two values
+    // the browser and the OS read before any stylesheet (the status-bar tint
+    // and the PWA splash). Everything else, the manifest included, imports
+    // from there.
+    const outsideCss = ["opengraph-image.tsx", "lib/theme.ts"];
     const offenders = components.filter(
       (path) => !outsideCss.some((f) => path.endsWith(f)) && hex.test(code(path)),
     );

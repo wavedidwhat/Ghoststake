@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { SideArrow } from "@/components/icons";
 import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { useNow } from "@/hooks/useNow";
@@ -11,7 +13,15 @@ import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
 import { formatAmount } from "@/lib/format";
-import { Phase, Side, entryClosesAt, formatCountdown, multipleFor } from "@/lib/rounds";
+import {
+  Phase,
+  Side,
+  entryClosesAt,
+  formatCountdown,
+  multipleFor,
+  upShare,
+  type Round,
+} from "@/lib/rounds";
 
 /**
  * Readable without a wallet, deliberately.
@@ -196,22 +206,27 @@ function MarketRow({
       </div>
 
       {live ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <SideSummary
-            name="Up"
-            pool={live.round.upPool}
-            multiple={upMultiple}
-            decimals={decimals}
-            symbol={symbol}
-          />
-          <SideSummary
-            name="Down"
-            pool={live.round.downPool}
-            multiple={downMultiple}
-            decimals={decimals}
-            symbol={symbol}
-          />
-        </div>
+        <>
+          <OddsSplit round={live.round} />
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <SideSummary
+              name="Up"
+              up
+              pool={live.round.upPool}
+              multiple={upMultiple}
+              decimals={decimals}
+              symbol={symbol}
+            />
+            <SideSummary
+              name="Down"
+              up={false}
+              pool={live.round.downPool}
+              multiple={downMultiple}
+              decimals={decimals}
+              symbol={symbol}
+            />
+          </div>
+        </>
       ) : (
         <p className="mt-3 text-xs text-ink-faint">No round open right now.</p>
       )}
@@ -219,32 +234,66 @@ function MarketRow({
   );
 }
 
+/**
+ * The split, as a bar. The same shape as the round card's (GHO-59), smaller,
+ * and without the pool figures — a feed is scanned rather than read, and the
+ * exact amounts are one tap away on the market itself.
+ */
+function OddsSplit({ round }: { round: Round }) {
+  const share = upShare(round);
+  if (share === null) {
+    return <p className="mt-3 text-xs text-ink-faint">Nothing staked yet.</p>;
+  }
+
+  const up = Math.round(share);
+  return (
+    <div
+      className="mt-3 flex h-7 overflow-hidden rounded-control bg-raised"
+      role="img"
+      aria-label={`${up}% of the pool is on Up, ${100 - up}% on Down`}
+    >
+      <div
+        className="display flex min-w-12 items-center gap-1 bg-up px-2 text-xs text-up-ink"
+        style={{ width: `${share}%` }}
+      >
+        <SideArrow up className="size-2" />
+        {up}%
+      </div>
+      <div className="display flex min-w-12 flex-1 items-center justify-end gap-1 bg-down px-2 text-xs text-down-ink">
+        {100 - up}%
+        <SideArrow up={false} className="size-2" />
+      </div>
+    </div>
+  );
+}
+
 function SideSummary({
   name,
+  up,
   pool,
   multiple,
   decimals,
   symbol,
 }: {
   name: string;
+  up: boolean;
   pool: bigint;
   multiple: bigint | null;
   decimals: number;
   symbol: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 rounded-sm bg-raised/40 px-3 py-2">
-      <span className="text-xs text-ink-muted">{name}</span>
-      <span className="flex items-baseline gap-2">
-        <span className="tabular text-xs text-ink-faint">
-          {formatAmount(pool, decimals, 0)} {symbol}
-        </span>
-        {/* A live quote, not a promise: it moves with every entry, and an
-            empty side has no multiple at all rather than an infinite one. */}
-        <span className="tabular text-sm text-ink">
-          {multiple === null ? "—" : `${formatAmount(multiple, 18, 2)}×`}
-        </span>
-      </span>
+    <div className="rounded-control border border-border bg-raised/40 px-3 py-2">
+      <div className={`display flex items-center gap-1.5 text-sm uppercase ${up ? "text-up" : "text-down"}`}>
+        <SideArrow up={up} className="size-2.5" />
+        {name}
+      </div>
+      <p className="tabular mt-1 text-base text-ink">
+        {multiple === null ? "—" : `${formatAmount(multiple, 18, 2)}×`}
+      </p>
+      <p className="tabular mt-0.5 text-[11px] text-ink-faint">
+        {formatAmount(pool, decimals, 2)} {symbol}
+      </p>
     </div>
   );
 }

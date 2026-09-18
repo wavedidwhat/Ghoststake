@@ -45,6 +45,60 @@ func TestProductionRejectsLocalhostSiweOrigin(t *testing.T) {
 	}
 }
 
+// A remote dev deployment (APP_ENV=staging) is the RDK case: the API runs on
+// the VPS, the frontend runs on a laptop, and every request the developer makes
+// carries Origin: http://localhost:3000. Before this the deployment refused to
+// boot with that in the list, so local development against it was impossible.
+func TestStagingAllowsALoopbackOrigin(t *testing.T) {
+	base(t)
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("CORS_ORIGINS", "https://ghoststake.example.com,http://localhost:3000")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("staging should allow a loopback origin: %v", err)
+	}
+	if len(cfg.CORSOrigins) != 2 {
+		t.Fatalf("want both origins kept, got %v", cfg.CORSOrigins)
+	}
+	// Staging is not development: it keeps the guards that matter.
+	if cfg.IsDev() || cfg.IsProd() {
+		t.Fatalf("staging is neither dev nor prod, got IsDev=%v IsProd=%v", cfg.IsDev(), cfg.IsProd())
+	}
+}
+
+func TestStagingStillRequiresARealSiweOrigin(t *testing.T) {
+	base(t)
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("APP_DOMAIN", "localhost:3000")
+	if _, err := config.Load(); err == nil {
+		t.Fatal("staging must still bind SIWE to a real domain")
+	}
+}
+
+// `http://localhost.evil.com` starts with "http://localhost" and is not
+// loopback at all, which is exactly the origin someone would ask to have
+// allowlisted. The check is by host, not by prefix.
+func TestProductionRejectsALookalikeLocalhostOrigin(t *testing.T) {
+	for _, origin := range []string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+		"http://[::1]:3000",
+	} {
+		base(t)
+		t.Setenv("CORS_ORIGINS", origin)
+		if _, err := config.Load(); err == nil {
+			t.Fatalf("%s was accepted in production", origin)
+		}
+	}
+
+	base(t)
+	t.Setenv("CORS_ORIGINS", "https://localhost.evil.com")
+	if _, err := config.Load(); err != nil {
+		t.Fatalf("a real host that merely looks local is not loopback: %v", err)
+	}
+}
+
 func TestDevelopmentStillAllowsLocalhost(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
