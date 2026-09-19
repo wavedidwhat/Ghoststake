@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { BACKGROUND_COLOR, THEME_COLOR } from "@/lib/theme";
+
 /**
  * Enough of a web app manifest that "Add to Home Screen" gives a real icon
  * and a dark splash rather than a screenshot of the page (GHO-58).
@@ -16,8 +18,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Stake, borrow against it, and take a position — without unwinding.",
     start_url: "/",
     display: "standalone",
-    background_color: "#1d2719",
-    theme_color: "#253122",
+    background_color: BACKGROUND_COLOR,
+    theme_color: THEME_COLOR,
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

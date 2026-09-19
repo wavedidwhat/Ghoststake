@@ -5,12 +5,15 @@
  * Design tokens (GHO-58). Single dark theme — components only ever have to
  * work against one ground.
  *
- * The palette is Sanzo Wada's combination 332 from A Dictionary of Color
- * Combinations (1933): Scarlet, Coral Red, Deep Slate Olive, Dusky Green.
- * It replaced the violet `#8b7cf6` scaffold accent, which was the statistical
- * average of "modern dark web app". Wada pairs red with greens that are
- * nearly grey rather than with a true green, which is what stops red and
- * green reading as Christmas.
+ * The ground is near-black and the only saturated colour on a screen belongs
+ * to a decision: the odds bar, the two side buttons, a result.
+ *
+ * This replaced Wada's plate 332 (a slate-olive ground with a sage/salmon
+ * pair, GHO-58). The palette was defensible on paper and wrong on a phone:
+ * ground and both side colours sat within a few points of the same lightness,
+ * so nothing separated from anything and the screen read as one soft murk.
+ * The scarlet brand survived the change, because the rule below is what the
+ * scarlet was for.
  *
  * The one rule that shapes the whole file: `brand` is scarlet and never
  * appears on a button. A red button on a betting screen reads as "you lost".
@@ -26,54 +29,62 @@
  */
 @theme {
   /* Grounds, darkest to lightest. `raised` is for a surface on a surface. */
-  --color-ground: #1d2719;
-  --color-surface: #253122;
-  --color-raised: #2e3b29;
-  --color-border: #3a4a36;
-  --color-border-strong: #53604a;
+  --color-ground: #0d0f0e;
+  --color-surface: #161a18;
+  --color-raised: #1f2522;
+  --color-border: #2c3431;
+  --color-border-strong: #3d4845;
 
-  /* Dusky Green (Wada 332), for a filled side or a lifted panel. */
-  --color-dusky: #004f46;
-
-  /* Scarlet (Wada 332). Brand only: top bar, phase chip, wordmark. */
-  --color-brand: #cb2f43;
-  --color-brand-strong: #dd4257;
-  --color-brand-soft: #cb2f4326;
+  /* Brand only: the wordmark, a live countdown, the phase chip. Never a
+     button — see the rule below. */
+  --color-brand: #e8394f;
+  --color-brand-strong: #f45065;
+  --color-brand-soft: #e8394f26;
+  /* Text on a brand-filled chip. The fill is dark enough for white here, but
+     it is a token because a lighter brand would need dark text, and a
+     countdown nobody can read is how that bug ships. */
+  --color-brand-ink: #ffffff;
 
   /*
    * `action` is for buttons that are not a market side — stake, borrow,
-   * repay, supply. Cobalt Green, so it never competes with the brand.
+   * repay, supply. The same green as `up`, so a confirmed action and a
+   * winning side never disagree about what green means.
    */
-  --color-action: #96d1aa;
-  --color-action-strong: #aadfbc;
-  --color-action-soft: #96d1aa1f;
+  --color-action: #2fd07a;
+  --color-action-strong: #4ade8d;
+  --color-action-soft: #2fd07a1f;
 
   /*
    * Market sides. These carry an arrow and a word as well, so the colour is
-   * never the only signal (GHO-57 rule 2, and colour-blind users).
-   * Cobalt Green and Coral Red differ in lightness as well as hue.
+   * never the only signal (GHO-57 rule 2, and colour-blind users). The two
+   * differ in lightness as well as hue, so the pair survives greyscale.
    */
-  --color-up: #96d1aa;
-  --color-down: #f58e84;
-  --color-up-soft: #96d1aa1f;
-  --color-down-soft: #f58e841f;
+  --color-up: #2fd07a;
+  --color-down: #ff5470;
+  --color-up-soft: #2fd07a1f;
+  --color-down-soft: #ff547026;
+  /* Text on a filled side, and the solid edge under a pressed button. */
+  --color-up-ink: #04140b;
+  --color-down-ink: #1e0409;
+  --color-up-edge: #1c9c59;
+  --color-down-edge: #c93a52;
 
   /* Semantic. Deltas and P/L only, never decoration. Same pair as the sides
      so a winning round and a positive balance agree. */
-  --color-positive: #96d1aa;
-  --color-negative: #f58e84;
-  --color-warning: #e2b540;
-  --color-positive-soft: #96d1aa1f;
-  --color-negative-soft: #f58e841f;
-  --color-warning-soft: #e2b54026;
+  --color-positive: #2fd07a;
+  --color-negative: #ff5470;
+  --color-warning: #ffc233;
+  --color-positive-soft: #2fd07a1f;
+  --color-negative-soft: #ff547026;
+  --color-warning-soft: #ffc23326;
 
-  /* Focus. Ocher, because a focus ring must not be mistaken for a side. */
-  --color-focus: #e2b540;
+  /* Amber, because a focus ring must not be mistaken for a side. */
+  --color-focus: #ffc233;
 
   /* Type. `faint` is for units and decimal tails, not for content. */
-  --color-ink: #f1eadb;
-  --color-ink-muted: #b3b8a4;
-  --color-ink-faint: #8b9182;
+  --color-ink: #f2f4f2;
+  --color-ink-muted: #a0aaa5;
+  --color-ink-faint: #6f7a75;
 
   /*
    * Three faces, each with one job (GHO-58):
@@ -99,10 +110,17 @@
   --text-figure--letter-spacing: -0.02em;
 
   /*
-   * Near-square. The old 0.875rem on every surface was the `rounded-lg`
-   * everywhere tell; a printed slip has corners.
+   * Rounded again, deliberately.
+   *
+   * GHO-58 took this to 0.25rem arguing that a printed slip has corners. The
+   * layout that followed is built on big pressable blocks — an odds bar and
+   * two side buttons — and a near-square block does not read as pressable at
+   * that size. The AI tell was never the radius on its own: it was one radius
+   * and one shadow stamped on every surface. Radius is spent by role here:
+   * `card` for a card, `control` for something you press, and nothing else.
    */
-  --radius-card: 0.25rem;
+  --radius-card: 1.125rem;
+  --radius-control: 0.875rem;
 }
 
 :root {
@@ -135,4 +153,36 @@ body {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+/*
+ * A button you press (GHO-59 layout).
+ *
+ * The 4px solid edge underneath is the only depth anywhere in this design.
+ * It is a hard offset, not a blurred shadow and not a gradient — both of
+ * those are on the no-AI-tells list, and neither says "pressable" as plainly
+ * as an edge that disappears when the button moves down onto it.
+ */
+.pressable {
+  box-shadow: 0 4px 0 var(--edge);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+}
+
+.pressable:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--edge);
+}
+
+/* Someone who asks for less motion still gets the colour and the edge, just
+   not the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .pressable {
+    transition: none;
+  }
+  .pressable:active:not(:disabled) {
+    transform: none;
+    box-shadow: 0 4px 0 var(--edge);
+  }
 }

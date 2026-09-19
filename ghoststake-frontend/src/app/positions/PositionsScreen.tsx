@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { AppShell, NeedsWallet } from "@/components/AppShell";
+import { RowCard, RowField, RowList } from "@/components/Rows";
 import { Card } from "@/components/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
@@ -442,8 +443,73 @@ function PositionsTable({
   decimals?: number;
   symbol: string;
 }) {
+  const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
+
   return (
-    <div className="overflow-x-auto rounded-card border border-border bg-surface">
+    <>
+      {/* The phone form (GHO-59): the market and the outcome lead, because
+          those are what someone is scanning for, and the rest follows as
+          pairs. */}
+      <RowList>
+        {positions.map((position) => {
+          const net = netOf(position);
+          const side = sideTaken(position);
+          const feed = feeds.get(position.round.market.toLowerCase())?.description;
+
+          return (
+            <RowCard
+              key={roundKey(position)}
+              title={
+                <>
+                  <Link
+                    href={`/markets/${position.round.market}/${position.round.id}`}
+                    className="text-sm text-ink underline-offset-2 hover:underline"
+                  >
+                    {feed ?? "Market"}
+                  </Link>
+                  <span className="mt-0.5 block font-mono text-xs text-ink-faint">
+                    {shortHash(position.round.market, 6, 4)} · round {position.round.id}
+                  </span>
+                </>
+              }
+              aside={<OutcomeTag outcome={outcomeOf(position)} voidReason={position.round.voidReason} />}
+            >
+              <RowField label="Side">
+                {side === "both"
+                  ? `up ${fmt(BigInt(position.upStake))} · down ${fmt(BigInt(position.downStake))}`
+                  : side}
+              </RowField>
+              <RowField label="Staked">
+                <span className="tabular font-mono text-ink">
+                  {fmt(BigInt(position.totalStake))} {symbol}
+                </span>
+              </RowField>
+              <RowField label="Net">
+                {net === null ? (
+                  <span className="text-ink-faint">—</span>
+                ) : (
+                  <span
+                    className={`tabular font-mono ${
+                      net > 0n ? "text-positive" : net < 0n ? "text-negative" : "text-ink-muted"
+                    }`}
+                  >
+                    {net > 0n ? "+" : net < 0n ? "−" : ""}
+                    {fmt(net < 0n ? -net : net)}
+                  </span>
+                )}
+              </RowField>
+              <RowField label="Settled">
+                <time dateTime={position.round.closeTime}>
+                  {new Date(position.round.closeTime).toLocaleString()}
+                </time>
+              </RowField>
+              {position.leveraged && <RowField label="Funded by">borrowing</RowField>}
+            </RowCard>
+          );
+        })}
+      </RowList>
+
+      <div className="hidden overflow-x-auto rounded-card border border-border bg-surface sm:block">
       <table className="w-full min-w-[48rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
@@ -467,7 +533,8 @@ function PositionsTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -526,7 +593,7 @@ function Row({
         </span>
         <span className="ml-2 text-xs text-ink-faint">round {position.round.id}</span>
         {position.leveraged && (
-          <span className="ml-2 rounded bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
+          <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
             leveraged
           </span>
         )}

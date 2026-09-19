@@ -27,28 +27,28 @@ export default async function Image() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#253122",
+          background: "#0d0f0e",
           padding: 72,
           fontFamily: "Nippo",
-          color: "#f1eadb",
+          color: "#f2f4f2",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <svg width="64" height="64" viewBox="0 0 64 64">
-            <path d="M32 2 60 32H4z" fill="#96d1aa" />
-            <path d="M32 62 4 32h56z" fill="#f58e84" />
+            <path d="M32 2 60 32H4z" fill="#2fd07a" />
+            <path d="M32 62 4 32h56z" fill="#ff5470" />
           </svg>
-          <span style={{ fontSize: 44, letterSpacing: 1, color: "#cb2f43" }}>GHOSTSTAKE</span>
+          <span style={{ fontSize: 44, letterSpacing: 1, color: "#e8394f" }}>GHOSTSTAKE</span>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <span style={{ fontSize: 76, lineHeight: 1.05 }}>Your stake keeps earning</span>
-          <span style={{ fontSize: 76, lineHeight: 1.05, color: "#96d1aa" }}>
+          <span style={{ fontSize: 76, lineHeight: 1.05, color: "#2fd07a" }}>
             while it backs your call
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: 40, fontSize: 30, color: "#b3b8a4" }}>
+        <div style={{ display: "flex", gap: 40, fontSize: 30, color: "#a0aaa5" }}>
           <span>Stake earns</span>
           <span>Borrow against it</span>
           <span>Take a side — without unwinding</span>

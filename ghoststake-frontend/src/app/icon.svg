@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GhostStake">
-  <rect width="64" height="64" fill="#253122"/>
-  <path d="M32 8 52 30H12z" fill="#96d1aa"/>
-  <path d="M32 56 12 34h40z" fill="#f58e84"/>
+  <rect width="64" height="64" fill="#0d0f0e"/>
+  <path d="M32 8 52 30H12z" fill="#2fd07a"/>
+  <path d="M32 56 12 34h40z" fill="#ff5470"/>
 </svg>
