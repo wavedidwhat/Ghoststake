@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useConnection, usePublicClient, useReadContract } from "wagmi";
+import { usePublicClient, useReadContract } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { TxStatus } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
@@ -53,16 +54,16 @@ import { useVaultPosition } from "@/hooks/useVaultPosition";
  * owner-gated, and those say whose key is needed.
  */
 export default function OperatorPage() {
-  const connection = useConnection();
+  const wallet = useWallet();
 
   return (
     <AppShell title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
-      ) : connection.status !== "connected" ? (
+      ) : !wallet.isConnected ? (
         <NeedsWallet what="Every action here is a transaction, so a wallet is needed to send one." />
       ) : (
-        <Console address={connection.address} />
+        <Console address={wallet.address} />
       )}
     </AppShell>
   );

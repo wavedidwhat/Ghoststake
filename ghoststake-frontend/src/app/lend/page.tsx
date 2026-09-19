@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { erc20Abi } from "viem";
-import { useConnection, useReadContract } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
 import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
@@ -54,7 +55,7 @@ export default function LendPage() {
 }
 
 function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
-  const connection = useConnection();
+  const wallet = useWallet();
   const decimals = pool.decimals!;
   const { symbol } = pool;
 
@@ -122,7 +123,7 @@ function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
         </div>
       )}
 
-      {connection.status !== "connected" ? (
+      {!wallet.isConnected ? (
         <div className="lg:col-span-3">
           <Card className="text-center">
             <h2 className="text-base font-medium text-ink">Connect a wallet to supply</h2>
@@ -138,12 +139,12 @@ function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
               assetAddress={pool.assetAddress}
               decimals={decimals}
               symbol={symbol}
-              address={connection.address}
+              address={wallet.address}
               onMinted={pool.refetch}
             />
           </div>
           <div className="lg:col-span-3">
-            <SupplyWithdraw pool={pool} address={connection.address} />
+            <SupplyWithdraw pool={pool} address={wallet.address} />
           </div>
         </>
       )}

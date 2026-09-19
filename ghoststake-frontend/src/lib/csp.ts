@@ -45,6 +45,34 @@ export type CspInput = {
  * and `fonts.reown.com` (the modal falls back to our font stack; a font CDN is
  * one more party that sees every visitor).
  */
+/**
+ * Hosts the Coinbase Wallet SDK needs.
+ *
+ * Unconditional, unlike the WalletConnect block: `wagmi.ts` registers
+ * `coinbaseWallet()` on every build, with no env flag to turn it off, so the
+ * connector is always offered and these are always needed. Leaving them out is
+ * what GHO-77 was — picking Coinbase blocked the relay socket, and the SDK's
+ * `Communicator.onMessage` has no timeout, so the connect never resolved and
+ * the button sat on "Connecting…" for good.
+ *
+ * - `www.walletlink.org` over both schemes — the relay. `WalletLinkConnection`
+ *   opens `${linkAPIUrl}/rpc` as a websocket (the SDK rewrites `http` to `ws`
+ *   itself) and `WalletLinkHTTP` fetches `${linkAPIUrl}/events` beside it, so
+ *   the `https:` and `wss:` forms are both load-bearing.
+ * - `rpc.wallet.coinbase.com` — `fetchRPCRequest`, for `wallet_getCallsStatus`.
+ *
+ * Deliberately absent: `keys.coinbase.com`. The signer-selection step opens it
+ * with `window.open`, and a popup is its own document — `connect-src` does not
+ * govern one, so listing it would only widen what our page may talk to.
+ */
+const COINBASE = {
+  connect: [
+    "https://www.walletlink.org",
+    "wss://www.walletlink.org",
+    "https://rpc.wallet.coinbase.com",
+  ],
+};
+
 const WALLETCONNECT = {
   connect: [
     "https://api.web3modal.org",
@@ -62,7 +90,7 @@ export function buildCsp(input: CspInput): string {
   const apiSocket = `${api.protocol === "https:" ? "wss:" : "ws:"}//${api.host}`;
   const rpc = new URL(input.rpcUrl).origin;
 
-  const connect = ["'self'", api.origin, apiSocket, rpc];
+  const connect = ["'self'", api.origin, apiSocket, rpc, ...COINBASE.connect];
   const img = ["'self'", "data:", "blob:"];
   const frame: string[] = [];
   if (input.walletConnect) {

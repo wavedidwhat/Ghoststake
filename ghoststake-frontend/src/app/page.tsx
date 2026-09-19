@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useConnection } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { Card, Stat } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { Figure } from "@/components/Figure";
@@ -22,7 +22,7 @@ import { stakeStanding } from "@/lib/stake";
 import { activeChain } from "@/lib/wagmi";
 
 export default function DashboardPage() {
-  const connection = useConnection();
+  const wallet = useWallet();
   const position = useVaultPosition();
 
   return (
@@ -41,7 +41,7 @@ export default function DashboardPage() {
         </header>
 
         <main className="flex-1 p-6">
-          {connection.status === "disconnected" ? (
+          {!wallet.isConnected ? (
             <Disconnected />
           ) : !contractsConfigured ? (
             <NotDeployed />

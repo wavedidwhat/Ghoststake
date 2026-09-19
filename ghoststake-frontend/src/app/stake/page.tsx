@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { erc20Abi } from "viem";
-import { useConnection, useReadContract } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
@@ -17,17 +18,17 @@ import { formatAmount } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
 
 export default function VaultPage() {
-  const connection = useConnection();
+  const wallet = useWallet();
   const position = useVaultPosition();
 
   return (
     <AppShell title="Stake" subtitle="Earns while it sits, and backs everything you borrow">
-      {connection.status !== "connected" ? (
+      {!wallet.isConnected ? (
         <NeedsWallet what="Your stake, what it earns, and what you can borrow against it all live at your address." />
       ) : !contractsConfigured ? (
         <NotConfigured what="No stake vault is configured for this network." />
       ) : (
-        <VaultScreen position={position} address={connection.address} />
+        <VaultScreen position={position} address={wallet.address} />
       )}
     </AppShell>
   );
