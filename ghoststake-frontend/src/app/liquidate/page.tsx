@@ -1,6 +1,6 @@
 "use client";
 
-import { useConnection } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { AppShell, NotConfigured } from "@/components/AppShell";
 import { RowCard, RowField, RowList } from "@/components/Rows";
 import { Card } from "@/components/Card";
@@ -30,7 +30,7 @@ import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
  * closes them, and which is openly labelled as paying nothing.
  */
 export default function LiquidatePage() {
-  const { status } = useConnection();
+  const wallet = useWallet();
   const atRisk = useAtRisk();
   const decimals = useActivityDecimals();
 
@@ -64,7 +64,7 @@ export default function LiquidatePage() {
           ) : (
             <Table
               positions={atRisk.positions}
-              connected={status === "connected"}
+              connected={wallet.isConnected}
               decimals={decimals.assetDecimals}
               symbol={decimals.assetSymbol}
               onDone={() => void atRisk.refetch()}

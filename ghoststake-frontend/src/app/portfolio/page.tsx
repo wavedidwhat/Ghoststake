@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useConnection } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { AppShell } from "@/components/AppShell";
 import { ClaimAllPanel } from "@/components/ClaimAllPanel";
 import { Card, Stat } from "@/components/Card";
@@ -20,15 +20,20 @@ import { stakeStanding } from "@/lib/stake";
 import { activeChain } from "@/lib/wagmi";
 
 export default function PortfolioPage() {
-  const connection = useConnection();
+  const wallet = useWallet();
   const position = useVaultPosition();
 
   // Was `/` until GHO-62 moved the market feed there. A lending dashboard is
   // the right home for someone who has money in this protocol and the wrong
   // one for someone deciding whether to.
+  //
+  // `useWallet` and not `status === "disconnected"`: on a reload wagmi restores
+  // the address from storage while it re-checks with the wallet, and branching
+  // on the status rendered "connect a wallet" over a page already showing that
+  // address's balances (GHO-77). If we have an address, we have a wallet.
   return (
     <AppShell title="Portfolio" subtitle="What you have staked, borrowed and riding on a market">
-      {connection.status === "disconnected" ? (
+      {!wallet.isConnected ? (
         <Disconnected />
       ) : !contractsConfigured ? (
         <NotDeployed />
@@ -71,7 +76,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
       ? undefined
       : formatAmount(value, decimals);
 
-  const { address } = useConnection();
+  const { address } = useWallet();
   const claimables = useClaimables();
 
   return (

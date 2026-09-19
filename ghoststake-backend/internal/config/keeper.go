@@ -53,6 +53,14 @@ type KeeperConfig struct {
 	// addresses cannot change without a restart anyway.
 	RefreshInterval time.Duration
 
+	// GasCheckInterval is how often the hot wallet's balance is read.
+	//
+	// Its own interval rather than the round loop's. The check only ever
+	// logs a warning — it never changes what the keeper does — so paying an
+	// `eth_getBalance` every poll buys nothing but 8,640 requests a day
+	// against the provider's quota. See GHO-76.
+	GasCheckInterval time.Duration
+
 	MinGasBalanceWei *big.Int
 }
 
@@ -80,6 +88,7 @@ func LoadKeeper() (KeeperConfig, error) {
 
 		MaxUncalendaredRound: envDuration("KEEPER_MAX_UNCALENDARED_ROUND", 15*time.Minute),
 		RefreshInterval:      envDuration("KEEPER_REGISTRY_REFRESH_INTERVAL", time.Minute),
+		GasCheckInterval:     envDuration("KEEPER_GAS_CHECK_INTERVAL", 5*time.Minute),
 	}
 
 	statusFeeds, err := parseStatusFeeds(env("KEEPER_MARKET_STATUS_FEEDS", ""))
@@ -124,6 +133,9 @@ func LoadKeeper() (KeeperConfig, error) {
 	}
 	if c.RefreshInterval <= 0 {
 		return KeeperConfig{}, fmt.Errorf("KEEPER_REGISTRY_REFRESH_INTERVAL must be positive")
+	}
+	if c.GasCheckInterval <= 0 {
+		return KeeperConfig{}, fmt.Errorf("KEEPER_GAS_CHECK_INTERVAL must be positive")
 	}
 
 	balance, ok := new(big.Int).SetString(strings.TrimSpace(env("KEEPER_MIN_GAS_BALANCE_WEI", "10000000000000000")), 10)

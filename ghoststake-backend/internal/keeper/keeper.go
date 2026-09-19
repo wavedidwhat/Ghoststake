@@ -54,6 +54,16 @@ type Config struct {
 	// learn nothing. Zero, or a source that cannot change, means no refresh.
 	RefreshInterval time.Duration
 
+	// GasCheckInterval is how often the hot wallet's balance is read. Zero
+	// falls back to the poll interval, which is what this used to be.
+	//
+	// Separated from the round loop in GHO-76. The gas check only logs — it
+	// never gates an action — so reading the balance on every poll spent an
+	// `eth_getBalance` every ten seconds to learn a number that matters at
+	// human timescales. On a metered provider that is 8,640 requests a day
+	// that no round depends on.
+	GasCheckInterval time.Duration
+
 	// MinGasBalance is the balance below which the keeper starts warning on
 	// every tick. It never stops working over this — a keeper that refused to
 	// try is indistinguishable from one that is out of gas, and the one that
@@ -102,6 +112,15 @@ type Keeper struct {
 	// the keeper cannot drive is one log line rather than one a minute.
 	rejected map[common.Address]string
 
+	// searched memoises the settlement search per (market, round).
+	//
+	// The search's answer is a pure function of the feed's latest round id
+	// and the round's closeTime, and both are fixed between feed
+	// publications. Re-running it against an unchanged head cannot produce a
+	// different answer, so it is a binary search — sixteen-odd `eth_call`s —
+	// spent to reproduce the previous tick's. See findSettlementRound.
+	searched map[string]searchResult
+
 	// maxBackoff is derived from the tightest deadline any of these markets
 	// imposes; see New.
 	maxBackoff time.Duration
@@ -110,6 +129,13 @@ type Keeper struct {
 type attempt struct {
 	next     time.Time
 	failures int
+}
+
+// searchResult is one settlement search, remembered against the feed head it
+// ran at. A nil candidate is a real answer and is cached like any other.
+type searchResult struct {
+	head      *big.Int
+	candidate *big.Int
 }
 
 // backoffCeiling caps the retry delay however many times an action has
@@ -147,6 +173,7 @@ func New(client *chain.Client, signer *chain.Signer, source MarketSource, market
 		pending:    map[common.Address]bool{},
 		retiring:   map[common.Address]bool{},
 		rejected:   map[common.Address]string{},
+		searched:   map[string]searchResult{},
 		maxBackoff: backoffLimit(markets),
 	}, nil
 }
@@ -207,6 +234,21 @@ func (k *Keeper) Run(ctx context.Context) error {
 	refresh := k.refreshTicker()
 	defer refresh.Stop()
 
+	gas := time.NewTicker(k.gasCheckInterval())
+	defer gas.Stop()
+
+	calls := k.callsPerMinute()
+	slog.Info("keeper started",
+		"markets", len(k.markets),
+		"poll", k.cfg.PollInterval,
+		"gas_check", k.gasCheckInterval(),
+		"rpc_calls_per_minute_floor", calls,
+		"rpc_calls_per_day_floor", calls*60*24)
+
+	// Checked once up front rather than only on the first tick of the gas
+	// ticker: an operator who starts a keeper with an empty wallet should be
+	// told now, not in five minutes.
+	k.checkGas(ctx)
 	k.tick(ctx)
 	for {
 		select {
@@ -217,8 +259,66 @@ func (k *Keeper) Run(ctx context.Context) error {
 			k.tick(ctx)
 		case <-refresh.C:
 			k.refreshMarkets(ctx)
+		case <-gas.C:
+			k.checkGas(ctx)
 		}
 	}
+}
+
+// callsPerMinute is a floor on the RPC requests this configuration makes when
+// nothing is going wrong.
+//
+// A floor, not a forecast: it counts the reads every poll makes regardless of
+// what it finds, and deliberately leaves out the ones that depend on state —
+// a settlement search, a retry, a transaction's nonce and gas estimate. Those
+// spike; this is the number that is always being paid.
+//
+// Logged at startup because the failure it warns about is invisible until it
+// is total. A metered provider does not slow down as the quota runs out, it
+// serves everything and then serves nothing, and the first symptom is a
+// keeper that cannot read the chain at all (GHO-76, runbook Part 7.69).
+//
+// Per poll, per market: the pending-block header the whole tick shares, then
+// `roundCount`, the open round, and — when a new round is due — `owner` and
+// `latestRoundData`. Four per market plus the shared header.
+func (k *Keeper) callsPerMinute() int {
+	perMinute := func(every time.Duration) float64 {
+		if every <= 0 {
+			return 0
+		}
+		return float64(time.Minute) / float64(every)
+	}
+	markets := len(k.markets)
+
+	polls := perMinute(k.cfg.PollInterval)
+	tick := polls * float64(1+4*markets)
+	gas := perMinute(k.gasCheckInterval())
+
+	// Only when the refresh ticker actually runs. A configured list of
+	// addresses cannot change, so refreshTicker stops the ticker and the
+	// registry is never re-read — counting it would overstate the floor for
+	// exactly the deployments that have no registry to read.
+	var refresh float64
+	if k.refreshes() {
+		refresh = perMinute(k.cfg.RefreshInterval) * float64(1+markets)
+	}
+
+	return int(tick + refresh + gas)
+}
+
+// refreshes reports whether the registry is re-read at all. One predicate so
+// the startup budget and the ticker cannot disagree about it.
+func (k *Keeper) refreshes() bool {
+	return k.cfg.RefreshInterval > 0 && k.source != nil && k.source.Dynamic()
+}
+
+// gasCheckInterval defaults to the poll interval, which is the cadence this
+// ran at before it had one of its own.
+func (k *Keeper) gasCheckInterval() time.Duration {
+	if k.cfg.GasCheckInterval > 0 {
+		return k.cfg.GasCheckInterval
+	}
+	return k.cfg.PollInterval
 }
 
 // refreshTicker fires on the registry cadence, or never when there is no
@@ -229,7 +329,7 @@ func (k *Keeper) Run(ctx context.Context) error {
 // exactly "no refresh".
 func (k *Keeper) refreshTicker() *time.Ticker {
 	interval := k.cfg.RefreshInterval
-	if interval <= 0 || k.source == nil || !k.source.Dynamic() {
+	if !k.refreshes() {
 		t := time.NewTicker(time.Hour)
 		t.Stop()
 		return t
@@ -365,6 +465,11 @@ func (k *Keeper) forgetMarket(m *Market) {
 			delete(k.retry, key)
 		}
 	}
+	for key := range k.searched {
+		if strings.HasPrefix(key, prefix) {
+			delete(k.searched, key)
+		}
+	}
 }
 
 func (k *Keeper) tick(ctx context.Context) {
@@ -373,7 +478,6 @@ func (k *Keeper) tick(ctx context.Context) {
 		slog.Warn("keeper: could not read chain time", "err", err)
 		return
 	}
-	k.checkGas(ctx)
 
 	for _, m := range k.markets {
 		if err := k.driveMarket(ctx, m, now); err != nil {
@@ -531,6 +635,11 @@ func (k *Keeper) driveRound(ctx context.Context, m *Market, id uint64, round Rou
 // it exists. It shares the backoff and logging machinery all the same.
 const actionOpen Action = "open"
 
+// actionSearch is not an action either — nothing is sent for it. It keys the
+// settlement search's memo in the same (market, round, action) namespace the
+// backoffs use, so one round's bookkeeping is cleared by one prefix.
+const actionSearch Action = "search"
+
 // settle resolves a locked round, or refunds it when there is nothing to
 // settle against and the deadline has passed.
 //
@@ -540,7 +649,7 @@ const actionOpen Action = "open"
 // it would rather be paid than refunded. Voiding is only reached when the
 // search finds no candidate, or the adapter refuses the one it found.
 func (k *Keeper) settle(ctx context.Context, m *Market, id uint64, round Round, action Action) error {
-	feedRoundID, err := k.findSettlementRound(ctx, m, round)
+	feedRoundID, err := k.findSettlementRound(ctx, m, id, round)
 	if err != nil {
 		return err
 	}
@@ -574,8 +683,11 @@ func (k *Keeper) settle(ctx context.Context, m *Market, id uint64, round Round, 
 
 // findSettlementRound returns the feed round `resolveRound` should name, or
 // nil when there is not one the adapter will accept.
-func (k *Keeper) findSettlementRound(ctx context.Context, m *Market, round Round) (*big.Int, error) {
-	latestFeedID, err := m.LatestFeedRoundID(ctx)
+func (k *Keeper) findSettlementRound(ctx context.Context, m *Market, id uint64, round Round) (*big.Int, error) {
+	// Both halves of one read. The id bounds the search and the timestamp
+	// decides whether there is anything to search for, and asking for them
+	// separately would be two calls describing two different moments.
+	latestFeedID, latest, err := m.LatestFeedRound(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read latest feed round: %w", err)
 	}
@@ -583,9 +695,31 @@ func (k *Keeper) findSettlementRound(ctx context.Context, m *Market, round Round
 		return nil, nil
 	}
 
-	candidate, err := FindCloseRound(ctx, m.ReadFeedRound, latestFeedID, round.CloseTime)
-	if err != nil {
-		return nil, err
+	// The cheap rejection, before the expensive search. Until the feed has
+	// published something after the close there is no answer to find, and
+	// this is the state a round sits in for most of its wait — so it is the
+	// one that must not cost a binary search. One `eth_call` per poll.
+	if latest == nil || latest.UpdatedAt <= round.CloseTime {
+		return nil, nil
+	}
+
+	// Past the close, so there may be an answer. Search for it once per feed
+	// head rather than once per poll.
+	//
+	// The adapter's verdict below is deliberately *not* cached with it. A
+	// candidate can be refused for reasons that clear on their own — the
+	// sequencer coming back up, a grace period expiring — so `readAt` is
+	// asked again every poll. That is one `eth_call`; the search it replaces
+	// is sixteen.
+	probe := retryKey(m, id, actionSearch)
+	memo, cached := k.searched[probe]
+	candidate := memo.candidate
+	if !cached || memo.head == nil || memo.head.Cmp(latestFeedID) != 0 {
+		candidate, err = FindCloseRoundFrom(ctx, m.ReadFeedRound, latestFeedID, latest, round.CloseTime)
+		if err != nil {
+			return nil, err
+		}
+		k.searched[probe] = searchResult{head: new(big.Int).Set(latestFeedID), candidate: candidate}
 	}
 	if candidate == nil {
 		return nil, nil
@@ -766,11 +900,14 @@ func (k *Keeper) succeeded(m *Market, id uint64, action Action) {
 	delete(k.retry, retryKey(m, id, action))
 }
 
-// forget drops every backoff entry for one round.
+// forget drops every backoff entry for one round, and the settlement search
+// memoised against it. Terminal is terminal: without this the keeper carries
+// a row per round the market ever ran.
 func (k *Keeper) forget(m *Market, id uint64) {
 	for _, action := range []Action{ActionLock, ActionResolve, ActionVoidUnlocked, ActionVoidUnsettled} {
 		delete(k.retry, retryKey(m, id, action))
 	}
+	delete(k.searched, retryKey(m, id, actionSearch))
 }
 
 func retryKey(m *Market, id uint64, action Action) string {

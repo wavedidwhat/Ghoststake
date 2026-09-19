@@ -20,6 +20,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"math/big"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,6 +28,7 @@ import (
 	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/keeper"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/redact"
 )
 
 func main() {
@@ -46,7 +48,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	client, err := chain.Dial(ctx, cfg.RPCURL, cfg.ChainID)
+	// Startup reads retry rather than exit: a provider rate limit is transient,
+	// but a keeper that treats it as fatal is restarted straight back into the
+	// same limit, turning a passing 429 into a crash loop (Part 7.61). A wrong
+	// chain ID still fails on the first attempt.
+	client, err := chain.DialWithRetry(ctx, cfg.RPCURL, cfg.ChainID, chain.DefaultBackoff)
 	if err != nil {
 		return err
 	}
@@ -56,8 +62,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	balance, err := signer.Balance(ctx)
-	if err != nil {
+	var balance *big.Int
+	if err := chain.Retry(ctx, "keeper balance", chain.DefaultBackoff, func(ctx context.Context) error {
+		var err error
+		balance, err = signer.Balance(ctx)
+		return err
+	}); err != nil {
 		return err
 	}
 	slog.Info("keeper wallet",
@@ -79,8 +89,12 @@ func run() error {
 	// transaction and a restart, and the restart is the half that gets
 	// forgotten. See Keeper.refreshMarkets.
 	source := keeper.NewSource(client, cfg.RegistryAddress, cfg.MarketAddresses, nyse, cfg.StatusFeeds)
-	markets, err := source.Markets(ctx)
-	if err != nil {
+	var markets []*keeper.Market
+	if err := chain.Retry(ctx, "read market registry", chain.DefaultBackoff, func(ctx context.Context) error {
+		var err error
+		markets, err = source.Markets(ctx)
+		return err
+	}); err != nil {
 		return err
 	}
 	for _, m := range markets {
@@ -102,6 +116,7 @@ func run() error {
 		Horizon:              cfg.Horizon,
 		MaxUncalendaredRound: cfg.MaxUncalendaredRound,
 		RefreshInterval:      cfg.RefreshInterval,
+		GasCheckInterval:     cfg.GasCheckInterval,
 		MinGasBalance:        cfg.MinGasBalanceWei,
 	})
 	if err != nil {
@@ -115,7 +130,9 @@ func setupKeeperLogger(cfg config.KeeperConfig) {
 	if cfg.IsDev() {
 		level = slog.LevelDebug
 	}
-	opts := &slog.HandlerOptions{Level: level}
+	// The RPC URL carries the provider key, and transport errors quote it in
+	// full (a failed startup read logs "fatal" with that error).
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: redact.ReplaceAttr(redact.Secrets(cfg.RPCURL))}
 	var h slog.Handler = slog.NewJSONHandler(os.Stdout, opts)
 	if cfg.IsDev() {
 		h = slog.NewTextHandler(os.Stdout, opts)

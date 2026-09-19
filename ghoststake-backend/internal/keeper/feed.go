@@ -63,6 +63,20 @@ func FindCloseRound(ctx context.Context, read RoundReader, latestID *big.Int, cl
 	if err != nil {
 		return nil, fmt.Errorf("keeper: read latest feed round: %w", err)
 	}
+	return FindCloseRoundFrom(ctx, read, latestID, latest, closeTime)
+}
+
+// FindCloseRoundFrom is FindCloseRound for a caller that has already read the
+// latest round.
+//
+// The keeper has: it calls `latestRoundData` to decide whether the feed is
+// worth searching at all, and that response *is* the latest round — the same
+// tuple `getRoundData(latestID)` returns. Re-reading it here was one wasted
+// `eth_call` on every poll of every round waiting to settle (GHO-76).
+func FindCloseRoundFrom(ctx context.Context, read RoundReader, latestID *big.Int, latest *FeedRound, closeTime uint64) (*big.Int, error) {
+	if latestID == nil || latestID.Sign() <= 0 {
+		return nil, nil
+	}
 	// Nothing published since the close, so no round can be both the last one
 	// before it and have a successor after it. Waiting is the answer, and the
 	// round contract knows how long it is willing to wait.

@@ -49,6 +49,23 @@ describe("buildCsp", () => {
     expect(connect.some((h) => h.includes("pulse.walletconnect"))).toBe(false);
   });
 
+  it("lets the Coinbase SDK reach its relay, whatever else is configured", () => {
+    // `wagmi.ts` registers coinbaseWallet() unconditionally, so unlike the
+    // WalletConnect hosts these cannot hang off a flag. Omitting them was
+    // GHO-77: the relay socket was blocked, the SDK waits on it without a
+    // timeout, and the button never left "Connecting…".
+    for (const walletConnect of [true, false]) {
+      const connect = directive(buildCsp({ ...prod, walletConnect }), "connect-src");
+      expect(connect).toContain("https://www.walletlink.org");
+      expect(connect).toContain("wss://www.walletlink.org");
+      expect(connect).toContain("https://rpc.wallet.coinbase.com");
+    }
+  });
+
+  it("keeps the Coinbase popup out of connect-src, since a popup is not a fetch", () => {
+    expect(buildCsp(prod)).not.toContain("keys.coinbase.com");
+  });
+
   it("drops every WalletConnect host when WalletConnect is not configured", () => {
     const csp = buildCsp({ ...prod, walletConnect: false });
     expect(csp).not.toMatch(/walletconnect|web3modal/);

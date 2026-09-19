@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -225,3 +226,98 @@ func TestRefreshDoesNotDropAMarketItHasNeverDriven(t *testing.T) {
 		t.Fatal("expected it retiring rather than dropped")
 	}
 }
+
+// GHO-76: the settlement search is memoised per (market, round) against the
+// feed head it ran at. Terminal rounds and dropped markets must take their
+// memo with them, or a long-lived keeper carries a row per round it ever saw.
+
+func TestASettledRoundDropsItsSearchMemo(t *testing.T) {
+	m := testMarket(1)
+	k := refreshKeeper(t, &fakeSource{markets: []*Market{m}}, m)
+
+	probe := retryKey(m, 7, actionSearch)
+	k.searched[probe] = searchResult{head: big.NewInt(5_099), candidate: big.NewInt(5_050)}
+
+	k.forget(m, 7)
+
+	if _, ok := k.searched[probe]; ok {
+		t.Fatal("the memo for a terminal round is still there")
+	}
+}
+
+func TestADroppedMarketDropsEverySearchMemo(t *testing.T) {
+	m := testMarket(1)
+	other := testMarket(2)
+	k := refreshKeeper(t, &fakeSource{markets: []*Market{m, other}}, m, other)
+
+	k.searched[retryKey(m, 1, actionSearch)] = searchResult{head: big.NewInt(1), candidate: nil}
+	k.searched[retryKey(m, 2, actionSearch)] = searchResult{head: big.NewInt(2), candidate: nil}
+	keep := retryKey(other, 1, actionSearch)
+	k.searched[keep] = searchResult{head: big.NewInt(3), candidate: nil}
+
+	k.forgetMarket(m)
+
+	if len(k.searched) != 1 {
+		t.Fatalf("kept %d memos, want 1", len(k.searched))
+	}
+	if _, ok := k.searched[keep]; !ok {
+		t.Fatal("dropping one market took another market's memo with it")
+	}
+}
+
+// The gas check moved off the round loop. A keeper configured without one
+// still has to check it at the poll interval rather than never.
+func TestTheGasCheckFallsBackToThePollInterval(t *testing.T) {
+	m := testMarket(1)
+	k := refreshKeeper(t, &fakeSource{markets: []*Market{m}}, m)
+
+	if got := k.gasCheckInterval(); got != 10*time.Second {
+		t.Fatalf("gas check interval = %s, want the 10s poll interval", got)
+	}
+
+	k.cfg.GasCheckInterval = 5 * time.Minute
+	if got := k.gasCheckInterval(); got != 5*time.Minute {
+		t.Fatalf("gas check interval = %s, want 5m", got)
+	}
+}
+
+// The budget an operator is shown at startup. Two markets on a ten-second
+// poll: 6 polls/min x (1 shared header + 4 per market) = 54, plus the
+// registry refresh (1 + 2) and one gas check.
+func TestTheStartupBudgetCountsWhatEveryPollPays(t *testing.T) {
+	a, b := testMarket(1), testMarket(2)
+	k := refreshKeeper(t, &fakeSource{markets: []*Market{a, b}}, a, b)
+	k.cfg.GasCheckInterval = time.Minute
+
+	if got, want := k.callsPerMinute(), 54+3+1; got != want {
+		t.Fatalf("callsPerMinute = %d, want %d", got, want)
+	}
+
+	// The whole point of the change: a slower gas check is fewer calls.
+	k.cfg.GasCheckInterval = 5 * time.Minute
+	if got := k.callsPerMinute(); got != 54+3 {
+		t.Fatalf("callsPerMinute = %d, want %d with a 5m gas check", got, 54+3)
+	}
+}
+
+// A deployment with no registry never re-reads one, so the budget must not
+// bill it for a refresh it does not make.
+func TestAStaticMarketListIsNotBilledForARefresh(t *testing.T) {
+	m := testMarket(1)
+	k := refreshKeeper(t, staticSource{m}, m)
+	k.cfg.GasCheckInterval = time.Minute
+
+	if k.refreshes() {
+		t.Fatal("a static source reports as refreshing")
+	}
+	if got, want := k.callsPerMinute(), 30+1; got != want {
+		t.Fatalf("callsPerMinute = %d, want %d with no registry refresh", got, want)
+	}
+}
+
+// A MarketSource that can never return a different set, which is what a
+// configured list of addresses is.
+type staticSource []*Market
+
+func (s staticSource) Markets(context.Context) ([]*Market, error) { return s, nil }
+func (s staticSource) Dynamic() bool                              { return false }
