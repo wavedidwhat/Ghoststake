@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Connector } from "wagmi";
-import { useConnection, useConnect, useConnectors, useDisconnect } from "wagmi";
+import { useConnect, useConnectors, useDisconnect } from "wagmi";
 import { shortenAddress } from "@/lib/format";
 import { orderWallets } from "@/lib/wallets";
 import { useSession, type SessionStatus } from "@/hooks/useSession";
+import { useWallet } from "@/hooks/useWallet";
 
 /**
  * Connect, disconnect, and the optional SIWE sign-in.
@@ -83,7 +84,7 @@ function connectHint(error: Error | null): string | undefined {
 }
 
 export function ConnectButton() {
-  const connection = useConnection();
+  const { address, isSettling } = useWallet();
   const wallets = useWallets();
   const { mutate: connect, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
@@ -112,17 +113,17 @@ export function ConnectButton() {
   }, [picking]);
 
   /**
-   * A connection with no address yet counts as still settling rather than as
-   * connected: the connected branch below would hand `shortenAddress` an
-   * undefined and take the page down with it. wagmi types `address` as present
-   * when the status is `connected`, but it casts to get there, so the pairing is
-   * a race away from being untrue.
+   * "Connecting…" means we do not know whose wallet this is yet — not that
+   * wagmi is still checking.
+   *
+   * The difference matters on a reload. wagmi restores the previous address
+   * from storage immediately and only then re-checks it with the wallet, so
+   * branching on the status showed "Connecting…" over a page that was already
+   * rendering that address's balances (GHO-77). With an address in hand there
+   * is something true to show, so we show it. Without one there is nothing to
+   * say but "connecting", and `useStalled` bounds how long we say it.
    */
-  const settling =
-    connection.status === "reconnecting" ||
-    connection.status === "connecting" ||
-    isPending ||
-    (connection.status === "connected" && !connection.address);
+  const settling = !address && (isSettling || isPending);
   const stalled = useStalled(settling, STALL_AFTER_MS, attempt);
 
   if (settling && !stalled) {
@@ -136,10 +137,10 @@ export function ConnectButton() {
     );
   }
 
-  // Reached while disconnected, and also while an attempt is still outstanding
-  // but has been quiet for too long — a stalled wallet gets the ordinary connect
-  // affordance back rather than a disabled button and a reload.
-  if (connection.status !== "connected" || !connection.address) {
+  // No address: nobody is connected, or an attempt has been quiet for too long
+  // and a stalled wallet gets the ordinary connect affordance back rather than a
+  // disabled button and a reload.
+  if (!address) {
     const all = [...wallets.detected, ...wallets.other];
 
     const pick = (wallet: Connector) => {
@@ -203,7 +204,7 @@ export function ConnectButton() {
         className="flex items-center gap-2 rounded-sm border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition hover:border-border-strong"
       >
         <span className="size-2 rounded-full bg-positive" />
-        <span className="tabular">{shortenAddress(connection.address)}</span>
+        <span className="tabular">{shortenAddress(address)}</span>
       </button>
     </div>
   );

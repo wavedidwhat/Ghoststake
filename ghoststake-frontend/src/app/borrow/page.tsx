@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { erc20Abi } from "viem";
-import { useConnection, useReadContract } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
@@ -16,12 +17,12 @@ import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
 
 export default function BorrowPage() {
-  const connection = useConnection();
+  const wallet = useWallet();
   const position = useVaultPosition();
 
   return (
     <AppShell title="Borrow" subtitle="Draw against your collateral, or repay what you owe">
-      {connection.status !== "connected" ? (
+      {!wallet.isConnected ? (
         <NeedsWallet what="Borrowing capacity is a property of your deposited collateral." />
       ) : !contractsConfigured ? (
         <NotConfigured what="No vault is configured for this network." />
@@ -30,7 +31,7 @@ export default function BorrowPage() {
           <div className="h-24 animate-pulse rounded bg-raised" />
         </Card>
       ) : (
-        <BorrowScreen position={position} address={connection.address} />
+        <BorrowScreen position={position} address={wallet.address} />
       )}
     </AppShell>
   );

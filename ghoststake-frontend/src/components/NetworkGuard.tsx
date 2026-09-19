@@ -11,6 +11,12 @@ export function NetworkGuard() {
   const connection = useConnection();
   const { switchChain, isPending } = useSwitchChain();
 
+  // The one surface that deliberately still wants `status`, not `useWallet`'s
+  // address (GHO-77). Everything else treats a restored-but-unconfirmed address
+  // as connected, because there is something true to render. Here the payload is
+  // an accusation — "you are on the wrong network" — computed from a `chainId`
+  // restored from storage that the wallet has not confirmed. A false alarm sends
+  // someone to switch a network they were never on, so this one waits.
   if (connection.status !== "connected") return null;
   if (connection.chainId === activeChain.id) return null;
 
