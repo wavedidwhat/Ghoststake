@@ -56,7 +56,31 @@ export function MarketBlock({
   setTaking: (v: { key: string; id: bigint; side: SideValue } | null) => void;
   refetch: () => void;
 }) {
-  if (!params) return null;
+  // A market whose immutables could not be read used to render as nothing at
+  // all — no message, no skeleton, no error (GHO-82). That was reachable for
+  // anyone hitting the RPC ceiling, and an empty space is the one outcome a
+  // user cannot act on or report. Say what is missing instead.
+  //
+  // Not an error state: the rounds themselves are fine and come from the
+  // indexer. What is unavailable is the rake and the entry cutoff, and without
+  // those the odds and the phase would be guesses.
+  if (!params) {
+    return (
+      <section className="flex flex-col gap-4">
+        <MarketHeader market={market} feed={feed} />
+        <Card>
+          <p className="text-sm text-ink-muted">
+            This market&rsquo;s terms could not be read, so its odds and countdown are not
+            shown. Nothing about your position has changed.
+          </p>
+          <p className="mt-2 text-xs text-ink-faint">
+            The rake and entry cutoff are read from the contract, and that read is failing.
+            This usually clears on its own.
+          </p>
+        </Card>
+      </section>
+    );
+  }
 
   const live = rounds.filter((r) => r.phase !== Phase.Resolved && r.phase !== Phase.Void);
   const done = rounds.filter((r) => r.phase === Phase.Resolved || r.phase === Phase.Void);

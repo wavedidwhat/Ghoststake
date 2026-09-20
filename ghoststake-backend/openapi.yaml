@@ -215,6 +215,8 @@ paths:
                       rounds:
                         type: array
                         items: { $ref: "#/components/schemas/Round" }
+                      degraded:
+                        $ref: "#/components/schemas/DegradedMarkets"
 
   /api/v1/positions/{address}:
     get:
@@ -248,6 +250,8 @@ paths:
                       history:
                         type: array
                         items: { $ref: "#/components/schemas/Position" }
+                      degraded:
+                        $ref: "#/components/schemas/DegradedMarkets"
         "400": { $ref: "#/components/responses/BadRequest" }
 
   /api/v1/positions/at-risk:
@@ -456,6 +460,9 @@ paths:
           description: Origin not in the allowlist.
 
 components:
+  # Declared once and referenced from both listings: /rounds and
+  # /positions/{address} answer the same way when a market cannot be described.
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -552,6 +559,22 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    DegradedMarkets:
+      type: array
+      description: |
+        Markets that could not be described, so a short listing says so rather
+        than quietly being a short listing.
+
+        A market's rake, entry cutoff and minimum side pool are read from its
+        contract. Round history deliberately spans deployments, so a listing
+        can contain markets this process has never watched — and before GHO-82
+        one of them being unreadable failed the whole request, including the
+        settled history that needs no live read at all.
+
+        Rounds and positions belonging to a listed market are omitted from this
+        response. They are not gone; they could not be priced. Absent when
+        every market was readable, which is the ordinary case.
+      items: { $ref: "#/components/schemas/Address" }
     Error:
       type: object
       properties:
