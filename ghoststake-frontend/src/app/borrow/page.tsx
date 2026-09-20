@@ -191,7 +191,7 @@ function BorrowScreen({
               {overWallet && (
                 <p className="text-xs text-negative">More than your wallet holds.</p>
               )}
-              <TxStatus state={tx.state} />
+              <TxStatus tx={tx} />
             </div>
 
             <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">

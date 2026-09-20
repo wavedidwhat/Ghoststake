@@ -286,7 +286,7 @@ function Balance({
           >
             Set destination
           </button>
-          <TxStatus state={repoint.state} />
+          <TxStatus tx={repoint} />
         </div>
       )}
 
@@ -331,7 +331,7 @@ function Balance({
                   ? "Reading the owner…"
                   : `Owner-only. This contract's owner is ${shortenAddress(owner)}.`}
             </span>
-            <TxStatus state={withdraw.state} />
+            <TxStatus tx={withdraw} />
           </div>
         </div>
       )}

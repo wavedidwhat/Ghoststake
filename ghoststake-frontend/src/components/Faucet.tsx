@@ -61,7 +61,7 @@ export function Faucet({
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <TxStatus state={tx.state} />
+        <TxStatus tx={tx} />
         <button
           disabled={busy}
           onClick={async () => {

@@ -462,7 +462,7 @@ function PositionForm({
             : `Take ${sideLabel} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
       </button>
 
-      <TxStatus state={tx.state} />
+      <TxStatus tx={tx} />
       </div>
     </Sheet>
   );
@@ -619,7 +619,7 @@ function ClaimRow({
         to claim. Debt is settled first; the rest reaches your wallet.
       </p>
       <div className="flex items-center gap-3">
-        <TxStatus state={tx.state} />
+        <TxStatus tx={tx} />
         <button
           disabled={busy}
           onClick={async () => {
