@@ -123,6 +123,20 @@ function pays(m: Market, side: "yes" | "no"): number | null {
   return ((m.yes + m.no) * (1 - RAKE)) / sidePool;
 }
 
+/**
+ * What a stake actually returns, counting its own dilution.
+ *
+ * Your money joins the side you back, so it moves the odds you are quoted.
+ * `stake x currentMultiple` overstates the return for exactly that reason, and
+ * the error grows with the size of the bet. `extraOnSide` models money that
+ * arrives after yours.
+ */
+function payout(sidePool: number, otherPool: number, stake: number, extraOnSide = 0): number {
+  const mine = sidePool + stake + extraOnSide;
+  if (mine === 0) return 0;
+  return ((mine + otherPool) * (1 - RAKE) * stake) / mine;
+}
+
 const money = (n: number, dp = 2) =>
   n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
@@ -389,6 +403,11 @@ function Resolution({ market }: { market: Market }) {
         {againstYou && " This one goes against your position."}
       </p>
 
+      <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+        A challenge is ruled on by 3 of 5 named signers, and the ruling is recorded here with
+        its reasoning.
+      </p>
+
       <button
         type="button"
         className="mt-2.5 rounded-control border border-warning/50 px-3 py-1.5 text-sm text-warning transition-colors hover:bg-warning/10"
@@ -452,7 +471,15 @@ function BetTicket({
   const w = Number(wallet) || 0;
   const b = Number(borrow) || 0;
   const total = w + b;
-  const multiple = pays(market, side) ?? 1;
+  const sidePool = side === "yes" ? market.yes : market.no;
+  const otherPool = side === "yes" ? market.no : market.yes;
+
+  const now = payout(sidePool, otherPool, total);
+  // If this side doubles from here. Money arriving on *your* side dilutes you;
+  // money on the other side helps you, so the bad case is the crowd agreeing
+  // with you rather than disagreeing.
+  const ifCrowded = payout(sidePool, otherPool, total, sidePool + total);
+
   const safetyAfter = b > 0 ? 2.4 - b * 0.011 : 2.4;
 
   return (
@@ -502,9 +529,11 @@ function BetTicket({
         Back {side === "yes" ? "Yes" : "No"} with {money(total)}
       </button>
 
-      <p className="mt-2 text-center text-xs text-ink-faint">
-        Returns <span className="tabular">{money(total * multiple)}</span> if it lands, at
-        today&rsquo;s odds. Later money moves them.
+      <p className="mt-2 text-center text-xs leading-relaxed text-ink-faint">
+        Returns <span className="tabular text-ink-muted">{money(now)}</span> if it lands, at
+        today&rsquo;s odds. If this side doubles before close,{" "}
+        <span className="tabular text-ink-muted">{money(ifCrowded)}</span> — money joining you
+        dilutes you, money against you does not.
       </p>
 
       {/* Worth stating, because it is the honest difference from a bookmaker:
