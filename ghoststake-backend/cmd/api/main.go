@@ -129,6 +129,10 @@ func startIndexer(ctx context.Context, cfg config.Config, st *store.Store, ch *c
 	if err != nil {
 		return httpx.Deps{}, err
 	}
+	// Market immutables get somewhere durable to live (GHO-81), so a restart
+	// does not re-ask the chain three questions per market whose answers are
+	// fixed at construction and cannot change.
+	reader = reader.WithParamStore(cfg.ChainID, st)
 	broker := live.NewBroker()
 
 	ix, err := indexer.New(ch, st, indexer.Config{

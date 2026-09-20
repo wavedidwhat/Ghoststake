@@ -16,6 +16,7 @@ package protocol
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"sync"
 	"time"
@@ -39,9 +40,55 @@ type Reader struct {
 	market  *chain.Contract
 	markets map[string]*chain.Contract
 
+	// params persists market immutables across restarts. Optional: the Reader
+	// works without one, it just re-asks the chain after every deploy.
+	params  ParamStore
+	chainID int64
+
 	mu     sync.Mutex
 	vaultP *finance.VaultParams
 	mktP   map[string]MarketParams
+	// mktFail remembers a params read that failed, so a retry storm cannot
+	// re-issue calls that are certain to fail for the same reason.
+	mktFail map[string]paramFailure
+}
+
+// ParamStore persists a market's immutables so they survive a restart.
+//
+// An interface rather than a *store.Store because this package has no business
+// knowing about Postgres, and because the honest test for the tiering below is
+// one that hands it a fake.
+type ParamStore interface {
+	MarketParams(ctx context.Context, chainID int64, market string) (MarketParams, bool, error)
+	PutMarketParams(ctx context.Context, chainID int64, market string, p MarketParams) error
+}
+
+// paramFailure is a remembered failure, with the error that caused it.
+//
+// The error is kept, not just the time: httpx decides between 503 and 500 by
+// asking chain.Transient, and a cooling window that returned a fresh generic
+// error would turn a rate limit into "something went wrong on our side" for
+// the next thirty seconds.
+type paramFailure struct {
+	at  time.Time
+	err error
+}
+
+// paramCooldown is how long a failed read is remembered.
+//
+// Short, because the failure it protects against is a provider having a bad
+// minute, and a market whose params genuinely cannot be read is a market the
+// caller should stop asking about rather than one we should cache forever.
+const paramCooldown = 30 * time.Second
+
+// WithParamStore gives the Reader somewhere durable to keep market immutables.
+//
+// Separate from New so the keeper and the local stack can build a Reader with
+// no database at all, which they do.
+func (r *Reader) WithParamStore(chainID int64, store ParamStore) *Reader {
+	r.params = store
+	r.chainID = chainID
+	return r
 }
 
 // MarketParams are the market's immutables.
@@ -88,7 +135,8 @@ func New(client *chain.Client, vaultAddress, poolAddress string, marketAddresses
 	return &Reader{
 		client: client, vault: vault, pool: pool,
 		market: primary, markets: markets,
-		mktP: map[string]MarketParams{},
+		mktP:    map[string]MarketParams{},
+		mktFail: map[string]paramFailure{},
 	}, nil
 }
 
@@ -224,35 +272,100 @@ func (r *Reader) MarketParamsFor(ctx context.Context, market string) (MarketPara
 	return r.marketParams(ctx, key, bound)
 }
 
+// marketParams answers from memory, then the store, then the chain.
+//
+// The ordering is the point. These three values are set in ParimutuelRound's
+// constructor and nothing changes them, so the chain is the slowest and least
+// reliable source of an answer that cannot vary. Before GHO-81 it was the only
+// source after a restart, which is how a rate-limited RPC turned every
+// chain-backed endpoint into a 500 while the data those endpoints actually
+// serve sat in Postgres, fine (runbook Part 7.71).
 func (r *Reader) marketParams(ctx context.Context, key string, market *chain.Contract) (MarketParams, error) {
 	r.mu.Lock()
 	cached, ok := r.mktP[key]
+	failure, cooling := r.mktFail[key]
 	r.mu.Unlock()
+
 	if ok {
 		return cached, nil
 	}
+	if cooling && time.Since(failure.at) < paramCooldown {
+		// The original error, so the HTTP layer can still tell a rate limit
+		// from a bug.
+		return MarketParams{}, failure.err
+	}
 
-	values, err := market.CallAt(ctx, nil, "entryCutoff")
+	if r.params != nil {
+		stored, found, err := r.params.MarketParams(ctx, r.chainID, key)
+		switch {
+		case err != nil:
+			// Logged, not returned. A database that cannot answer is a reason
+			// to ask the chain, not a reason to fail a read the chain can
+			// still serve.
+			slog.Warn("read stored market params", "market", key, "err", err)
+		case found:
+			r.mu.Lock()
+			r.mktP[key] = stored
+			delete(r.mktFail, key)
+			r.mu.Unlock()
+			return stored, nil
+		}
+	}
+
+	params, err := r.readMarketParams(ctx, key, market)
 	if err != nil {
+		r.mu.Lock()
+		r.mktFail[key] = paramFailure{at: time.Now(), err: err}
+		r.mu.Unlock()
 		return MarketParams{}, err
 	}
-	cutoff, ok := values[0].(uint64)
-	if !ok {
-		return MarketParams{}, fmt.Errorf("protocol: entryCutoff returned %T", values[0])
-	}
-	rake, err := market.CallBig(ctx, nil, "rake")
-	if err != nil {
-		return MarketParams{}, err
-	}
-	minSide, err := market.CallBig(ctx, nil, "minSidePool")
-	if err != nil {
-		return MarketParams{}, err
-	}
-	params := MarketParams{EntryCutoff: int64(cutoff), Rake: rake, MinSidePool: minSide}
 
 	r.mu.Lock()
 	r.mktP[key] = params
+	delete(r.mktFail, key)
 	r.mu.Unlock()
+
+	if r.params != nil {
+		if err := r.params.PutMarketParams(ctx, r.chainID, key, params); err != nil {
+			// Also logged rather than returned: we have the answer, and
+			// failing the caller's read because we could not write it down
+			// would be the tail wagging the dog.
+			slog.Warn("store market params", "market", key, "err", err)
+		}
+	}
+	return params, nil
+}
+
+// readMarketParams asks the chain, waiting out a provider having a bad moment.
+//
+// chain.RequestBackoff and not DefaultBackoff: this runs inside a request that
+// httpx bounds at 20s and the server bounds at 30s, so a five-minute retry
+// budget would be spent holding a connection nobody is still waiting on.
+func (r *Reader) readMarketParams(ctx context.Context, key string, market *chain.Contract) (MarketParams, error) {
+	var params MarketParams
+	err := chain.Retry(ctx, "read market params "+key, chain.RequestBackoff, func(ctx context.Context) error {
+		values, err := market.CallAt(ctx, nil, "entryCutoff")
+		if err != nil {
+			return err
+		}
+		cutoff, ok := values[0].(uint64)
+		if !ok {
+			return fmt.Errorf("protocol: entryCutoff returned %T", values[0])
+		}
+		rake, err := market.CallBig(ctx, nil, "rake")
+		if err != nil {
+			return err
+		}
+		minSide, err := market.CallBig(ctx, nil, "minSidePool")
+		if err != nil {
+			return err
+		}
+		params = MarketParams{EntryCutoff: int64(cutoff), Rake: rake, MinSidePool: minSide}
+		return nil
+	})
+	if err != nil {
+		return MarketParams{}, err
+	}
 	return params, nil
 }
 
