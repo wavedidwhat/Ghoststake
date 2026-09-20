@@ -2,8 +2,10 @@ package httpx
 
 import (
 	"context"
+	"log/slog"
 	"math/big"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,6 +80,12 @@ type roundsResponse struct {
 	IndexedBlock uint64      `json:"indexedBlock"`
 	AsOf         time.Time   `json:"asOf"`
 	Rounds       []roundJSON `json:"rounds"`
+
+	// Degraded names markets that could not be described, so a short listing
+	// says so instead of quietly being a short listing. Omitted when empty:
+	// an absent field and an empty array would mean the same thing, and only
+	// one of them makes the common response smaller.
+	Degraded []string `json:"degraded,omitempty"`
 }
 
 // handleRounds lists recent rounds with their pool split.
@@ -118,19 +126,31 @@ func (s *Server) handleRounds(w http.ResponseWriter, r *http.Request) {
 		return rounds[i].RoundID > rounds[j].RoundID
 	})
 
+	// Per market rather than once for the listing. Rake, entry cutoff and
+	// minimum side pool are constructor arguments, and the demo market is
+	// deliberately configured differently from the Chainlink one — so one set
+	// of params applied to a mixed listing would put the wrong rake on the
+	// odds of every row from the other market.
+	markets := make([]string, 0, len(rounds))
+	for _, round := range rounds {
+		markets = append(markets, round.Market)
+	}
+	params, degraded, firstErr := s.marketParamsForAll(ctx, markets)
+
 	out := make([]roundJSON, 0, len(rounds))
 	for _, round := range rounds {
-		// Per round rather than once for the listing. Rake, entry cutoff and
-		// minimum side pool are constructor arguments, and the demo market is
-		// deliberately configured differently from the Chainlink one — so one
-		// set of params applied to a mixed listing would put the wrong rake
-		// on the odds of every row from the other market.
-		params, err := s.marketParamsFor(ctx, round.Market)
-		if err != nil {
-			serverError(w, "read market params", err)
-			return
+		p, ok := params[round.Market]
+		if !ok {
+			continue
 		}
-		out = append(out, renderRound(round, params, now))
+		out = append(out, renderRound(round, p, now))
+	}
+
+	// Only a failure when there was something to render and none of it could
+	// be. An empty listing with nothing degraded is a legitimate empty answer.
+	if len(out) == 0 && firstErr != nil {
+		serverError(w, "read market params", firstErr)
+		return
 	}
 
 	writeJSON(w, http.StatusOK, roundsResponse{
@@ -138,7 +158,69 @@ func (s *Server) handleRounds(w http.ResponseWriter, r *http.Request) {
 		IndexedBlock: s.indexedBlock(ctx),
 		AsOf:         now,
 		Rounds:       out,
+		Degraded:     degraded,
 	})
+}
+
+// marketParamsForAll resolves the params of every distinct market in one pass.
+//
+// It returns what it could read, the markets it could not, and the first
+// failure. Not the first error alone, which is what the callers used to do:
+// GHO-51 made round history span deployments on purpose, so a listing
+// legitimately contains markets this process has never watched, and one of
+// them being unreadable took down every other market's data with it —
+// including settled history that needs no live chain read to be listed.
+//
+// The first error is kept so the caller can still classify the failure when
+// *nothing* could be rendered: serverError tells a rate limit from a bug by
+// inspecting it, and a synthesised error would lose that.
+func (s *Server) marketParamsForAll(ctx context.Context, markets []string) (map[string]protocol.MarketParams, []string, error) {
+	return partitionMarketParams(markets, func(market string) (protocol.MarketParams, error) {
+		return s.marketParamsFor(ctx, market)
+	})
+}
+
+// partitionMarketParams is the whole of the above that is worth testing.
+//
+// Split out because `Server.reader` is a concrete *protocol.Reader with no
+// interface behind it, so "what happens when the second of three markets
+// fails" cannot be arranged through the Server without inventing one. A
+// function taking a lookup needs no such ceremony and has no other dependency.
+func partitionMarketParams(
+	markets []string,
+	lookup func(string) (protocol.MarketParams, error),
+) (map[string]protocol.MarketParams, []string, error) {
+	out := make(map[string]protocol.MarketParams, len(markets))
+	var degraded []string
+	var firstErr error
+
+	for _, market := range markets {
+		if _, done := out[market]; done {
+			continue
+		}
+		if slices.Contains(degraded, market) {
+			continue
+		}
+
+		params, err := lookup(market)
+		if err != nil {
+			// Warn, not error: one market being unreadable is now a partial
+			// answer rather than a failure, and paging someone for it would
+			// be paging them for a degraded response that worked.
+			slog.Warn("read market params", "market", market, "err", err)
+			degraded = append(degraded, market)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		out[market] = params
+	}
+
+	// Sorted so the field is stable across requests. An unstable list looks
+	// like markets flapping when it is only map iteration order.
+	slices.Sort(degraded)
+	return out, degraded, firstErr
 }
 
 type positionJSON struct {
@@ -168,6 +250,12 @@ type positionsResponse struct {
 	// happened". A caller wanting both still gets one request.
 	Open    []positionJSON `json:"open"`
 	History []positionJSON `json:"history"`
+
+	// Degraded names markets that could not be described, so a short listing
+	// says so instead of quietly being a short listing. Omitted when empty:
+	// an absent field and an empty array would mean the same thing, and only
+	// one of them makes the common response smaller.
+	Degraded []string `json:"degraded,omitempty"`
 }
 
 // handlePositions returns one address's round positions, open and historical.
@@ -217,25 +305,45 @@ func (s *Server) handlePositions(w http.ResponseWriter, r *http.Request) {
 		History:      []positionJSON{},
 	}
 
-	for _, position := range ledger.ProjectPositions(events, address) {
+	positions := ledger.ProjectPositions(events, address)
+
+	// Resolved once for the whole answer, before anything is rendered. This
+	// lookup used to sit inside the loop and return on its first failure,
+	// which is how one unreadable market took down a whole account's history
+	// — and why an address with no positions returned 200 for the same
+	// request that 500'd for an address with some (runbook Part 7.71).
+	markets := make([]string, 0, len(positions))
+	for _, position := range positions {
+		markets = append(markets, position.Market)
+	}
+	params, degraded, firstErr := s.marketParamsForAll(ctx, markets)
+
+	for _, position := range positions {
 		round, ok := rounds[ledger.RoundRef{Market: position.Market, RoundID: position.RoundID}]
 		if !ok {
 			// Unreachable: the position was folded from the same events. Skip
 			// rather than render a position with no round beside it.
 			continue
 		}
-		params, err := s.marketParamsFor(ctx, round.Market)
-		if err != nil {
-			serverError(w, "read market params", err)
-			return
+		p, ok := params[round.Market]
+		if !ok {
+			// Named in Degraded, not dropped silently. Under-reporting
+			// somebody's history without saying so is the worse failure.
+			continue
 		}
-		rendered := renderPosition(position, round, params, now)
+		rendered := renderPosition(position, round, p, now)
 		if round.Status == ledger.StatusResolved || round.Status == ledger.StatusVoid {
 			response.History = append(response.History, rendered)
 			continue
 		}
 		response.Open = append(response.Open, rendered)
 	}
+
+	if len(response.Open) == 0 && len(response.History) == 0 && firstErr != nil {
+		serverError(w, "read market params", firstErr)
+		return
+	}
+	response.Degraded = degraded
 
 	writeJSON(w, http.StatusOK, response)
 }
