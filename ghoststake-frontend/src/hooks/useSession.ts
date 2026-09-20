@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useConnection, useSignMessage } from "wagmi";
 import { ApiError, requestNonce, verifySignature, type StoredSession } from "@/lib/api";
 import {
@@ -27,6 +27,15 @@ export function useSession() {
   const stored = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [pending, setPending] = useState<"signing" | "error" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every attempt, so a retry gets its own stall window rather than
+  // inheriting the last one's verdict. See useStalled.
+  const [attempt, setAttempt] = useState(0);
+  // Which attempt is live. A cancelled attempt's promise is still running —
+  // there is no way to withdraw a request a wallet has already taken — so when
+  // it finally settles it must not write over the state of a newer one, or of
+  // a user who has given up. Compared by value rather than aborted, because
+  // signMessageAsync takes no AbortSignal.
+  const live = useRef(0);
 
   /**
    * A session belongs to one address, so it stops applying when the wallet
@@ -71,6 +80,9 @@ export function useSession() {
 
   const signIn = useCallback(async () => {
     if (!connection.address) return;
+    const mine = live.current + 1;
+    live.current = mine;
+    setAttempt((n) => n + 1);
     setPending("signing");
     setError(null);
     try {
@@ -83,9 +95,11 @@ export function useSession() {
         address: verified.address,
         expiresAt: verified.expiresAt,
       };
+      if (live.current !== mine) return;
       setStoredSession(next);
       setPending(null);
     } catch (cause) {
+      if (live.current !== mine) return;
       // Dismissing the wallet prompt is a normal outcome, not an error state.
       const rejected = cause instanceof Error && /user rejected|denied/i.test(cause.message);
       if (rejected) {
@@ -99,9 +113,24 @@ export function useSession() {
 
   const signOut = useCallback(() => {
     clearStoredSession();
+    live.current += 1;
     setPending(null);
     setError(null);
   }, []);
 
-  return { session, status, error, signIn, signOut };
+  /**
+   * Give up on a wallet that is not going to answer.
+   *
+   * It cannot cancel the request — the wallet has it, and `signMessageAsync`
+   * takes no AbortSignal — so this abandons it instead: the attempt is retired,
+   * and if it ever resolves the guards above drop it on the floor. The honest
+   * framing for the user is "stop waiting", not "cancel", and the copy says so.
+   */
+  const stopWaiting = useCallback(() => {
+    live.current += 1;
+    setPending(null);
+    setError(null);
+  }, []);
+
+  return { session, status, error, attempt, signIn, signOut, stopWaiting };
 }

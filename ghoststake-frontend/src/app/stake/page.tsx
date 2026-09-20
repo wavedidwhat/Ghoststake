@@ -247,7 +247,7 @@ function DepositWithdraw({
               lien is settled from the proceeds and the rest comes back to you.
             </p>
           )}
-          <TxStatus state={tx.state} />
+          <TxStatus tx={tx} />
         </div>
 
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">

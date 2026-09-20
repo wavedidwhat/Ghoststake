@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useWriteContract } from "wagmi";
 import { useConfig } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
@@ -29,20 +29,50 @@ export function useTransaction() {
   const config = useConfig();
   const { writeContractAsync } = useWriteContract();
   const [state, setState] = useState<TxState>({ status: "idle" });
+  // Bumped per send, so a retry gets its own stall window. See useStalled.
+  const [attempt, setAttempt] = useState(0);
+  // Which send is live. An abandoned one is still running — a wallet that has
+  // the request cannot be made to give it back, and neither writeContractAsync
+  // nor waitForTransactionReceipt takes an AbortSignal — so when it settles it
+  // must not write over a newer send or over a user who stopped waiting.
+  const live = useRef(0);
 
-  const reset = useCallback(() => setState({ status: "idle" }), []);
+  const reset = useCallback(() => {
+    live.current += 1;
+    setState({ status: "idle" });
+  }, []);
+
+  /**
+   * Stop waiting on a wallet that is not going to answer.
+   *
+   * It cannot cancel anything: the request is with the wallet, and a sent
+   * transaction is on the chain whatever this app does. What it does is give
+   * the state a door, which is what "signing" and "pending" did not have
+   * (GHO-83). A send abandoned at the prompt may still arrive; a send
+   * abandoned while pending certainly will, and the hash stays on screen for
+   * exactly that reason.
+   */
+  const stopWaiting = useCallback(() => {
+    live.current += 1;
+    setState({ status: "idle" });
+  }, []);
 
   const send = useCallback(
     async (
       request: Parameters<typeof writeContractAsync>[0],
       options?: { onConfirmed?: () => void },
     ): Promise<boolean> => {
+      const mine = live.current + 1;
+      live.current = mine;
+      setAttempt((n) => n + 1);
       setState({ status: "signing" });
       try {
         const hash = await writeContractAsync(request);
+        if (live.current !== mine) return false;
         setState({ status: "pending", hash });
 
         const receipt = await waitForTransactionReceipt(config, { hash });
+        if (live.current !== mine) return false;
         if (receipt.status === "reverted") {
           // A mined revert is not the same as a failed send: the user paid
           // for it, so say so plainly rather than "something went wrong".
@@ -54,6 +84,7 @@ export function useTransaction() {
         options?.onConfirmed?.();
         return true;
       } catch (cause) {
+        if (live.current !== mine) return false;
         const message = cause instanceof Error ? cause.message : String(cause);
         if (/user rejected|denied|rejected the request/i.test(message)) {
           setState({ status: "cancelled" });
@@ -66,7 +97,7 @@ export function useTransaction() {
     [config, writeContractAsync],
   );
 
-  return { state, send, reset };
+  return { state, attempt, send, reset, stopWaiting };
 }
 
 /**

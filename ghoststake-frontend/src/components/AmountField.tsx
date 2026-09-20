@@ -2,7 +2,9 @@
 
 import { useId } from "react";
 import { formatAmount } from "@/lib/format";
-import type { TxState } from "@/hooks/useTransaction";
+import { explorerTxUrl } from "@/lib/activity";
+import type { useTransaction } from "@/hooks/useTransaction";
+import { useStalled } from "@/hooks/useStalled";
 
 /**
  * An amount input backed by a bigint, with the balance it is bounded by.
@@ -111,15 +113,45 @@ export function parseAmount(input: string, decimals: number): bigint | null {
   }
 }
 
-/** Shared status line for a pending write. */
-export function TxStatus({ state }: { state: TxState }) {
+/**
+ * How long a mined transaction gets before the wait is called unusual.
+ *
+ * Much longer than the wallet-prompt window: a transaction that has been sent
+ * is genuinely out of everyone's hands, and offering an escape after eight
+ * seconds would suggest something is wrong on a chain simply having a normal
+ * minute.
+ */
+const PENDING_STALL_MS = 45_000;
+
+/**
+ * Shared status line for a write, with a way out of both waits.
+ *
+ * Takes the whole transaction rather than its state, so a caller cannot wire
+ * up the message and forget the escape — which is how "signing" and "pending"
+ * came to be states with no exit across twelve call sites (GHO-83).
+ *
+ * Neither escape cancels anything. A wallet holding a request cannot be made
+ * to give it back, and a sent transaction is on the chain whatever this app
+ * does. What they do is stop the interface being held hostage by a wallet that
+ * is not going to answer, and the copy is careful not to promise more.
+ */
+export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
+  const { state, attempt, stopWaiting } = tx;
+
+  const signing = state.status === "signing";
+  const pending = state.status === "pending";
+
+  const signingStalled = useStalled(signing, attempt);
+  const pendingStalled = useStalled(pending, attempt, PENDING_STALL_MS);
+  const stalled = signingStalled || pendingStalled;
+
   if (state.status === "idle") return null;
 
   const text =
     state.status === "signing"
-      ? "Check your wallet…"
+      ? "Check your wallet\u2026"
       : state.status === "pending"
-        ? "Waiting for confirmation…"
+        ? "Waiting for confirmation\u2026"
         : state.status === "confirmed"
           ? "Confirmed."
           : state.status === "cancelled"
@@ -133,9 +165,39 @@ export function TxStatus({ state }: { state: TxState }) {
         ? "text-negative"
         : "text-ink-muted";
 
+  // Only while it is in flight. A confirmed or failed transaction has a hash
+  // worth linking too, but by then the row that reports it is the place for
+  // that, not a status line that is about to disappear.
+  const explorer = pending ? explorerTxUrl(state.hash) : undefined;
+
   return (
-    <p className={`text-xs ${tone}`} role="status" aria-live="polite">
-      {text}
-    </p>
+    <div className="flex flex-col items-start gap-0.5">
+      <p className={`text-xs ${tone}`} role="status" aria-live="polite">
+        {text}
+      </p>
+
+      {explorer && (
+        <a
+          href={explorer}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
+        >
+          Track it on the explorer
+        </a>
+      )}
+
+      {stalled && (
+        <button
+          type="button"
+          onClick={stopWaiting}
+          className="text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
+        >
+          {signingStalled
+            ? "Your wallet hasn\u2019t answered \u2014 stop waiting"
+            : "Still not confirmed \u2014 stop waiting"}
+        </button>
+      )}
+    </div>
   );
 }

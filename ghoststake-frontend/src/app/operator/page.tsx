@@ -314,7 +314,7 @@ function OpenRoundForm({
         >
           {busy ? "Opening…" : "Open round"}
         </button>
-        <TxStatus state={tx.state} />
+        <TxStatus tx={tx} />
       </div>
     </Card>
   );
@@ -448,7 +448,7 @@ function SimpleAction({
             : "Owner-only. Connected as a different address, this will revert."
           : "Permissionless — anyone connected may call this."}
       </span>
-      <TxStatus state={tx.state} />
+      <TxStatus tx={tx} />
     </div>
   );
 }
@@ -624,7 +624,7 @@ function ResolveControl({
             >
               {busy ? "Resolving…" : "Resolve"}
             </button>
-            <TxStatus state={tx.state} />
+            <TxStatus tx={tx} />
           </div>
         </div>
       )}
@@ -744,7 +744,7 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
         </p>
       )}
       <div className="mt-2">
-        <TxStatus state={tx.state} />
+        <TxStatus tx={tx} />
       </div>
     </Card>
   );

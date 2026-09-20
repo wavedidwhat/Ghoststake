@@ -6,6 +6,7 @@ import { useConnect, useConnectors, useDisconnect } from "wagmi";
 import { shortenAddress } from "@/lib/format";
 import { orderWallets } from "@/lib/wallets";
 import { useSession, type SessionStatus } from "@/hooks/useSession";
+import { useStalled } from "@/hooks/useStalled";
 import { useWallet } from "@/hooks/useWallet";
 
 /**
@@ -31,52 +32,6 @@ function useWallets() {
   return orderWallets(connectors, hasInjectedProvider);
 }
 
-/**
- * How long a wallet gets to answer before the button offers a way out.
- *
- * Eight seconds is long enough that nobody waiting on a wallet that is about to
- * answer sees it, and short enough to beat the reflex to reload the page.
- */
-const STALL_AFTER_MS = 8_000;
-
-/**
- * Whether `active` has been continuously true for `afterMs`.
- *
- * This exists because "connecting" was a state with no exit (GHO-77). wagmi's
- * `reconnect()` runs on mount and probes every connector with an untimed
- * `isAuthorized()` — for an EIP-6963 wallet, an `eth_accounts` call. A wallet
- * that is installed but locked, busy or mid-update accepts that call and never
- * answers, so `status` stayed `reconnecting` forever and the button stayed
- * disabled. Nothing recovered it: `@wagmi/core` latches a module-level
- * `isReconnecting` flag for the duration, so no later reconnect even runs. A
- * wallet extension merely being present was enough, with no click involved.
- *
- * `restartKey` changes when a fresh attempt begins, so picking a wallet after a
- * stall shows "Connecting…" again for its own eight seconds rather than staying
- * on the escape hatch and looking like the click did nothing.
- *
- * The verdict is keyed on the attempt rather than on the activation, so if
- * `active` ever went false and true again under an unchanged key the old verdict
- * would still match and the escape would appear at once. After mount, `settling`
- * only rises again through `pick`, which changes the key — and were that ever
- * untrue the cost is cosmetic: the escape offers the same working button early.
- */
-function useStalled(active: boolean, afterMs: number, restartKey: number): boolean {
-  // Which attempt went quiet, not a bare boolean. A boolean would have to be
-  // reset from the effect body on every restart, which is the cascading-render
-  // pattern `react-hooks/set-state-in-effect` exists to stop; comparing keys
-  // resets by itself, since a new attempt cannot match an old verdict.
-  const [stalledKey, setStalledKey] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!active) return;
-    const timer = setTimeout(() => setStalledKey(restartKey), afterMs);
-    return () => clearTimeout(timer);
-  }, [active, afterMs, restartKey]);
-
-  return active && stalledKey === restartKey;
-}
-
 /** A dismissed wallet prompt is a normal outcome, and says so quietly. */
 function connectHint(error: Error | null): string | undefined {
   if (!error) return undefined;
@@ -88,7 +43,14 @@ export function ConnectButton() {
   const wallets = useWallets();
   const { mutate: connect, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
-  const { status: sessionStatus, error: sessionError, signIn, signOut } = useSession();
+  const {
+    status: sessionStatus,
+    error: sessionError,
+    attempt: sessionAttempt,
+    signIn,
+    signOut,
+    stopWaiting,
+  } = useSession();
 
   const [picking, setPicking] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -124,7 +86,7 @@ export function ConnectButton() {
    * say but "connecting", and `useStalled` bounds how long we say it.
    */
   const settling = !address && (isSettling || isPending);
-  const stalled = useStalled(settling, STALL_AFTER_MS, attempt);
+  const stalled = useStalled(settling, attempt);
 
   if (settling && !stalled) {
     return (
@@ -194,8 +156,10 @@ export function ConnectButton() {
       <SessionAction
         status={sessionStatus}
         error={sessionError}
+        attempt={sessionAttempt}
         onSignIn={signIn}
         onSignOut={signOut}
+        onStopWaiting={stopWaiting}
       />
 
       <button
@@ -217,20 +181,46 @@ export function ConnectButton() {
  * signed in at all: `useSession` computed the reason and the caller dropped it
  * on the floor (GHO-77). Someone whose sign-in failed clicked, saw nothing
  * change, and had nothing to act on. The reason is shown instead.
+ *
+ * And "Check your wallet…" used to be a `<span>` — not a control, with no
+ * timeout behind it (GHO-83). A wallet that took the request and never
+ * answered pinned it there until a reload, which is exactly the state GHO-77
+ * removed from the connect half and left in this one.
  */
 function SessionAction({
   status,
   error,
+  attempt,
   onSignIn,
   onSignOut,
+  onStopWaiting,
 }: {
   status: SessionStatus;
   error: string | null;
+  attempt: number;
   onSignIn: () => void;
   onSignOut: () => void;
+  onStopWaiting: () => void;
 }) {
-  if (status === "signing") {
-    return <span className="px-3 py-2 text-sm text-ink-muted">Check your wallet…</span>;
+  const waiting = status === "signing";
+  const stalled = useStalled(waiting, attempt);
+
+  if (waiting) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="px-3 py-2 text-sm text-ink-muted">Check your wallet…</span>
+        {/* Only once it has actually gone quiet. Offering an out immediately
+            would read as "this probably will not work" on every sign-in. */}
+        {stalled && (
+          <button
+            onClick={onStopWaiting}
+            className="px-3 text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
+          >
+            Your wallet hasn&rsquo;t answered — stop waiting
+          </button>
+        )}
+      </div>
+    );
   }
 
   if (status === "authenticated") {
