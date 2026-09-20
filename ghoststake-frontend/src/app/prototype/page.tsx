@@ -25,7 +25,18 @@ type Market = {
   yes: number;
   no: number;
   closesIn: string;
-  phase: "open" | "cutoff" | "settled";
+  phase: "open" | "cutoff" | "resolving" | "settled";
+  /** External markets carry the evidence their outcome was proposed on. */
+  proposal?: {
+    outcome: "yes" | "no";
+    by: string;
+    when: string;
+    source: string;
+    digest: string;
+    /** How long anyone can still challenge it. */
+    challengeEnds: string;
+    bond: number;
+  };
   /** Present once settled. */
   won?: "yes" | "no";
   /** Your stake, if any, as [yes, no]. */
@@ -61,6 +72,24 @@ const MARKETS: Market[] = [
     closesIn: "0:38",
     phase: "cutoff",
     thin: true,
+  },
+  {
+    id: "wc-brazil",
+    question: "Brazil win the 2026 World Cup",
+    yes: 18400,
+    no: 26100,
+    closesIn: "—",
+    phase: "resolving",
+    yours: [400, 0],
+    proposal: {
+      outcome: "no",
+      by: "0x3f9c…a91c",
+      when: "2 hours ago",
+      source: "fifa.com/worldcup/2026/final",
+      digest: "8a3f2c91…d21e",
+      challengeEnds: "4:12:30",
+      bond: 100,
+    },
   },
   {
     id: "eth-3300",
@@ -194,6 +223,7 @@ function QuestionCard({
 }) {
   const yesShare = share(market, "yes");
   const settled = market.phase === "settled";
+  const resolving = market.phase === "resolving";
   const open = market.phase === "open";
 
   return (
@@ -214,6 +244,8 @@ function QuestionCard({
 
         {settled ? (
           <span className="text-xs text-ink-faint">Settled</span>
+        ) : resolving ? (
+          <span className="text-xs text-warning">Resolving</span>
         ) : (
           <span className="tabular text-sm text-brand">{market.closesIn}</span>
         )}
@@ -221,6 +253,8 @@ function QuestionCard({
 
       {settled ? (
         <Settled market={market} />
+      ) : resolving && market.proposal ? (
+        <Resolution market={market} />
       ) : (
         <div className="mt-3 grid grid-cols-2 gap-2.5">
           <SideButton market={market} side="yes" disabled={!open} onPick={onPick} />
@@ -298,6 +332,70 @@ function SideButton({
       </span>
       {held && <span className="tabular text-xs opacity-75">you have {money(yours, 0)}</span>}
     </button>
+  );
+}
+
+/**
+ * How an outcome gets to be true, shown while it is still contestable.
+ *
+ * A price market needs none of this: the feed published a number, the contract
+ * read it, and anyone can check the feed. An external question has no such
+ * source, so the outcome is *claimed* by someone, backed by a bond, against
+ * named evidence — and it only becomes final if nobody pays to argue.
+ *
+ * The window is the product, not a formality. It is the whole difference
+ * between "we say Brazil lost" and "anyone could have proved otherwise and
+ * nobody did", and it is why this is on the card rather than behind a link.
+ */
+function Resolution({ market }: { market: Market }) {
+  const p = market.proposal!;
+  const yourSide = (market.yours?.[0] ?? 0) > 0 ? "yes" : "no";
+  const againstYou = p.outcome !== yourSide;
+
+  return (
+    <div className="mt-3 rounded-control border border-warning/30 bg-warning-soft/40 p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm text-ink">
+          Proposed:{" "}
+          <span className={`display ${p.outcome === "yes" ? "text-up" : "text-down"}`}>
+            {p.outcome === "yes" ? "Yes" : "No"}
+          </span>
+        </p>
+        <span className="tabular text-xs text-ink-faint">{p.when}</span>
+      </div>
+
+      <dl className="mt-2 flex flex-col gap-1 text-xs">
+        <div className="flex justify-between gap-3">
+          <dt className="text-ink-muted">Claimed by</dt>
+          <dd className="tabular text-ink">{p.by}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-ink-muted">Evidence</dt>
+          <dd className="truncate text-ink underline decoration-ink-faint underline-offset-2">
+            {p.source}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-ink-muted">Digest</dt>
+          <dd className="tabular text-ink-faint">{p.digest}</dd>
+        </div>
+      </dl>
+
+      <p className="mt-2.5 text-xs leading-relaxed text-ink-muted">
+        Anyone can challenge this for{" "}
+        <span className="tabular text-warning">{p.challengeEnds}</span>. It costs{" "}
+        <span className="tabular text-ink">{money(p.bond, 0)}</span>, which you lose if the
+        proposal stands and get back with theirs if it does not.
+        {againstYou && " This one goes against your position."}
+      </p>
+
+      <button
+        type="button"
+        className="mt-2.5 rounded-control border border-warning/50 px-3 py-1.5 text-sm text-warning transition-colors hover:bg-warning/10"
+      >
+        Challenge this
+      </button>
+    </div>
   );
 }
 
@@ -406,7 +504,15 @@ function BetTicket({
 
       <p className="mt-2 text-center text-xs text-ink-faint">
         Returns <span className="tabular">{money(total * multiple)}</span> if it lands, at
-        today&rsquo;s odds
+        today&rsquo;s odds. Later money moves them.
+      </p>
+
+      {/* Worth stating, because it is the honest difference from a bookmaker:
+          the protocol's 2% comes off the pool whichever way this lands, so it
+          has no reason to want you wrong. */}
+      <p className="mt-2 text-center text-xs text-ink-faint">
+        The protocol takes <span className="tabular">2%</span> of the pool when this settles,
+        and never takes a side.
       </p>
     </div>
   );
