@@ -5,12 +5,16 @@ import type { Connector } from "wagmi";
 import { useConnect, useConnectors, useDisconnect } from "wagmi";
 import { shortenAddress } from "@/lib/format";
 import { orderWallets } from "@/lib/wallets";
-import { useSession, type SessionStatus } from "@/hooks/useSession";
 import { useStalled } from "@/hooks/useStalled";
 import { useWallet } from "@/hooks/useWallet";
 
 /**
- * Connect, disconnect, and the optional SIWE sign-in.
+ * Connect and disconnect.
+ *
+ * There was a third control here, an optional SIWE sign-in, and GHO-84 removed
+ * it: nothing in the app ever read the session it produced, so every connected
+ * user was shown a second login that granted them nothing, at the moment they
+ * were deciding whether to trust the app.
  *
  * wagmi 3 has no `useAccount`: connection state is `useConnection`, and
  * `useConnect().connect` / `.connectors` are deprecated in favour of
@@ -43,14 +47,6 @@ export function ConnectButton() {
   const wallets = useWallets();
   const { mutate: connect, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
-  const {
-    status: sessionStatus,
-    error: sessionError,
-    attempt: sessionAttempt,
-    signIn,
-    signOut,
-    stopWaiting,
-  } = useSession();
 
   const [picking, setPicking] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -153,15 +149,6 @@ export function ConnectButton() {
 
   return (
     <div className="flex items-center gap-2">
-      <SessionAction
-        status={sessionStatus}
-        error={sessionError}
-        attempt={sessionAttempt}
-        onSignIn={signIn}
-        onSignOut={signOut}
-        onStopWaiting={stopWaiting}
-      />
-
       <button
         onClick={() => disconnect()}
         title="Disconnect"
@@ -170,83 +157,6 @@ export function ConnectButton() {
         <span className="size-2 rounded-full bg-positive" />
         <span className="tabular">{shortenAddress(address)}</span>
       </button>
-    </div>
-  );
-}
-
-/**
- * The SIWE half of the button.
- *
- * A failed sign-in used to render the same bare "Sign in" as never having
- * signed in at all: `useSession` computed the reason and the caller dropped it
- * on the floor (GHO-77). Someone whose sign-in failed clicked, saw nothing
- * change, and had nothing to act on. The reason is shown instead.
- *
- * And "Check your wallet…" used to be a `<span>` — not a control, with no
- * timeout behind it (GHO-83). A wallet that took the request and never
- * answered pinned it there until a reload, which is exactly the state GHO-77
- * removed from the connect half and left in this one.
- */
-function SessionAction({
-  status,
-  error,
-  attempt,
-  onSignIn,
-  onSignOut,
-  onStopWaiting,
-}: {
-  status: SessionStatus;
-  error: string | null;
-  attempt: number;
-  onSignIn: () => void;
-  onSignOut: () => void;
-  onStopWaiting: () => void;
-}) {
-  const waiting = status === "signing";
-  const stalled = useStalled(waiting, attempt);
-
-  if (waiting) {
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <span className="px-3 py-2 text-sm text-ink-muted">Check your wallet…</span>
-        {/* Only once it has actually gone quiet. Offering an out immediately
-            would read as "this probably will not work" on every sign-in. */}
-        {stalled && (
-          <button
-            onClick={onStopWaiting}
-            className="px-3 text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
-          >
-            Your wallet hasn&rsquo;t answered — stop waiting
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (status === "authenticated") {
-    return (
-      <button
-        onClick={onSignOut}
-        className="rounded-sm border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
-      >
-        Sign out
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        onClick={onSignIn}
-        className="rounded-sm border border-border px-3 py-2 text-sm text-ink-muted transition hover:text-ink"
-      >
-        Sign in
-      </button>
-      {/* Louder than the connect hints: a signature that failed for a reason the
-          API gave is not something clicking again reliably fixes. */}
-      {status === "error" && error && (
-        <span className="max-w-48 text-right text-xs text-negative">{error}</span>
-      )}
     </div>
   );
 }

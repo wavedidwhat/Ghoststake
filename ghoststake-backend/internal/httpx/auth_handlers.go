@@ -1,3 +1,21 @@
+// SIWE: nonce, verify, and the one endpoint behind a bearer token.
+//
+// Nothing calls any of this today, and that is deliberate rather than
+// forgotten. GHO-84 removed the frontend's sign-in because the session it
+// produced unlocked nothing — every figure this API serves is public chain
+// state or indexed public data — while the JWT it stored was still reachable
+// by any XSS bug. A token that authenticates nothing is pure liability on the
+// client.
+//
+// The server half stays because it is built, audited and tested, and because
+// the first write endpoint or any per-account notification (GHO-71) needs
+// exactly this and nothing else. Deleting it would buy nothing and cost the
+// work twice.
+//
+// If you are adding an authenticated endpoint: put it behind RequireAuth as
+// /me is, and give the frontend a reason to sign in *before* putting the
+// button back. The button existing without that reason is the bug GHO-84
+// fixed.
 package httpx
 
 import (
