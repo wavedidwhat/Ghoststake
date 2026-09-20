@@ -10,6 +10,11 @@ import { installMockWallet } from "./mock-wallet";
  *
  * `useStalled` gives a surface 8 seconds before it offers an escape, so these
  * wait past that deliberately rather than racing it.
+ *
+ * There was a third spec here, for a hanging SIWE sign-in. GHO-84 removed the
+ * sign-in itself — nothing in the app read the session it produced — so the
+ * spec went with it rather than being kept green against a button nobody can
+ * press. The escape it exercised is the same `useStalled` the two below use.
  */
 
 const ESCAPE = /stop waiting|hasn.t answered|could not|declined/i;
@@ -37,46 +42,6 @@ test.describe("a wallet that never answers", () => {
     const connect = page.getByRole("button", { name: /connect wallet/i });
     await expect(connect).toBeVisible({ timeout: ESCAPE_TIMEOUT });
     await expect(connect).toBeEnabled();
-  });
-
-  test("signing in offers a way to stop waiting", async ({ page }) => {
-    await installMockWallet(page, { methods: { personal_sign: "hang" } });
-
-    // Sign-in asks the API for a nonce *before* it reaches the wallet, so
-    // without this the flow fails at the fetch and never gets to the state
-    // under test. Stubbed rather than pointed at a running API: the wallet is
-    // what is being tested, and a test that needs a backend up is a test that
-    // will be deleted the first time it is inconvenient.
-    await page.route("**/api/v1/auth/nonce", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          nonce: "test-nonce",
-          message: "ghoststake wants you to sign in",
-          expiresAt: new Date(Date.now() + 600_000).toISOString(),
-        }),
-      }),
-    );
-
-    await page.goto("/");
-
-    // No connect dance: wagmi's reconnect() probes on mount and this wallet
-    // answers eth_accounts, so the app is already connected by first paint.
-    // Only personal_sign hangs, which is the state under test.
-    const signIn = page.getByRole("button", { name: /^sign in$/i });
-    await expect(signIn).toBeVisible({ timeout: 20_000 });
-    await signIn.click();
-
-    // Pinned on "Check your wallet…" before GHO-83, with no control at all.
-    await expect(page.getByText(/check your wallet/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: ESCAPE })).toBeVisible({
-      timeout: ESCAPE_TIMEOUT,
-    });
-
-    // And taking the escape actually returns the surface to a usable state.
-    await page.getByRole("button", { name: ESCAPE }).click();
-    await expect(signIn).toBeVisible();
   });
 });
 
