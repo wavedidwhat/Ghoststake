@@ -29,6 +29,16 @@ type Backoff struct {
 // the failure in front of a human.
 var DefaultBackoff = Backoff{Base: time.Second, Max: 30 * time.Second, Factor: 2, Jitter: 0.2, Limit: 5 * time.Minute}
 
+// RequestBackoff is DefaultBackoff's budget for work inside an HTTP request.
+//
+// Three seconds, not five minutes. A read serving a user is bounded by
+// httpx's own 20s timeout and the server's 30s WriteTimeout, so a long retry
+// budget does not wait out a rate limit — it holds a connection until
+// something above it gives up, and then the retry was spent for nothing.
+// Waiting out a genuinely exhausted provider is the caller's job, by serving
+// what it has (GHO-81), not this one's.
+var RequestBackoff = Backoff{Base: 100 * time.Millisecond, Max: time.Second, Factor: 2, Jitter: 0.2, Limit: 3 * time.Second}
+
 func (b Backoff) wait(attempt int) time.Duration {
 	d := float64(b.Base)
 	for range attempt {

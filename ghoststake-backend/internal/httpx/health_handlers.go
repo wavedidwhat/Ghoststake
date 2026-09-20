@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/finance"
 )
 
@@ -299,6 +300,22 @@ func serverError(w http.ResponseWriter, what string, err error) {
 		writeError(w, http.StatusServiceUnavailable, "chain reads are not configured")
 		return
 	}
+
+	// A provider rate-limiting us is not a bug in this code, and a 500 says it
+	// is. It also tells every caller the wrong thing about retrying: a 500
+	// invites an immediate one, which is exactly what kept the limit exhausted
+	// on 2026-09-19 (runbook Part 7.71). 503 with Retry-After says "later",
+	// which is true and actionable.
+	//
+	// Logged at warn rather than error for the same reason: an on-call alert
+	// on somebody else's quota is noise.
+	if chain.Transient(err) {
+		slog.Warn(what, "err", err, "upstream", "rate_limited_or_unreachable")
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "the chain is temporarily unreachable")
+		return
+	}
+
 	slog.Error(what, "err", err)
 	writeError(w, http.StatusInternalServerError, "request failed")
 }
