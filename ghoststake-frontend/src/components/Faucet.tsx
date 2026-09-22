@@ -5,6 +5,7 @@ import { TxStatus } from "./AmountField";
 import { useTransaction } from "@/hooks/useTransaction";
 import { mockUSDCAbi } from "@/lib/abis";
 import { formatAmount } from "@/lib/format";
+import { isRevert } from "@/lib/probe";
 import { activeChain } from "@/lib/wagmi";
 
 /** What one tap hands out. Enough to deposit, borrow and take a position. */
@@ -37,16 +38,47 @@ export function Faucet({
   // changes state, so it cannot be called as a view. Simulating it against a
   // token that does not implement it fails, and that failure is how we learn
   // this is a real asset and the faucet should stay hidden.
+  //
+  // Only a *revert* means that (GHO-86). This was `retry: false` and hid on
+  // any error, so one 429 during the probe read as "a real ERC-20" and — with
+  // `staleTime: Infinity` — the faucet was gone for the session. On a testnet
+  // whose only token source is this button, that is the whole way in.
   const mintable = useSimulateContract({
     address: assetAddress,
     abi: mockUSDCAbi,
     functionName: "mint",
     args: [address, 0n],
     chainId: activeChain.id,
-    query: { enabled: Boolean(assetAddress), retry: false, staleTime: Infinity },
+    query: {
+      enabled: Boolean(assetAddress),
+      // A revert is an answer and is not asked again; anything else is the
+      // absence of one and is.
+      retry: (failures, error) => !isRevert(error) && failures < 3,
+      staleTime: Infinity,
+    },
   });
 
-  if (!assetAddress || mintable.isError) return null;
+  if (!assetAddress) return null;
+  if (mintable.isError && isRevert(mintable.error)) return null;
+  if (mintable.isError) {
+    // Could not tell. Said so, with a way to ask again, rather than guessing
+    // in either direction: hiding would strand a new user, and showing the
+    // button would offer a transaction that may not exist.
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-raised/40 p-4">
+        <p className="text-xs text-ink-muted">
+          Could not check whether test {symbol} can be minted here. The network did not answer.
+        </p>
+        <button
+          type="button"
+          onClick={() => void mintable.refetch()}
+          className="cursor-pointer rounded-sm border border-border px-3 py-2 text-sm text-ink hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+        >
+          Check again
+        </button>
+      </div>
+    );
+  }
 
   const amount = GRANT * 10n ** BigInt(decimals);
   const busy = tx.state.status === "signing" || tx.state.status === "pending";

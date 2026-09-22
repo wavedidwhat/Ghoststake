@@ -190,6 +190,16 @@ function PipelineStrip({
   const { markets } = useMarkets();
   const { rounds } = useRounds(markets);
 
+  // The one figure on this page that asserted the scale instead of checking
+  // it (GHO-86). `Position` renders before decimals resolve — it is gated on
+  // the wallet and on errors, not on the read — so on every first load this
+  // strip formatted balances against no scale at all, and `formatAmount` then
+  // defaulted to 18. A 6-decimal balance of 10,000 rendered as 0.00.
+  const { decimals } = position;
+  if (decimals === undefined) {
+    return <div className="h-40 animate-pulse rounded-card bg-raised" />;
+  }
+
   let atRisk = 0n;
   let open = 0;
   for (const r of rounds) {
@@ -214,7 +224,7 @@ function PipelineStrip({
       liquidatable={position.isLiquidatable}
       atRiskInMarkets={atRisk}
       openPositions={open}
-      decimals={position.decimals!}
+      decimals={decimals}
       symbol={position.symbol}
     />
   );

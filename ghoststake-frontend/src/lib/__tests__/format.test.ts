@@ -77,16 +77,16 @@ describe("figures", () => {
 
 describe("amounts and percentages", () => {
   it("formats 18-decimal amounts with grouped thousands", () => {
-    expect(formatAmount(1234567n * 10n ** 18n)).toBe("1,234,567.0000");
-    expect(formatAmount(10n ** 18n / 2n)).toBe("0.5000");
+    expect(formatAmount(1234567n * 10n ** 18n, 18)).toBe("1,234,567.0000");
+    expect(formatAmount(10n ** 18n / 2n, 18)).toBe("0.5000");
   });
 
   it("renders a zero balance rather than an empty string", () => {
-    expect(formatAmount(0n)).toBe("0.0000");
+    expect(formatAmount(0n, 18)).toBe("0.0000");
   });
 
   it("does not fall back to scientific notation on large balances", () => {
-    expect(formatAmount(10n ** 30n)).not.toMatch(/e\+/i);
+    expect(formatAmount(10n ** 30n, 18)).not.toMatch(/e\+/i);
   });
 
   it("scales WAD ratios to percentages", () => {
@@ -119,7 +119,7 @@ describe("audit regressions", () => {
     // Via Number this rendered as ...567,000.0000 — trailing zeros that look
     // exact and are float precision running out.
     const value = 12345678901234567891234567890123456789n;
-    expect(formatAmount(value)).toBe("12,345,678,901,234,567,891.2346");
+    expect(formatAmount(value, 18)).toBe("12,345,678,901,234,567,891.2346");
   });
 
   it("stays exact at the far end of uint256", () => {
@@ -138,12 +138,12 @@ describe("audit regressions", () => {
   });
 
   it("renders zero and sub-unit amounts without losing the leading zero", () => {
-    expect(formatAmount(1n)).toBe("0.0000");
-    expect(formatAmount(10n ** 14n)).toBe("0.0001");
+    expect(formatAmount(1n, 18)).toBe("0.0000");
+    expect(formatAmount(10n ** 14n, 18)).toBe("0.0001");
   });
 
   it("groups thousands only in the integer part", () => {
-    expect(formatAmount(1234567n * WAD)).toBe("1,234,567.0000");
+    expect(formatAmount(1234567n * WAD, 18)).toBe("1,234,567.0000");
     expect(formatPercent(WAD * 1234n)).toBe("123,400.00%");
   });
 });

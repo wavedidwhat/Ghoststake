@@ -7,12 +7,37 @@ import type { Address } from "viem";
  * belongs in this file.
  */
 
-function optionalAddress(value: string | undefined): Address | undefined {
+/**
+ * A variable this deployment was built with that cannot be used.
+ *
+ * Recorded rather than thrown (GHO-85). Refusing a bad value is right — every
+ * one of these would otherwise produce plausible wrong numbers — but a throw at
+ * module scope is delivered as the worst possible failure: this module is
+ * imported by `proxy.ts`, which runs before any page or error boundary exists,
+ * so the throw was a blank 500 on every URL with nothing on screen naming the
+ * variable. The root layout renders these instead of the app.
+ */
+export type ConfigProblem = {
+  variable: string;
+  value: string;
+  reason: string;
+};
+
+const problems: ConfigProblem[] = [];
+
+/** Every problem found in this module, in the order the variables appear. */
+export const envProblems: readonly ConfigProblem[] = problems;
+
+function optionalAddress(variable: string, value: string | undefined): Address | undefined {
   if (!value) return undefined;
   if (!/^0x[0-9a-fA-F]{40}$/.test(value)) {
-    // Throws rather than warns: a malformed address reads on-chain as an
-    // address with no code, so every balance would render as a plausible zero.
-    throw new Error(`Invalid contract address in environment: ${value}`);
+    // Refused rather than warned about: a malformed address reads on-chain as
+    // an address with no code, so every balance would render as a plausible
+    // zero. `undefined` is only what the module evaluates to — the app does
+    // not render with a problem recorded, so nothing reads it as "not
+    // deployed".
+    problems.push({ variable, value, reason: "is not a 20-byte hex address (0x followed by 40 hex digits)" });
+    return undefined;
   }
   return value as Address;
 }
@@ -21,9 +46,12 @@ function requiredChainId(value: string | undefined): number {
   if (!value) return 421614;
   const parsed = Number(value);
   // A non-numeric value would coerce to NaN and silently select the default
-  // chain, so the app would talk to a network nobody chose.
+  // chain, so the app would talk to a network nobody chose. Recorded, and the
+  // default is only a placeholder for the rest of the module graph to evaluate
+  // against; see `optionalAddress`.
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`Invalid NEXT_PUBLIC_CHAIN_ID: ${value}`);
+    problems.push({ variable: "NEXT_PUBLIC_CHAIN_ID", value, reason: "is not a positive integer chain id" });
+    return 421614;
   }
   return parsed;
 }
@@ -49,12 +77,12 @@ export const env = {
    * Undefined until the contracts are deployed. The UI renders this as a
    * distinct state from "connected with an empty position".
    */
-  vaultAddress: optionalAddress(process.env.NEXT_PUBLIC_VAULT_ADDRESS),
-  poolAddress: optionalAddress(process.env.NEXT_PUBLIC_POOL_ADDRESS),
+  vaultAddress: optionalAddress("NEXT_PUBLIC_VAULT_ADDRESS", process.env.NEXT_PUBLIC_VAULT_ADDRESS),
+  poolAddress: optionalAddress("NEXT_PUBLIC_POOL_ADDRESS", process.env.NEXT_PUBLIC_POOL_ADDRESS),
 
   /** The parimutuel market and the borrow-to-position router. */
-  marketAddress: optionalAddress(process.env.NEXT_PUBLIC_MARKET_ADDRESS),
-  routerAddress: optionalAddress(process.env.NEXT_PUBLIC_ROUTER_ADDRESS),
+  marketAddress: optionalAddress("NEXT_PUBLIC_MARKET_ADDRESS", process.env.NEXT_PUBLIC_MARKET_ADDRESS),
+  routerAddress: optionalAddress("NEXT_PUBLIC_ROUTER_ADDRESS", process.env.NEXT_PUBLIC_ROUTER_ADDRESS),
 
   /**
    * The demo market (GHO-29): the same contracts over a price feed the
@@ -66,8 +94,8 @@ export const env = {
    * and one settles against whatever the operator typed, and every surface
    * that shows them has to keep saying which is which.
    */
-  demoMarketAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_MARKET_ADDRESS),
-  demoRouterAddress: optionalAddress(process.env.NEXT_PUBLIC_DEMO_ROUTER_ADDRESS),
+  demoMarketAddress: optionalAddress("NEXT_PUBLIC_DEMO_MARKET_ADDRESS", process.env.NEXT_PUBLIC_DEMO_MARKET_ADDRESS),
+  demoRouterAddress: optionalAddress("NEXT_PUBLIC_DEMO_ROUTER_ADDRESS", process.env.NEXT_PUBLIC_DEMO_ROUTER_ADDRESS),
 
   /**
    * The market registry (GHO-34). When set, it is the list of markets and the
@@ -78,7 +106,7 @@ export const env = {
    * one does. Where it is absent the env pair is the whole list, which is what
    * every deployment did until now.
    */
-  registryAddress: optionalAddress(process.env.NEXT_PUBLIC_REGISTRY_ADDRESS),
+  registryAddress: optionalAddress("NEXT_PUBLIC_REGISTRY_ADDRESS", process.env.NEXT_PUBLIC_REGISTRY_ADDRESS),
 
   /**
    * Reown (WalletConnect) project id. Public by design — what stops a clone
@@ -91,10 +119,15 @@ export const env = {
 
 function optionalProjectId(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  // Throws for the same reason addresses do: a typo'd id fails only when a
+  // Refused for the same reason addresses are: a typo'd id fails only when a
   // user taps WalletConnect on a phone, which is the last place to find it.
   if (!/^[0-9a-f]{32}$/.test(value)) {
-    throw new Error(`Invalid NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${value}`);
+    problems.push({
+      variable: "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID",
+      value,
+      reason: "is not a 32-character lowercase hex project id",
+    });
+    return undefined;
   }
   return value;
 }

@@ -47,7 +47,7 @@ export function splitFigure(value: string): { lead: string; tail: string } {
 }
 
 /** Grouped thousands, fixed decimals, never scientific notation. */
-export function formatAmount(value: bigint, decimals = 18, fractionDigits = 4): string {
+export function formatAmount(value: bigint, decimals: number, fractionDigits = 4): string {
   return formatFixed(value, decimals, fractionDigits);
 }
 

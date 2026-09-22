@@ -15,12 +15,18 @@ describe("chain resolution", () => {
     expect(activeChain.name).toBe("Sepolia");
   });
 
-  it("throws on an unsupported chain rather than falling back", async () => {
+  it("refuses an unsupported chain rather than silently falling back", async () => {
     // The bug this replaces: an unknown id silently became Arbitrum Sepolia,
     // so reads were pinned to a chain with no contracts on it and the
-    // wrong-network banner named the wrong network.
+    // wrong-network banner named the wrong network. Still a placeholder
+    // chain underneath since GHO-85 — but recorded, and the layout renders
+    // the problem instead of the app, so nothing reads through it.
     vi.stubEnv("NEXT_PUBLIC_CHAIN_ID", "999999");
-    await expect(import("../wagmi")).rejects.toThrow(/not a supported chain/);
+    const { configProblems, configured } = await import("../config");
+    expect(configured).toBe(false);
+    expect(configProblems).toEqual([
+      expect.objectContaining({ variable: "NEXT_PUBLIC_CHAIN_ID", value: "999999", reason: expect.stringMatching(/not a supported chain/) }),
+    ]);
   });
 
   it("supports Robinhood Chain testnet, the GHO-21 target", async () => {
@@ -39,9 +45,10 @@ describe("chain resolution", () => {
     expect(types).not.toContain("walletConnect");
   });
 
-  it("throws on a malformed WalletConnect project id", async () => {
+  it("refuses a malformed WalletConnect project id", async () => {
     vi.stubEnv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", "not-a-project-id");
-    await expect(import("../wagmi")).rejects.toThrow(/WALLETCONNECT_PROJECT_ID/);
+    const { configProblems } = await import("../config");
+    expect(configProblems.map((p) => p.variable)).toEqual(["NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID"]);
   });
 
   it("supports the local foundry chain", async () => {
