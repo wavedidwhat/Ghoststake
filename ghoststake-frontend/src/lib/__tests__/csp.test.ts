@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import nextConfig from "../../../next.config";
+import { PHASE_PRODUCTION_SERVER } from "next/constants";
+import config from "../../../next.config";
 import { STATIC_SECURITY_HEADERS, buildCsp, type CspInput } from "../csp";
 
 const prod: CspInput = {
@@ -79,6 +80,10 @@ describe("buildCsp", () => {
     expect(buildCsp(prod)).toContain("upgrade-insecure-requests");
   });
 });
+
+// The config is a function of the build phase since GHO-85; this is the one
+// the deployed server runs under.
+const nextConfig = config(PHASE_PRODUCTION_SERVER);
 
 describe("static security headers", () => {
   it("are applied to every path, so a refactor cannot quietly drop them", async () => {
