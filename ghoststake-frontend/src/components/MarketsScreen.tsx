@@ -85,6 +85,9 @@ function RoundsScreen() {
       </Card>
     );
   }
+  // Captured once narrowed. The narrowing above does not reach into the row
+  // callback below, which is where the `!` used to stand in for it (GHO-86).
+  const decimals = asset.decimals;
 
   if (markets.length === 0) {
     return (
@@ -127,7 +130,7 @@ function RoundsScreen() {
               key={summary.market.key}
               summary={summary}
               feed={feeds.byMarket.get(summary.market.key)}
-              decimals={asset.decimals!}
+              decimals={decimals}
               symbol={asset.symbol}
               now={now}
             />

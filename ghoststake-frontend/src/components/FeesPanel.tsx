@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useReadContracts } from "wagmi";
-import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
+import { parseAmount } from "@/lib/amount";
 import { Card } from "@/components/Card";
 import { useTransaction } from "@/hooks/useTransaction";
 import { borrowLiquidityPoolAbi, parimutuelRoundAbi } from "@/lib/abis";

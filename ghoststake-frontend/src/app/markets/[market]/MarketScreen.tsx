@@ -114,6 +114,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
         rounds={rounds.filter((r) => r.market.key === found.key)}
         address={address}
         position={position}
+        decimals={position.decimals}
         now={now}
         taking={taking}
         setTaking={setTaking}

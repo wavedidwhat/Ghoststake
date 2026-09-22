@@ -4,7 +4,8 @@ import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
-import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
+import { parseAmount } from "@/lib/amount";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
 import { Faucet } from "@/components/Faucet";
@@ -14,7 +15,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatOptional } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
 
 export default function VaultPage() {
@@ -62,7 +63,10 @@ function VaultScreen({
 
       <Stat label="In your wallet" hint="available to deposit">
         <Figure
-          value={formatAmount(walletBalance.data ?? 0n, decimals)}
+          // "…", not 0.00, while the read is pending or has failed: a zero
+          // balance is a claim about the wallet, and a failed read is not
+          // one (GHO-86).
+          value={formatOptional(walletBalance.data, (v) => formatAmount(v, decimals)) ?? "…"}
           unit={symbol}
           size="stat"
         />

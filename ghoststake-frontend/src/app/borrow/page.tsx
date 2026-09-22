@@ -4,7 +4,8 @@ import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
-import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
+import { parseAmount } from "@/lib/amount";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
 import { Figure } from "@/components/Figure";
@@ -13,7 +14,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
-import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
+import { formatAmount, formatHealthFactor, formatOptional, healthBand } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
 
 export default function BorrowPage() {
@@ -31,20 +32,28 @@ export default function BorrowPage() {
           <div className="h-24 animate-pulse rounded bg-raised" />
         </Card>
       ) : (
-        <BorrowScreen position={position} address={wallet.address} />
+        <BorrowScreen position={position} decimals={position.decimals} address={wallet.address} />
       )}
     </AppShell>
   );
 }
 
+/**
+ * `decimals` is its own prop, narrowed by the caller, rather than read off
+ * `position` and asserted (GHO-86). The assertion made the guard above and
+ * the claim here two separate facts in two functions, and nothing kept them
+ * together — a new caller skipping the guard would format every figure at
+ * whatever scale `undefined` fell through to.
+ */
 function BorrowScreen({
   position,
+  decimals,
   address,
 }: {
   position: ReturnType<typeof useVaultPosition>;
+  decimals: number;
   address: `0x${string}`;
 }) {
-  const decimals = position.decimals!;
   const [mode, setMode] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -128,7 +137,7 @@ function BorrowScreen({
 
       <Stat label="Still borrowable" hint="to the LTV ceiling">
         <Figure
-          value={formatAmount(position.maxBorrowable ?? 0n, decimals)}
+          value={formatOptional(position.maxBorrowable, (v) => formatAmount(v, decimals)) ?? "…"}
           unit={position.symbol}
           size="stat"
         />

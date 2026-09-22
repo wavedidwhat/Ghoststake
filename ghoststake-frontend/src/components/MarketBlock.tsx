@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
-import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
+import { parseAmount } from "@/lib/amount";
 import { Card } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
@@ -38,6 +39,7 @@ export function MarketBlock({
   rounds,
   address,
   position,
+  decimals,
   now,
   taking,
   setTaking,
@@ -51,6 +53,10 @@ export function MarketBlock({
    *  the actions need an address. See GHO-44. */
   address: `0x${string}` | undefined;
   position: ReturnType<typeof useVaultPosition>;
+  /** The asset's scale, known. Its own prop rather than `position.decimals!`
+   *  (GHO-86): the caller has to have narrowed it, so a figure can never be
+   *  formatted against a scale nobody read. */
+  decimals: number;
   now: bigint | undefined;
   taking: { key: string; id: bigint; side: SideValue } | null;
   setTaking: (v: { key: string; id: bigint; side: SideValue } | null) => void;
@@ -95,7 +101,7 @@ export function MarketBlock({
       entryCutoff={params.entryCutoff}
       minSidePool={params.minSidePool}
       rake={params.rake}
-      decimals={position.decimals!}
+      decimals={decimals}
       symbol={position.symbol}
       now={now}
       yourUp={r.up}
@@ -113,7 +119,7 @@ export function MarketBlock({
             claimable={r.claimable}
             claimed={r.isClaimed}
             positionSize={(r.up ?? 0n) + (r.down ?? 0n)}
-            decimals={position.decimals!}
+            decimals={decimals}
             symbol={position.symbol}
             address={address}
             onDone={() => {
@@ -136,6 +142,7 @@ export function MarketBlock({
             side={taking.side}
             address={address}
             position={position}
+            decimals={decimals}
             onClose={() => setTaking(null)}
             onDone={() => {
               setTaking(null);
@@ -276,6 +283,7 @@ function PositionForm({
   side,
   address,
   position,
+  decimals,
   onClose,
   onDone,
 }: {
@@ -284,10 +292,10 @@ function PositionForm({
   side: SideValue;
   address: `0x${string}`;
   position: ReturnType<typeof useVaultPosition>;
+  decimals: number;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const decimals = position.decimals!;
   const [own, setOwn] = useState("");
   const [borrow, setBorrow] = useState("");
   const tx = useTransaction();
@@ -318,8 +326,16 @@ function PositionForm({
     chainId: activeChain.id,
   });
 
-  const ownAmount = parseAmount(own || "0", decimals) ?? 0n;
-  const borrowAmount = parseAmount(borrow || "0", decimals) ?? 0n;
+  // An empty field is zero; an unparseable one is *not* (GHO-86). This was
+  // `parseAmount(own || "0", decimals) ?? 0n`, which turned seven decimal
+  // places on a six-decimal token into zero: the field showed your number,
+  // the button read "Take Up · 0.00", and nothing said why. AmountField now
+  // says why; this keeps the refusal from being swallowed on the way.
+  const ownParsed = own === "" ? 0n : parseAmount(own, decimals);
+  const borrowParsed = borrow === "" ? 0n : parseAmount(borrow, decimals);
+  const invalid = ownParsed === null || borrowParsed === null;
+  const ownAmount = ownParsed ?? 0n;
+  const borrowAmount = borrowParsed ?? 0n;
   const total = ownAmount + borrowAmount;
 
   const overWallet = wallet.data !== undefined && ownAmount > wallet.data;
@@ -333,7 +349,7 @@ function PositionForm({
   const preview = previewHealth(position, borrowAmount);
 
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
-  const disabled = busy || total === 0n || overWallet || overCapacity;
+  const disabled = busy || invalid || total === 0n || overWallet || overCapacity;
 
   async function submit() {
     if (needsTokenApproval) {
@@ -457,7 +473,9 @@ function PositionForm({
       >
         {busy
           ? "Working…"
-          : needsTokenApproval || needsDelegation
+          : invalid
+            ? `Take ${sideLabel}`
+            : needsTokenApproval || needsDelegation
             ? `Approve and take ${sideLabel}`
             : `Take ${sideLabel} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
       </button>
