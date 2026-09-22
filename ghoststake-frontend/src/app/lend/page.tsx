@@ -4,7 +4,8 @@ import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
-import { AmountField, TxStatus, parseAmount } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
+import { parseAmount } from "@/lib/amount";
 import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card, Stat } from "@/components/Card";
 import { Faucet } from "@/components/Faucet";
@@ -48,15 +49,22 @@ export default function LendPage() {
       ) : pool.decimals === undefined ? (
         <Loading />
       ) : (
-        <LendScreen pool={pool} />
+        <LendScreen pool={pool} decimals={pool.decimals} />
       )}
     </AppShell>
   );
 }
 
-function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
+// `decimals` narrowed by the caller rather than asserted here (GHO-86); see
+// BorrowScreen for why the two must be one fact.
+function LendScreen({
+  pool,
+  decimals,
+}: {
+  pool: ReturnType<typeof useLendPosition>;
+  decimals: number;
+}) {
   const wallet = useWallet();
-  const decimals = pool.decimals!;
   const { symbol } = pool;
 
   const balance = pool.balance ?? 0n;
@@ -144,7 +152,7 @@ function LendScreen({ pool }: { pool: ReturnType<typeof useLendPosition> }) {
             />
           </div>
           <div className="lg:col-span-3">
-            <SupplyWithdraw pool={pool} address={wallet.address} />
+            <SupplyWithdraw pool={pool} decimals={decimals} address={wallet.address} />
           </div>
         </>
       )}
@@ -231,12 +239,13 @@ function PoolStrip({
 
 function SupplyWithdraw({
   pool,
+  decimals,
   address,
 }: {
   pool: ReturnType<typeof useLendPosition>;
+  decimals: number;
   address: `0x${string}`;
 }) {
-  const decimals = pool.decimals!;
   const { symbol } = pool;
   const [mode, setMode] = useState<"supply" | "withdraw">("supply");
   const [amount, setAmount] = useState("");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { amountProblem } from "@/lib/amount";
 import { formatAmount } from "@/lib/format";
 import { explorerTxUrl } from "@/lib/activity";
 import type { useTransaction } from "@/hooks/useTransaction";
@@ -36,6 +37,7 @@ export function AmountField({
   disabled?: boolean;
 }) {
   const id = useId();
+  const problem = amountProblem(value, decimals);
 
   return (
     <div className="flex flex-col gap-2">
@@ -63,11 +65,23 @@ export function AmountField({
           disabled={disabled}
           inputMode="decimal"
           placeholder="0.00"
+          aria-invalid={problem !== null}
+          aria-describedby={problem ? `${id}-problem` : undefined}
           className="tabular w-full bg-transparent text-lg text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
         />
         <span className="text-sm text-ink-faint">{symbol}</span>
       </div>
 
+      {/* Stated at the field (GHO-86). `parseAmount` has always refused an
+          amount with more precision than the token, and every form then
+          either disabled its button with no reason or — in the position
+          sheet — coerced the refusal to zero. The field is the one place
+          that knows both the input and the scale, so it says it. */}
+      {problem && (
+        <p id={`${id}-problem`} role="alert" className="text-xs text-warning">
+          {problem}
+        </p>
+      )}
       {hint && <p className="text-xs text-ink-muted">{hint}</p>}
     </div>
   );
@@ -94,23 +108,6 @@ function toDecimalString(value: bigint, decimals: number): string {
   if (fraction === 0n) return whole.toString();
   const padded = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${whole}.${padded}`;
-}
-
-/** Parses the field back to a bigint. Returns null for anything unusable. */
-export function parseAmount(input: string, decimals: number): bigint | null {
-  const trimmed = input.trim();
-  if (trimmed === "" || trimmed === ".") return null;
-
-  const [whole = "0", fraction = ""] = trimmed.split(".");
-  // Extra precision is rejected rather than truncated: silently dropping a
-  // digit changes the amount the user asked for.
-  if (fraction.length > decimals) return null;
-
-  try {
-    return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
-  } catch {
-    return null;
-  }
 }
 
 /**
