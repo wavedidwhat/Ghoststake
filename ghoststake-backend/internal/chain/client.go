@@ -7,6 +7,7 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -21,6 +22,12 @@ const (
 	ChainIDArbitrumOne     int64 = 42161
 	ChainIDArbitrumSepolia int64 = 421614
 )
+
+// ErrChainIDMismatch is the one dial failure that is a configuration error
+// rather than a condition of the endpoint. Typed so callers that otherwise
+// tolerate an unreachable chain (the API, GHO-88) can still refuse this one:
+// serving another network's state is worse than serving none.
+var ErrChainIDMismatch = errors.New("chain id mismatch")
 
 type Client struct {
 	eth     *ethclient.Client
@@ -45,7 +52,7 @@ func Dial(ctx context.Context, rpcURL string, expectedChainID int64) (*Client, e
 	}
 	if got.Int64() != expectedChainID {
 		c.Close()
-		return nil, fmt.Errorf("chain id mismatch: rpc reports %d, config expects %d", got.Int64(), expectedChainID)
+		return nil, fmt.Errorf("%w: rpc reports %d, config expects %d", ErrChainIDMismatch, got.Int64(), expectedChainID)
 	}
 
 	return &Client{eth: c, chainID: expectedChainID}, nil

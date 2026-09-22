@@ -157,3 +157,101 @@ func TestBackoffGrowsAndIsCapped(t *testing.T) {
 		}
 	}
 }
+
+// The 2026-09-19 failure (runbook Part 7.71): Infura answered 402 Payment
+// Required, which is not transient, so DialWithRetry gave up on the first
+// attempt and the API crash-looped. Pinned here so the contrast with
+// DialPersistently below is a test rather than a comment.
+func TestDialWithRetryGivesUpOnPaymentRequired(t *testing.T) {
+	srv, calls := rpcServer(t, 1000, http.StatusPaymentRequired, ChainIDArbitrumSepolia)
+	if _, err := DialWithRetry(t.Context(), srv.URL, ChainIDArbitrumSepolia, fastBackoff); err == nil {
+		t.Fatal("expected a 402 to fail DialWithRetry")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected 402 to be treated as standing (1 attempt), got %d", got)
+	}
+}
+
+// GHO-88: the chain coming back is picked up without a restart. A 402 that
+// clears after a while must end in a connection, not an exit.
+func TestDialPersistentlyOutlastsPaymentRequired(t *testing.T) {
+	srv, calls := rpcServer(t, 5, http.StatusPaymentRequired, ChainIDArbitrumSepolia)
+
+	c, err := DialPersistently(t.Context(), srv.URL, ChainIDArbitrumSepolia, fastBackoff)
+	if err != nil {
+		t.Fatalf("expected to connect once the 402s stopped, got %v", err)
+	}
+	defer c.Close()
+	if got := calls.Load(); got != 6 {
+		t.Fatalf("expected 6 attempts (5 refused, 1 served), got %d", got)
+	}
+}
+
+// And it ignores Limit: a chain that stays down for longer than any retry
+// budget is still waited for, because the caller is serving meanwhile.
+func TestDialPersistentlyIgnoresLimit(t *testing.T) {
+	srv, _ := rpcServer(t, 40, http.StatusTooManyRequests, ChainIDArbitrumSepolia)
+	b := fastBackoff
+	b.Limit = time.Millisecond
+	c, err := DialPersistently(t.Context(), srv.URL, ChainIDArbitrumSepolia, b)
+	if err != nil {
+		t.Fatalf("expected Limit to be ignored, got %v", err)
+	}
+	c.Close()
+}
+
+func TestDialPersistentlyRefusesTheWrongChain(t *testing.T) {
+	srv, calls := rpcServer(t, 0, 0, ChainIDArbitrumOne)
+	_, err := DialPersistently(t.Context(), srv.URL, ChainIDArbitrumSepolia, fastBackoff)
+	if !errors.Is(err, ErrChainIDMismatch) {
+		t.Fatalf("expected ErrChainIDMismatch, got %v", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 attempt, got %d", got)
+	}
+}
+
+func TestDialPersistentlyStopsOnShutdown(t *testing.T) {
+	srv, _ := rpcServer(t, 1_000_000, http.StatusPaymentRequired, ChainIDArbitrumSepolia)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_, err := DialPersistently(ctx, srv.URL, ChainIDArbitrumSepolia, fastBackoff)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected the context to end the wait, got %v", err)
+	}
+}
+
+// An endpoint that accepts and never answers must not hold the redial on its
+// first attempt forever.
+func TestDialPersistentlyBoundsASilentAttempt(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			select {
+			case <-release:
+			case <-r.Context().Done():
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"jsonrpc":"2.0","id":1,"result":"0x%x"}`, ChainIDArbitrumSepolia)
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	old := dialAttemptTimeout
+	dialAttemptTimeout = 50 * time.Millisecond
+	defer func() { dialAttemptTimeout = old }()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	c, err := DialPersistently(ctx, srv.URL, ChainIDArbitrumSepolia, fastBackoff)
+	if err != nil {
+		t.Fatalf("expected the silent first attempt to time out and the second to connect, got %v", err)
+	}
+	c.Close()
+	if got := calls.Load(); got < 2 {
+		t.Fatalf("expected a second attempt, got %d", got)
+	}
+}
