@@ -55,9 +55,13 @@ export default defineConfig({
     // CI has already built in an earlier step, so building again there would
     // double the slowest part of the job for nothing. Locally there may be no
     // build at all, so one happens first.
+    //
+    // `build:e2e`, not `build` (GHO-87): the browser tests run against a fixed
+    // deployment of fake contracts that tests/mock-chain.ts answers for, set in
+    // tests/e2e.env. CI builds with the same script.
     command: process.env.CI
       ? "pnpm exec next start --port 3311"
-      : "pnpm build && pnpm exec next start --port 3311",
+      : "pnpm build:e2e && pnpm exec next start --port 3311",
     url: "http://127.0.0.1:3311",
     // Turns on `/e2e/throw`, the page errors.spec.ts uses to prove the error
     // boundary catches (GHO-85). A server variable read per request, so the
