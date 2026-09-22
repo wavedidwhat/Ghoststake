@@ -38,9 +38,19 @@ test.describe("a wallet that never answers", () => {
     await installMockWallet(page, { methods: { eth_accounts: "hang" } });
     await page.goto("/");
 
-    // The connect affordance comes back rather than staying disabled forever.
+    // Wait for the *stall*, not for the button. "Connect wallet" is also what
+    // the server renders, before hydration starts wagmi's reconnect — so
+    // waiting for the button could resolve on that first frame, and the next
+    // assertion then met a disabled "Connecting…" for the whole stall window.
+    // Locally hydration beats the load event and the race never showed; on a
+    // loaded CI runner it failed about one run in two. The hint only exists
+    // once the wallet has been given up on, so it cannot be seen early.
+    await expect(page.getByText(/your wallet didn.t respond/i)).toBeVisible({
+      timeout: ESCAPE_TIMEOUT,
+    });
+
+    // And the affordance that comes back is usable, not a disabled button.
     const connect = page.getByRole("button", { name: /connect wallet/i });
-    await expect(connect).toBeVisible({ timeout: ESCAPE_TIMEOUT });
     await expect(connect).toBeEnabled();
   });
 });

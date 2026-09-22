@@ -58,7 +58,12 @@ jobs:
         run: pnpm test:layout
 
       # The screenshots of a failure are the whole point of having these.
-      - uses: actions/upload-artifact@v4
+      #
+      # v3, not v4. v4 refuses to run anywhere but github.com
+      # ("GHESNotSupportedError"), and CI has run on Forgejo since Part 7.60 —
+      # so this step has failed on every red run since, and the screenshots it
+      # exists for were never kept.
+      - uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: playwright-report
