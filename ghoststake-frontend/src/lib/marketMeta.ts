@@ -1,6 +1,7 @@
 import { createPublicClient, http } from "viem";
 import { parimutuelRoundAbi } from "./abis";
 import { formatAmount } from "./format";
+import { configured } from "./config";
 import { env } from "./env";
 import { activeChain } from "./wagmi";
 
@@ -49,6 +50,10 @@ const feedAbi = [
  * both are better than a page that does not render.
  */
 export async function feedLabel(market: string): Promise<string | null> {
+  // With a config problem the client above is built against a placeholder
+  // chain (GHO-85), and a label read from it would unfurl a link with another
+  // network's feed name. The page itself renders the problem instead.
+  if (!configured) return null;
   try {
     const oracle = await client.readContract({
       address: market as `0x${string}`,

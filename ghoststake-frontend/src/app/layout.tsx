@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import "./globals.css";
+import { Misconfigured } from "@/components/Misconfigured";
 import { Providers } from "@/components/providers";
+import { configProblems } from "@/lib/config";
 import { env } from "@/lib/env";
 import { THEME_COLOR } from "@/lib/theme";
 
@@ -83,7 +85,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${nippo.variable} ${technor.variable} ${tabular.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <Providers>{children}</Providers>
+        {/* Instead of the app, not around it (GHO-85): with a bad address or
+            chain id, the providers would be built against a placeholder, and
+            every figure on every page would be a plausible wrong one. */}
+        {configProblems.length > 0 ? (
+          <Misconfigured problems={configProblems} />
+        ) : (
+          <Providers>{children}</Providers>
+        )}
       </body>
     </html>
   );

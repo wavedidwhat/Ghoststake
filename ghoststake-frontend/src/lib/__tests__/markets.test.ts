@@ -66,9 +66,13 @@ describe("markets from the environment", () => {
 
   it("refuses a malformed demo address rather than reading a dead one", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MARKET_ADDRESS", "0xnope");
-    // Thrown at module load, from `env`: a malformed address reads on chain
-    // as an address with no code, so every pool would render as a plausible
-    // zero rather than as a misconfiguration.
-    await expect(import("../markets")).rejects.toThrow(/Invalid contract address/);
+    // A malformed address reads on chain as an address with no code, so every
+    // pool would render as a plausible zero rather than as a misconfiguration.
+    // Recorded rather than thrown since GHO-85, so the layout can name it —
+    // but still never listed as a market.
+    const { envMarkets } = await import("../markets");
+    const { configProblems } = await import("../config");
+    expect(envMarkets().some((m) => m.kindHint === "demo")).toBe(false);
+    expect(configProblems.map((p) => p.variable)).toContain("NEXT_PUBLIC_DEMO_MARKET_ADDRESS");
   });
 });

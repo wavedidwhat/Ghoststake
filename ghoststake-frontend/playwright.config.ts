@@ -59,6 +59,10 @@ export default defineConfig({
       ? "pnpm exec next start --port 3311"
       : "pnpm build && pnpm exec next start --port 3311",
     url: "http://127.0.0.1:3311",
+    // Turns on `/e2e/throw`, the page errors.spec.ts uses to prove the error
+    // boundary catches (GHO-85). A server variable read per request, so the
+    // built image is identical with and without it.
+    env: { GHOSTSTAKE_E2E: "1" },
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
