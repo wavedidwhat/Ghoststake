@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 
 	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
@@ -402,10 +404,50 @@ func renderPosition(p ledger.AccountPosition, round ledger.Round, params protoco
 // marketParamsFor reads one market's immutables, which protocol.Reader caches
 // per market.
 func (s *Server) marketParamsFor(ctx context.Context, market string) (protocol.MarketParams, error) {
-	if s.reader == nil {
-		return protocol.MarketParams{}, errNoChainReader
+	reader, err := s.chainReader()
+	if err != nil {
+		return s.storedMarketParams(ctx, market, err)
 	}
-	return s.reader.MarketParamsFor(ctx, market)
+	return reader.MarketParamsFor(ctx, market)
+}
+
+// storedMarketParams answers from Postgres alone, for a process that has no
+// chain to ask (GHO-88).
+//
+// This is what makes booting without a chain worth anything. The Reader's own
+// tiering already consults the store — but only once a Reader exists, and one
+// cannot be built without a dialled client. Without this, a process that booted
+// through a provider outage would 503 every round while the three numbers it
+// needs to render them sit in `market_params`.
+//
+// Only for errChainUnavailable. A deployment with no contracts configured has
+// no business rendering a market's odds from rows some earlier configuration
+// left behind, and answering "not configured" keeps that visible.
+func (s *Server) storedMarketParams(ctx context.Context, market string, cause error) (protocol.MarketParams, error) {
+	if !errors.Is(cause, errChainUnavailable) || s.params == nil {
+		return protocol.MarketParams{}, cause
+	}
+	if market == "" {
+		// The primary market, spelled the way the Reader would have.
+		// config.Load guarantees one when the indexer is enabled; checked
+		// anyway because an index panic here would be a 500 in an outage.
+		if len(s.cfg.Indexer.MarketAddresses) == 0 {
+			return protocol.MarketParams{}, cause
+		}
+		market = s.cfg.Indexer.MarketAddresses[0]
+	}
+	key := common.HexToAddress(market).Hex()
+
+	stored, found, err := s.params.MarketParams(ctx, s.cfg.ChainID, key)
+	if err != nil {
+		return protocol.MarketParams{}, err
+	}
+	if !found {
+		// Never read while the chain was up, so there is nothing to serve —
+		// and the reason is still the chain, not the database.
+		return protocol.MarketParams{}, cause
+	}
+	return stored, nil
 }
 
 // queryMarket reads an optional `?market=` filter, normalised to the
@@ -430,14 +472,16 @@ func queryMarket(w http.ResponseWriter, r *http.Request) (string, bool) {
 // marketParams reads the primary market's immutables, which protocol.Reader
 // caches.
 func (s *Server) marketParams(ctx context.Context) (protocol.MarketParams, error) {
-	if s.reader == nil {
+	reader, err := s.chainReader()
+	if err != nil {
 		// The API can serve indexed rounds with no chain connection, but not
 		// the odds or the phase, both of which need the market's immutables.
-		// Reported rather than defaulted: guessed protocol parameters produce
+		// Answered from the store if they were ever read; otherwise reported
+		// rather than defaulted, because guessed protocol parameters produce
 		// plausible wrong numbers, which is worse than an error.
-		return protocol.MarketParams{}, errNoChainReader
+		return s.storedMarketParams(ctx, "", err)
 	}
-	return s.reader.MarketParams(ctx)
+	return reader.MarketParams(ctx)
 }
 
 // indexedBlock reports how far the indexer has read, or zero if it never has.

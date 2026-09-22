@@ -168,7 +168,7 @@ being documented fails CI rather than quietly making the spec a lie.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/healthz` | – | liveness; touches no dependencies |
-| GET | `/readyz` | – | readiness; pings the database |
+| GET | `/readyz` | – | readiness; fails on the database only, reports the chain (`ok` / `unreachable` / `not_configured`) |
 | POST | `/api/v1/auth/nonce` | – | issue login challenge |
 | POST | `/api/v1/auth/verify` | – | verify signature, issue JWT |
 | GET | `/api/v1/me` | Bearer | current wallet |

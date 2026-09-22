@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,7 +18,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
-	"forge.wavedidwhat.com/wave/ghoststake/internal/chain"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/live"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/protocol"
@@ -27,7 +27,6 @@ import (
 type Server struct {
 	cfg    config.Config
 	store  *store.Store
-	chain  *chain.Client
 	tokens *auth.TokenIssuer
 	http   *http.Server
 
@@ -36,9 +35,17 @@ type Server struct {
 	// it, and recomputing per request is a chance for two requests to disagree
 	// about which deployment they are describing.
 	deployment []string
-	// reader is nil when the contract addresses are not configured. The
-	// endpoints that need contract state say so rather than guessing.
-	reader *protocol.Reader
+	// reader is nil when the contract addresses are not configured, and also
+	// while the chain is unreachable (GHO-88): the process boots and serves
+	// indexed data without one, and main promotes a Reader in with SetReader
+	// once a dial succeeds. Atomic because that promotion happens while
+	// requests are in flight.
+	reader atomic.Pointer[protocol.Reader]
+	// params is where market immutables are persisted (GHO-81), consulted
+	// directly while there is no Reader. Without it a process with no chain
+	// would 503 every round even though the three numbers needed to render
+	// one are sitting in Postgres.
+	params protocol.ParamStore
 	// broker is nil when the indexer is off: with nothing writing, there is
 	// nothing to push.
 	broker   *live.Broker
@@ -74,15 +81,19 @@ type Deps struct {
 	Broker *live.Broker
 }
 
-func NewServer(cfg config.Config, st *store.Store, ch *chain.Client, deps Deps) *Server {
+func NewServer(cfg config.Config, st *store.Store, deps Deps) *Server {
 	s := &Server{
 		cfg:        cfg,
 		store:      st,
-		chain:      ch,
 		tokens:     auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL),
-		reader:     deps.Reader,
 		broker:     deps.Broker,
 		deployment: deploymentContracts(cfg),
+	}
+	if st != nil {
+		s.params = st
+	}
+	if deps.Reader != nil {
+		s.reader.Store(deps.Reader)
 	}
 
 	// The websocket handshake is not subject to CORS — the browser sends no
@@ -196,18 +207,63 @@ func (s *Server) originAllowed(origin string) bool {
 	return false
 }
 
+// SetReader promotes a Reader in once the chain is reachable (GHO-88).
+func (s *Server) SetReader(r *protocol.Reader) { s.reader.Store(r) }
+
+// chainReader returns the Reader, or the reason there is not one.
+//
+// Two reasons, kept apart because they call for different things from whoever
+// is looking: "not configured" is a deployment that was never given contract
+// addresses and will not change by waiting; "unavailable" is a configured
+// chain the process cannot currently reach, which will.
+func (s *Server) chainReader() (*protocol.Reader, error) {
+	if r := s.reader.Load(); r != nil {
+		return r, nil
+	}
+	if !s.cfg.Indexer.Enabled {
+		return nil, errNoChainReader
+	}
+	return nil, errChainUnavailable
+}
+
+// chainStatus is /readyz's word for the chain.
+func (s *Server) chainStatus() string {
+	switch _, err := s.chainReader(); {
+	case err == nil:
+		return "ok"
+	case errors.Is(err, errNoChainReader):
+		return "not_configured"
+	default:
+		return "unreachable"
+	}
+}
+
+// handleReady reports the database and the chain, and fails only on the
+// database.
+//
+// The asymmetry is the point of GHO-88. Nearly everything this API serves comes
+// out of Postgres, so a process with a database and no chain is still the best
+// thing available to route a request to — and if readiness failed on the chain,
+// an orchestrator would pull every replica out of rotation during exactly the
+// provider outage the process was built to ride out. The chain is reported so a
+// human can see it; "status" says "degraded" so nothing mistakes it for fine.
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
+	chainState := s.chainStatus()
 	if err := s.store.Ping(ctx); err != nil {
 		slog.Warn("readiness: database unreachable", "err", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"status": "degraded", "database": "unreachable",
+			"status": "degraded", "database": "unreachable", "chain": chainState,
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "ok"})
+	status := "ok"
+	if chainState == "unreachable" {
+		status = "degraded"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": status, "database": "ok", "chain": chainState})
 }
 
 func (s *Server) Start() error {

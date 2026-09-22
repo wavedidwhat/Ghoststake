@@ -141,3 +141,51 @@ func DialWithRetry(ctx context.Context, rpcURL string, expectedChainID int64, b 
 	})
 	return c, err
 }
+
+// dialAttemptTimeout bounds one DialPersistently attempt. A variable so the
+// test for a silent endpoint does not have to wait out the real value.
+var dialAttemptTimeout = 15 * time.Second
+
+// DialPersistently dials until it connects, the context ends, or the endpoint
+// turns out to be the wrong chain.
+//
+// Unlike DialWithRetry it does not ask whether a failure is transient, and it
+// has no time limit. It exists for a caller that can do its job without a
+// chain and is only waiting to do it better (the API, GHO-88). For that caller
+// the transient/standing distinction is the wrong question: a 402 Payment
+// Required is standing in the sense that retrying for five minutes will not
+// clear it, but it does clear when the billing period rolls over or someone
+// swaps the key, and the process that is still up at that point recovers
+// without anyone restarting it. Only ErrChainIDMismatch is returned early,
+// because that one never clears by waiting.
+//
+// b.Limit is ignored; b.Max is the longest it will sleep between attempts.
+// Each attempt is bounded by dialAttemptTimeout, because an endpoint that
+// accepts the connection and never answers would otherwise hold the first
+// attempt forever — no retry, no log line, a redial that silently is not one.
+func DialPersistently(ctx context.Context, rpcURL string, expectedChainID int64, b Backoff) (*Client, error) {
+	for attempt := 0; ; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, dialAttemptTimeout)
+		c, err := Dial(attemptCtx, rpcURL, expectedChainID)
+		cancel()
+		if err == nil {
+			if attempt > 0 {
+				slog.Info("rpc reachable again", "attempts", attempt+1)
+			}
+			return c, nil
+		}
+		if errors.Is(err, ErrChainIDMismatch) {
+			return nil, err
+		}
+		if ctx.Err() != nil {
+			return nil, errors.Join(err, ctx.Err())
+		}
+		wait := b.wait(attempt)
+		slog.Warn("rpc unreachable, will retry", "attempt", attempt+1, "retry_in", wait.Round(time.Millisecond).String(), "err", err)
+		select {
+		case <-ctx.Done():
+			return nil, errors.Join(err, ctx.Err())
+		case <-time.After(wait):
+		}
+	}
+}

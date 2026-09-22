@@ -14,8 +14,13 @@ import (
 )
 
 // errNoChainReader is returned when an endpoint needs contract state and the
-// process was started without a chain connection.
+// process was started without contract addresses to read.
 var errNoChainReader = errors.New("chain reader is not configured")
+
+// errChainUnavailable is returned when the contract addresses are configured
+// but the chain has not been reachable since boot (GHO-88). The process is
+// redialling in the background; the answer is "later", not "never".
+var errChainUnavailable = errors.New("chain is not reachable yet")
 
 type healthResponse struct {
 	Address string `json:"address"`
@@ -80,12 +85,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if s.reader == nil {
-		writeError(w, http.StatusServiceUnavailable, "chain reads are not configured")
+	reader, err := s.chainReader()
+	if err != nil {
+		serverError(w, "read health", err)
 		return
 	}
 
-	health, snapshot, err := s.reader.Health(r.Context(), address)
+	health, snapshot, err := reader.Health(r.Context(), address)
 	if err != nil {
 		serverError(w, "read health", err)
 		return
@@ -197,8 +203,9 @@ type atRiskResponse struct {
 // only who gets scanned when the cap bites.
 func (s *Server) handleAtRisk(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if s.reader == nil {
-		writeError(w, http.StatusServiceUnavailable, "chain reads are not configured")
+	reader, err := s.chainReader()
+	if err != nil {
+		serverError(w, "read borrower health", err)
 		return
 	}
 	limit := clampAtRiskLimit(r.URL.Query().Get("limit"))
@@ -215,12 +222,12 @@ func (s *Server) handleAtRisk(w http.ResponseWriter, r *http.Request) {
 		borrowers = borrowers[:limit]
 	}
 
-	healths, snap, err := s.reader.HealthBatch(ctx, borrowers)
+	healths, snap, err := reader.HealthBatch(ctx, borrowers)
 	if err != nil {
 		serverError(w, "read borrower health", err)
 		return
 	}
-	params, err := s.reader.VaultParams(ctx)
+	params, err := reader.VaultParams(ctx)
 	if err != nil {
 		serverError(w, "read vault params", err)
 		return
@@ -298,6 +305,14 @@ func clampAtRiskLimit(raw string) int {
 func serverError(w http.ResponseWriter, what string, err error) {
 	if errors.Is(err, errNoChainReader) {
 		writeError(w, http.StatusServiceUnavailable, "chain reads are not configured")
+		return
+	}
+	// Same answer as a rate limit, because it is the same situation from the
+	// caller's side: the chain is somebody else's and it will be back.
+	if errors.Is(err, errChainUnavailable) {
+		slog.Warn(what, "err", err, "upstream", "not_connected")
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "the chain is temporarily unreachable")
 		return
 	}
 

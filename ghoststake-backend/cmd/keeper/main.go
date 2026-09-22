@@ -52,6 +52,13 @@ func run() error {
 	// but a keeper that treats it as fatal is restarted straight back into the
 	// same limit, turning a passing 429 into a crash loop (Part 7.61). A wrong
 	// chain ID still fails on the first attempt.
+	//
+	// Fatal once the retries run out, and on a 402 at once. That is the
+	// opposite of the API, which boots without a chain (GHO-88), and it is
+	// deliberate: the API serves an index that lives in Postgres, while the
+	// keeper exists only to send transactions. A keeper with no chain has
+	// nothing to do, and staying up would make a stopped keeper look like a
+	// running one. Exiting puts it in front of whoever watches restarts.
 	client, err := chain.DialWithRetry(ctx, cfg.RPCURL, cfg.ChainID, chain.DefaultBackoff)
 	if err != nil {
 		return err

@@ -72,18 +72,30 @@ paths:
     get:
       tags: [health]
       summary: Readiness
-      description: Safe to receive traffic, so this *does* check the database.
+      description: |
+        Safe to receive traffic, so this *does* check the database, and fails
+        only on it.
+
+        The chain is reported but never fails readiness (GHO-88). Rounds,
+        positions and activity are served from Postgres, so a process with a
+        database and no chain is still the best place to route a request.
+        `status` is `degraded` while a configured chain is unreachable.
+
+        `chain` is `ok`, `unreachable` (configured, not connected — the
+        process is redialling), or `not_configured` (no contract addresses,
+        so there is nothing to read).
       security: []
       responses:
         "200":
-          description: Ready.
+          description: Ready. `status` is `degraded` when the chain is unreachable.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status: { type: string, const: ok }
+                  status: { type: string, enum: [ok, degraded] }
                   database: { type: string, const: ok }
+                  chain: { type: string, enum: [ok, unreachable, not_configured] }
         "503":
           description: Database unreachable.
           content:
@@ -93,6 +105,7 @@ paths:
                 properties:
                   status: { type: string, const: degraded }
                   database: { type: string, const: unreachable }
+                  chain: { type: string, enum: [ok, unreachable, not_configured] }
 
   /api/v1/auth/nonce:
     post:
