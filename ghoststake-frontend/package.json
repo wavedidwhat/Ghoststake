@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:e2e": "node scripts/with-env.mjs tests/e2e.env next build",
     "start": "next start",
     "lint": "eslint",
     "gen:abis": "node scripts/generate-abis.mjs",

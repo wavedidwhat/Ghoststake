@@ -43,8 +43,13 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Built once, with the configuration the browser tests expect (GHO-87):
+      # fake contract addresses that tests/mock-chain.ts answers for, from
+      # tests/e2e.env. Still the full production build and type-check — only
+      # the inlined NEXT_PUBLIC_ values differ, and those differ per
+      # deployment anyway.
       - name: Build
-        run: pnpm build # next build type-checks as part of the build
+        run: pnpm build:e2e # next build type-checks as part of the build
 
       # Layout tests run in the same job rather than their own (GHO-59): a
       # second job would be a second required check to configure, and this one
