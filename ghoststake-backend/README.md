@@ -213,7 +213,19 @@ See `.env.example`. `JWT_SECRET` is required (min 32 bytes) whenever
 
 `CHAIN_ID` is checked against the RPC on startup and the service exits on
 mismatch, so a wrong endpoint fails loudly instead of silently reading the
-wrong network. `421614` = Arbitrum Sepolia, `42161` = Arbitrum One.
+wrong network. `421614` = Arbitrum Sepolia, `42161` = Arbitrum One. Every
+other dial failure is survivable: the API boots without a chain, serves what
+is indexed, and redials in the background (GHO-88). The keeper is the
+opposite and exits, because it exists only to send transactions.
+
+**`RPC_URL` must serve logs back to `INDEXER_START_BLOCK`.** Public endpoints
+prune their log index — `ethereum-sepolia-rpc.publicnode.com` keeps about 33
+hours — and answer older ranges with an empty result rather than an error, so
+an indexer reading through one records nothing and reports healthy. The
+indexer refuses to walk such a range and says so (GHO-89), but the fix is an
+endpoint that keeps the history: point `RPC_URL` at an archive-capable
+provider for a backfill, or start the index above the pruning boundary and
+accept the gap.
 
 The keeper reads its own environment (`config.LoadKeeper`), not the API's. It
 requires `KEEPER_PRIVATE_KEY` and either `REGISTRY_ADDRESS` or
