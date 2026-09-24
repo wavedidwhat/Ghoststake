@@ -217,6 +217,9 @@ type fakeChain struct {
 	// comes back as an empty result rather than an error. Zero means the node
 	// serves everything.
 	pruneBelow uint64
+	// unfilteredEmpty models an endpoint that will not answer a query with no
+	// address filter and says so with an empty result rather than an error.
+	unfilteredEmpty bool
 }
 
 func newFakeChain(head uint64) *fakeChain {
@@ -228,6 +231,10 @@ func (f *fakeChain) BlockNumber(context.Context) (uint64, error) { return f.head
 func (f *fakeChain) FilterLogs(_ context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
 	from, to := q.FromBlock.Uint64(), q.ToBlock.Uint64()
 	f.ranges = append(f.ranges, [2]uint64{from, to})
+
+	if f.unfilteredEmpty && len(q.Addresses) == 0 {
+		return nil, nil
+	}
 
 	var out []types.Log
 	for _, l := range f.logs {
@@ -250,6 +257,16 @@ func (f *fakeChain) HeaderByNumber(_ context.Context, number *big.Int) (*types.H
 		Number: new(big.Int).SetUint64(n),
 		Time:   1700000000 + n,
 		Extra:  []byte(f.hashes[n]),
+	}
+	// The header records that the block had logs even when pruning stops them
+	// being served, which is what the real endpoint does and what the GHO-89
+	// probe reads. Set from the scripted logs *before* pruneBelow is applied:
+	// the header is the chain's account of the block, not the node's.
+	for _, l := range f.logs {
+		if l.BlockNumber == n {
+			h.Bloom[0] = 1
+			break
+		}
 	}
 	return h, nil
 }

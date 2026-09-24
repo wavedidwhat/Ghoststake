@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -513,7 +514,15 @@ func (ix *Indexer) Run(ctx context.Context) error {
 			}
 			// A failed cycle is retried on the next tick. The cursor only
 			// advances on a committed write, so nothing is skipped.
-			slog.Warn("indexer cycle failed", "err", err)
+			//
+			// Except that a pruned endpoint is not a bad minute: it will
+			// refuse on every tick until someone changes RPC_URL. Logged at
+			// error so it reads as the stall it is (GHO-89).
+			if errors.Is(err, ErrLogsNotServed) {
+				slog.Error("indexer stalled: the RPC no longer serves these logs", "err", err)
+			} else {
+				slog.Warn("indexer cycle failed", "err", err)
+			}
 		}
 
 		select {
@@ -567,6 +576,10 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		to = safeHead
 	}
 
+	if err := ix.assertRangeServed(ctx, from, to, head); err != nil {
+		return err
+	}
+
 	logs, err := ix.client.FilterLogs(ctx, ethereum.FilterQuery{
 		FromBlock: new(big.Int).SetUint64(from),
 		ToBlock:   new(big.Int).SetUint64(to),
@@ -610,6 +623,103 @@ func (ix *Indexer) Step(ctx context.Context) error {
 		ix.publish(batch, next)
 	} else {
 		slog.Debug("indexed", "from", from, "to", to, "logs", len(logs))
+	}
+	return nil
+}
+
+// ErrLogsNotServed means the endpoint answers eth_getLogs with nothing for
+// blocks that provably had logs. It does not clear by retrying.
+//
+// Pruning is the cause we have measured, but not the only one: an endpoint
+// that will not serve a query — a plan restriction, a range limit — can
+// answer with an empty result too, which is the same lie. The remedy is the
+// same either way, so they are one error.
+var ErrLogsNotServed = errors.New("rpc does not serve logs for this range")
+
+// How far below head a range has to start before it is probed, and how many
+// blocks the probe will look through for one that had logs at all.
+//
+// The depth keeps the probe off the hot path. Following the head, every range
+// starts a few blocks back and is well inside any endpoint's retention, and
+// GHO-76 counted what every extra call per poll costs. A backfill, or an
+// indexer that has fallen behind, starts deep and is exactly what this is for.
+const (
+	probeDepth  = 256
+	probeBlocks = 8
+)
+
+// assertRangeServed refuses to walk a range whose logs the endpoint has
+// pruned (GHO-89).
+//
+// The endpoint production has used since runbook Part 7.71 keeps about 33
+// hours of logs and answers anything older with `{"result":[]}` — a success
+// that says "nothing happened in these blocks". A fresh backfill through it
+// indexed ~170,000 blocks of a deployment with 399 rounds and recorded zero
+// logs, and reported healthy the whole way.
+//
+// assertLogsStillServed (GHO-50) cannot see this. It compares against rows we
+// already hold, and a range read for the first time has none. This compares
+// against the chain's own record instead: every block header carries a
+// `logsBloom`, a filter over the logs in that block, and a bloom never has a
+// bit set that no log put there. **A non-zero bloom proves the block had logs.**
+// If `eth_getLogs` for that block — any address, not just ours — comes back
+// empty, the endpoint is not serving what the chain holds, with no false
+// positive possible. Checked against the real endpoint before writing this:
+// block 11,706,699's header is still served with a non-zero bloom, and its
+// logs are not.
+//
+// A range whose first few blocks all have empty blooms (a local anvil chain, a
+// quiet L2) teaches the probe nothing, and it says nothing rather than
+// guessing. Probing the *oldest* block of the range is deliberate: pruning
+// takes old blocks first, so a range straddling the boundary shows it there.
+func (ix *Indexer) assertRangeServed(ctx context.Context, from, to, head uint64) error {
+	if head < probeDepth || from > head-probeDepth {
+		return nil
+	}
+
+	for b := from; b <= to && b < from+probeBlocks; b++ {
+		header, err := ix.client.HeaderByNumber(ctx, new(big.Int).SetUint64(b))
+		if err != nil {
+			return fmt.Errorf("probe header %d: %w", b, err)
+		}
+		if header.Bloom == (types.Bloom{}) {
+			continue // no logs in this block; nothing to check against
+		}
+
+		logs, err := ix.client.FilterLogs(ctx, ethereum.FilterQuery{
+			FromBlock: new(big.Int).SetUint64(b),
+			ToBlock:   new(big.Int).SetUint64(b),
+		})
+		if err != nil {
+			return fmt.Errorf("probe logs %d: %w", b, err)
+		}
+		if len(logs) > 0 {
+			return nil
+		}
+
+		// Before refusing: ask again for the same block, filtered to the
+		// contracts we watch. An endpoint that declines an unfiltered query
+		// with an empty result — some public ones restrict them — but serves
+		// a filtered one is serving us fine, and refusing it would be a false
+		// alarm on a healthy backfill. Only reachable in the failing path, so
+		// it costs nothing in the normal case.
+		ours, err := ix.client.FilterLogs(ctx, ethereum.FilterQuery{
+			FromBlock: new(big.Int).SetUint64(b),
+			ToBlock:   new(big.Int).SetUint64(b),
+			Addresses: ix.addresses,
+		})
+		if err == nil && len(ours) > 0 {
+			return nil
+		}
+
+		return fmt.Errorf(
+			"indexer: %w: block %d's header records logs (non-zero logsBloom) but eth_getLogs returns "+
+				"none for it. The endpoint is not serving logs it holds — a pruned log index (public "+
+				"endpoints drop old blocks) or a query it will not answer, reported as an empty result "+
+				"either way. Walking blocks %d-%d through it would record nothing and advance the cursor "+
+				"anyway. Point RPC_URL at an endpoint that serves this range and the indexer will resume "+
+				"from where it stopped",
+			ErrLogsNotServed, b, from, to)
 	}
 	return nil
 }
