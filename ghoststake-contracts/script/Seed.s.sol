@@ -31,6 +31,11 @@ contract Seed is Script {
     /// simulating a transaction and it being mined.
     uint64 internal constant OPEN_LEAD = 2 minutes;
 
+    /// @dev The level the seeded rounds ask about. The local feed is seeded at
+    /// 2,000, so this is "will it be above where it started" — a question the
+    /// round can now state at open (GHO-79).
+    uint256 internal constant SEED_STRIKE = 2000e18;
+
     function run() external {
         MockUSDC asset = MockUSDC(vm.envAddress("ASSET_ADDRESS"));
         BorrowLiquidityPool pool = BorrowLiquidityPool(vm.envAddress("POOL_ADDRESS"));
@@ -97,7 +102,7 @@ contract Seed is Script {
         uint64 openAt = uint64(block.timestamp) + OPEN_LEAD;
 
         vm.startBroadcast(DEPLOYER_KEY);
-        uint256 roundId = market.openRound(openAt, openAt + 10 minutes, openAt + 20 minutes);
+        uint256 roundId = market.openRound(openAt, openAt + 10 minutes, openAt + 20 minutes, SEED_STRIKE);
         vm.stopBroadcast();
 
         console2.log("SEED_ROUND=%s", vm.toString(roundId));
@@ -163,7 +168,7 @@ contract Seed is Script {
         // which point "now" has moved and the schedule is already invalid.
         // anvil hides this by mining instantly.
         uint64 openTime = uint64(block.timestamp) + OPEN_LEAD;
-        uint256 roundId = market.openRound(openTime, openTime + 30 minutes, openTime + 60 minutes);
+        uint256 roundId = market.openRound(openTime, openTime + 30 minutes, openTime + 60 minutes, SEED_STRIKE);
 
         // No position is taken here: entry is not open until `openTime`, and
         // every transaction in this script lands within seconds of the last.

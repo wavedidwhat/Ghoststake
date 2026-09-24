@@ -112,7 +112,11 @@ func run() error {
 			"lock_window_s", m.Timing.LockWindow,
 			"resolve_deadline_s", m.Timing.ResolveDeadline,
 			"session", m.SessionLabel(),
-			"feed_heartbeat", m.HeartbeatLabel())
+			"feed_heartbeat", m.HeartbeatLabel(),
+			// Which shape of `openRound` this deployment takes (GHO-79), so
+			// "why does that market not state its question" is answerable
+			// from the boot log rather than from the bytecode.
+			"strike_at_open", m.StrikeAtOpen)
 	}
 
 	k, err := keeper.New(client, signer, source, markets, keeper.Config{

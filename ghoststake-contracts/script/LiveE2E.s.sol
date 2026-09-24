@@ -86,8 +86,16 @@ contract LiveE2E is Script {
         uint64 lockTime = openTime + uint64(vm.envOr("E2E_ENTRY_WINDOW", uint256(120)));
         uint64 closeTime = lockTime + uint64(vm.envOr("E2E_OBSERVATION", uint256(120)));
 
+        // The strike is chosen when the round opens (GHO-79), so the script
+        // has to pick one. Spot from the market's own oracle unless the caller
+        // names a level, which is what a keeper does — and what makes the
+        // round state its question from the first second.
+        (bool ok, uint256 spot,) = market.oracle().readLatest();
+        require(ok, "oracle has no usable price to strike against");
+        uint256 strike = vm.envOr("E2E_STRIKE", spot);
+
         vm.startBroadcast(key);
-        uint256 roundId = market.openRound(openTime, lockTime, closeTime);
+        uint256 roundId = market.openRound(openTime, lockTime, closeTime, strike);
         vm.stopBroadcast();
 
         console2.log("round      %s", vm.toString(roundId));

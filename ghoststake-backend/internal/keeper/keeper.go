@@ -793,8 +793,37 @@ func (k *Keeper) openRound(ctx context.Context, m *Market, now uint64) error {
 	if !k.ready(m, 0, actionOpen) {
 		return nil
 	}
+
+	// A market deployed before GHO-79 has no strike argument, and calling the
+	// four-argument form on it reverts every tick. Both shapes are driven
+	// rather than the old ones being abandoned: they hold real positions, and
+	// a keeper that quietly stopped opening their rounds would look like a
+	// dead market.
+	if !m.StrikeAtOpen {
+		return k.send(ctx, m, 0, actionOpen, "openRound",
+			schedule.OpenTime, schedule.LockTime, schedule.CloseTime)
+	}
+
+	// The level this round asks about, chosen now and public from the moment
+	// it opens (GHO-79). Read through the market's own adapter, so the strike
+	// is a price the settlement path would accept; a feed between
+	// publications simply means the round waits.
+	spot, ok, err := m.Spot(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		slog.Info("keeper: not opening rounds", "market", m.String(),
+			"because", "the oracle has no usable price to strike against")
+		return nil
+	}
+	strike := StrikeFor(spot)
+	if strike == nil {
+		return fmt.Errorf("refusing to open a round: no strike can be made of spot %s", spot)
+	}
+
 	return k.send(ctx, m, 0, actionOpen, "openRound",
-		schedule.OpenTime, schedule.LockTime, schedule.CloseTime)
+		schedule.OpenTime, schedule.LockTime, schedule.CloseTime, strike)
 }
 
 // schedulePlan is SplitHorizon for this market, falling back to the config's

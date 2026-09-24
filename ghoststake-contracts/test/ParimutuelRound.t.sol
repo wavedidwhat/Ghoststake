@@ -82,7 +82,8 @@ contract ParimutuelRoundTest is Test {
         roundId = market.openRound(
             uint64(block.timestamp),
             uint64(block.timestamp) + ENTRY_WINDOW,
-            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW
+            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW,
+            START_PRICE
         );
     }
 
@@ -139,7 +140,7 @@ contract ParimutuelRoundTest is Test {
         uint64 now_ = uint64(block.timestamp);
         vm.prank(owner);
         vm.expectRevert(ParimutuelRound.InvalidSchedule.selector);
-        market.openRound(now_, now_ + ENTRY_CUTOFF, now_ + 10 minutes);
+        market.openRound(now_, now_ + ENTRY_CUTOFF, now_ + 10 minutes, START_PRICE);
     }
 
     function test_openRoundRejectsBackwardsSchedule() public {
@@ -147,10 +148,10 @@ contract ParimutuelRoundTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(ParimutuelRound.InvalidSchedule.selector);
-        market.openRound(now_ - 1, now_ + 5 minutes, now_ + 10 minutes);
+        market.openRound(now_ - 1, now_ + 5 minutes, now_ + 10 minutes, START_PRICE);
 
         vm.expectRevert(ParimutuelRound.InvalidSchedule.selector);
-        market.openRound(now_, now_ + 5 minutes, now_ + 5 minutes);
+        market.openRound(now_, now_ + 5 minutes, now_ + 5 minutes, START_PRICE);
         vm.stopPrank();
     }
 
@@ -158,7 +159,7 @@ contract ParimutuelRoundTest is Test {
         uint64 now_ = uint64(block.timestamp);
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, keeper));
-        market.openRound(now_, now_ + 5 minutes, now_ + 10 minutes);
+        market.openRound(now_, now_ + 5 minutes, now_ + 10 minutes, START_PRICE);
     }
 
     // ------------------------------------------------------------------
@@ -189,7 +190,7 @@ contract ParimutuelRoundTest is Test {
     function test_entryRejectedBeforeOpenTime() public {
         uint64 openAt = uint64(block.timestamp) + 1 hours;
         vm.prank(owner);
-        uint256 roundId = market.openRound(openAt, openAt + ENTRY_WINDOW, openAt + 10 minutes);
+        uint256 roundId = market.openRound(openAt, openAt + ENTRY_WINDOW, openAt + 10 minutes, START_PRICE);
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.TooEarly.selector, roundId, openAt));
@@ -412,7 +413,11 @@ contract ParimutuelRoundTest is Test {
         assertEq(token.balanceOf(address(market)), 100 ether);
     }
 
-    function test_oracleFailureInsideGraceRevertsAndCanBeRetried() public {
+    /// @dev ~~A feed hiccup at lock cost a retry.~~ Since GHO-79 it costs
+    /// nothing at all: locking reads no feed, so an oracle that is down at
+    /// `lockTime` cannot delay or void a round. The outage only matters at
+    /// resolution, where the price actually is the answer.
+    function test_anOracleOutageNoLongerTouchesTheLock() public {
         uint256 roundId = _openRound();
         _take(roundId, alice, ParimutuelRound.Side.Up, 100 ether);
         _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
@@ -421,14 +426,15 @@ contract ParimutuelRoundTest is Test {
         vm.warp(round.lockTime);
         oracle.setOk(false);
 
-        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
-        market.lockRound(roundId);
-
-        // A hiccup should cost a retry, not the round.
-        vm.warp(round.lockTime + LOCK_WINDOW);
-        oracle.setOk(true);
         market.lockRound(roundId);
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Observation));
+        assertEq(market.rounds(roundId).lockPrice, START_PRICE, "the strike survived the outage");
+
+        // Resolution still needs a feed, and still says so.
+        vm.warp(round.closeTime);
+        uint80 feedRound = oracle.oracleRoundId();
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
+        market.resolveRound(roundId, feedRound);
     }
 
     function test_oracleFailurePastTheLockWindowVoids() public {
@@ -499,23 +505,28 @@ contract ParimutuelRoundTest is Test {
     /// @dev A round published *before* the strike was captured is not the
     /// price at `closeTime` under any reading, so naming one is reported
     /// rather than absorbed — and it stays a revert however late it is tried.
-    function test_resolveRejectsAFeedRoundEarlierThanTheLockRead() public {
+    /// @dev ~~Resolution rejected a feed round older than the lock read.~~
+    /// There is no lock read since GHO-79, so that comparison is gone. What
+    /// still stops a caller shopping for a price is the adapter: `readAt`
+    /// accepts exactly one feed round, the last published at or before
+    /// `closeTime`, proven against its successor — see `ChainlinkResolution`
+    /// and the G-series in `AttackMarket`. At this level the property worth
+    /// pinning is narrower: a feed round that says nothing settles nothing.
+    function test_resolveRefusesAFeedRoundTheAdapterWillNotVouchFor() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        uint80 lockRoundId = round.lockOracleRoundId;
-        uint80 earlier = lockRoundId - 1;
+
+        uint80 unknownFeedRound = oracle.oracleRoundId() + 7;
 
         vm.warp(round.closeTime);
-        vm.expectRevert(
-            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
-        );
-        market.resolveRound(roundId, earlier);
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
+        market.resolveRound(roundId, unknownFeedRound);
 
+        // Still refused however late it is called: unavailability is never a
+        // route to a refund, or a loser could wait out the deadline.
         vm.warp(round.closeTime + RESOLVE_DEADLINE * 100);
-        vm.expectRevert(
-            abi.encodeWithSelector(ParimutuelRound.OracleRoundNotAdvanced.selector, roundId, lockRoundId, earlier)
-        );
-        market.resolveRound(roundId, earlier);
+        vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
+        market.resolveRound(roundId, unknownFeedRound);
     }
 
     /// @dev The lock's own round is allowed through. A feed that published
@@ -523,12 +534,82 @@ contract ParimutuelRoundTest is Test {
     /// `closeTime` really is the lock's, the two prices are one observation,
     /// and that is a tie — refunded automatically rather than left for the
     /// owner to unwind by hand.
+    // ------------------------------------------------------------------
+    // The strike is announced at open (GHO-79)
+    // ------------------------------------------------------------------
+
+    /// @dev The property the whole change exists for: a round can be asked
+    /// about before anybody has staked on it. Before this, `lockPrice` was
+    /// zero until lock, so the only question a market could pose was "will it
+    /// be higher in a few minutes".
+    function test_theStrikeIsReadableWhileEntryIsStillOpen() public {
+        uint256 roundId = _openRound();
+
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Open));
+        assertTrue(market.entryIsOpen(roundId));
+        assertEq(round.lockPrice, START_PRICE, "the round states what it settles against from the first second");
+        assertEq(round.lockOracleRoundId, 0, "nothing was read from the feed to open it");
+    }
+
+    function test_openRoundRefusesAZeroStrike() public {
+        uint64 now_ = uint64(block.timestamp);
+        vm.prank(owner);
+        vm.expectRevert(ParimutuelRound.InvalidStrike.selector);
+        market.openRound(now_, now_ + ENTRY_WINDOW, now_ + ENTRY_WINDOW + OBSERVATION_WINDOW, 0);
+    }
+
+    function test_openRoundAnnouncesTheStrike() public {
+        uint64 now_ = uint64(block.timestamp);
+        vm.expectEmit(true, false, false, true, address(market));
+        emit ParimutuelRound.RoundStrikeSet(1, START_PRICE);
+        vm.prank(owner);
+        market.openRound(now_, now_ + ENTRY_WINDOW, now_ + ENTRY_WINDOW + OBSERVATION_WINDOW, START_PRICE);
+    }
+
+    /// @dev The behavioural difference from the old design, stated as a test.
+    /// The feed moves a long way between open and lock; under the old rule the
+    /// round would have settled against 2,500 — the price when `lockRound`
+    /// landed — and Down would have won. It settles against the announced
+    /// 2,000, so Up wins, because that is the question people were answering
+    /// when they staked.
+    function test_theFeedMovingBeforeLockDoesNotMoveTheStrike() public {
+        uint256 roundId = _openRound();
+        _take(roundId, alice, ParimutuelRound.Side.Up, 100 ether);
+        _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
+
+        oracle.setPrice(START_PRICE + 500e8); // 2,500 at lock time
+        _lock(roundId);
+        assertEq(market.rounds(roundId).lockPrice, START_PRICE, "the strike followed the feed");
+
+        _resolveAt(roundId, START_PRICE + 100e8); // 2,100 at close
+
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+        assertEq(uint256(round.status), uint256(ParimutuelRound.Status.Resolved));
+        assertEq(uint256(round.winner), uint256(ParimutuelRound.Side.Up), "2,100 is above the announced 2,000");
+    }
+
+    function test_lockEmitsTheAnnouncedStrikeAndNoFeedRound() public {
+        uint256 roundId = _openRound();
+        _take(roundId, alice, ParimutuelRound.Side.Up, 100 ether);
+        _take(roundId, carol, ParimutuelRound.Side.Down, 100 ether);
+
+        ParimutuelRound.Round memory round = market.rounds(roundId);
+        vm.warp(round.lockTime);
+        vm.expectEmit(true, false, false, true, address(market));
+        emit ParimutuelRound.RoundLocked(roundId, START_PRICE, 0);
+        market.lockRound(roundId);
+    }
+
     function test_aQuietFeedBetweenLockAndCloseVoidsAsATie() public {
         uint256 roundId = _standardRound();
         ParimutuelRound.Round memory round = market.rounds(roundId);
 
+        // The feed has published nothing since before the round opened, so the
+        // last round at or before `closeTime` still carries START_PRICE — the
+        // very level the round struck at. Nothing moved, so nobody won.
         vm.warp(round.closeTime);
-        market.resolveRound(roundId, round.lockOracleRoundId);
+        market.resolveRound(roundId, oracle.oracleRoundId());
 
         assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
         assertEq(market.protocolFees(), 0);

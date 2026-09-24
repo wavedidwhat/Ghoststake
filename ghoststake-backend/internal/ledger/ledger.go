@@ -204,6 +204,13 @@ type Cursor struct {
 // too. That re-read is idempotent and costs one pass of eth_getLogs, which is
 // the cheaper half of the trade against leaving known-missing rows missing
 // forever.
+//
+// Deliberately *not* bumped for GHO-79's `RoundStrikeSet`. A replay would
+// find none of them: markets deployed before the change never emit it, and
+// markets deployed after are indexed live from their first block. The bump
+// would have bought nothing and cost every deployment a full re-read — which
+// since GHO-89 a pruned endpoint refuses outright, stalling the indexer over
+// rows that do not exist.
 const DecoderVersion = "2026-08-28-replay-after-prune"
 
 // Fingerprint identifies a set of watched contract addresses.

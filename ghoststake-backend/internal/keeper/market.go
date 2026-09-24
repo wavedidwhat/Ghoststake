@@ -44,6 +44,11 @@ type Market struct {
 	// opening rounds on alternate ticks.
 	calendarDisqualified bool
 
+	// StrikeAtOpen is whether this deployment takes a strike when a round is
+	// opened (GHO-79). False for the markets deployed before it, which are
+	// still live and still have to be driven — see SupportsStrikeAtOpen.
+	StrikeAtOpen bool
+
 	// Liveness is the feed's measured publication cadence, read once at
 	// startup. Only Heartbeat and Known are meaningful here — LastPublished
 	// is filled in per check, because it is the part that goes stale.
@@ -157,6 +162,14 @@ func LoadMarket(ctx context.Context, client *chain.Client, address string, horiz
 	} else {
 		m.Session = AlwaysOpen()
 	}
+
+	// Asked once, for the same reason as everything else here: a contract's
+	// code cannot change, so the answer cannot either.
+	code, err := client.CodeAt(ctx, round.Address().Hex())
+	if err != nil {
+		return nil, err
+	}
+	m.StrikeAtOpen = SupportsStrikeAtOpen(code)
 
 	// Measured once. The cadence is a property of the feed and does not move;
 	// how long ago it last published is read per check, where it matters.
@@ -393,4 +406,35 @@ func readDescription(ctx context.Context, feed *chain.Contract) string {
 		return ""
 	}
 	return text
+}
+
+// Spot is the price the market's own oracle would report right now, in the
+// adapter's 18-decimal scale — the same scale a strike is stored in.
+//
+// Read through the adapter rather than the feed directly, so the keeper
+// strikes against a price the *contract* would accept: the adapter applies
+// its own staleness bound and, on an L2, its sequencer-uptime check. A strike
+// chosen from a raw feed read the adapter would refuse is a round opened on a
+// number the settlement path does not believe in.
+//
+// `ok` false means the adapter has no usable price at the moment. Not an
+// error: it is the ordinary state of a feed between publications on a quiet
+// chain, and the caller's job is to not open a round yet.
+func (m *Market) Spot(ctx context.Context) (price *big.Int, ok bool, err error) {
+	values, err := m.oracle.CallAt(ctx, nil, "readLatest")
+	if err != nil {
+		return nil, false, err
+	}
+	usable, isBool := values[0].(bool)
+	if !isBool {
+		return nil, false, fmt.Errorf("keeper: readLatest returned %T for ok, want bool", values[0])
+	}
+	if !usable {
+		return nil, false, nil
+	}
+	price, isInt := values[1].(*big.Int)
+	if !isInt {
+		return nil, false, fmt.Errorf("keeper: readLatest returned %T for price, want *big.Int", values[1])
+	}
+	return price, true, nil
 }

@@ -248,3 +248,26 @@ export async function findCloseRound(
   const answer = await readRound(lo);
   return answer === null ? null : lo;
 }
+
+/**
+ * `openRound` as the markets deployed before GHO-79 declare it.
+ *
+ * Those contracts are live, hold positions, and take three arguments. The
+ * app's generated ABI describes the current contract, so driving an older one
+ * needs its own fragment — the alternative is an operator console that can
+ * only work against the newest deployment, which is exactly what GHO-51 spent
+ * a week making unnecessary.
+ */
+export const legacyOpenRoundAbi = [
+  {
+    type: "function",
+    name: "openRound",
+    inputs: [
+      { name: "openTime", type: "uint64" },
+      { name: "lockTime", type: "uint64" },
+      { name: "closeTime", type: "uint64" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+] as const;

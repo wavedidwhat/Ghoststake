@@ -190,8 +190,9 @@ contract MarketRegistryTest is Test {
         // The point: a delisted market is not a paused one. It still opens
         // rounds, and anyone holding a position in it is unaffected.
         vm.prank(owner);
-        uint256 roundId =
-            market.openRound(uint64(block.timestamp), uint64(block.timestamp + 300), uint64(block.timestamp + 600));
+        uint256 roundId = market.openRound(
+            uint64(block.timestamp), uint64(block.timestamp + 300), uint64(block.timestamp + 600), 2000e18
+        );
         assertEq(roundId, 1);
         assertTrue(market.entryIsOpen(roundId));
     }
