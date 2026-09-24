@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
 import { formatAmount } from "@/lib/format";
+import { winnerLabel } from "@/lib/question";
 import type { PositionRound } from "@/lib/positions";
 import { fetchRounds, type RoundsResponse } from "@/lib/roundsApi";
 import { activeChain } from "@/lib/wagmi";
@@ -117,8 +118,8 @@ function Detail({
         <Card>
           <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">The pool</p>
           <dl className="mt-3 space-y-2 text-sm">
-            <Line label="Up" value={`${fmt(round.upPool)} ${symbol}`} />
-            <Line label="Down" value={`${fmt(round.downPool)} ${symbol}`} />
+            <Line label="Yes" value={`${fmt(round.upPool)} ${symbol}`} />
+            <Line label="No" value={`${fmt(round.downPool)} ${symbol}`} />
             <Line label="Total" value={`${fmt(round.totalPool)} ${symbol}`} />
             {round.rakeTaken && (
               <Line label="Rake taken" value={`${fmt(round.rakeTaken)} ${symbol}`} />
@@ -181,7 +182,9 @@ function Detail({
 
 function Outcome({ round }: { round: PositionRound }) {
   if (round.status === "resolved") {
-    return <span className="text-positive">{round.winner === "up" ? "Up won" : "Down won"}</span>;
+    return (
+      <span className="text-positive">{winnerLabel(round.winner) === "Yes" ? "Yes" : "No"} won</span>
+    );
   }
   if (round.status === "void") {
     return (

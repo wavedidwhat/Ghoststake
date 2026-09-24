@@ -5,6 +5,7 @@ import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
+import { sideLabel } from "@/lib/question";
 import { Card } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
@@ -103,6 +104,7 @@ export function MarketBlock({
       rake={params.rake}
       decimals={decimals}
       symbol={position.symbol}
+      feed={feed?.description}
       now={now}
       yourUp={r.up}
       yourDown={r.down}
@@ -386,7 +388,7 @@ function PositionForm({
     if (ok) onDone();
   }
 
-  const sideLabel = side === Side.Up ? "Up" : "Down";
+  const answer = sideLabel(side);
 
   /*
    * The ticket is a sheet, not an inline block (GHO-59).
@@ -401,7 +403,7 @@ function PositionForm({
    * been chosen; closing it is the parent dropping it.
    */
   return (
-    <Sheet open onClose={onClose} title={`Take ${sideLabel} · round ${roundId.toString()}`}>
+    <Sheet open onClose={onClose} title={`${answer} · round ${roundId.toString()}`}>
       <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-sm text-ink">
         {/* The side is named with its arrow and its colour here too, so the
@@ -412,7 +414,7 @@ function PositionForm({
           }`}
         >
           <SideArrow up={side === Side.Up} className="size-3" />
-          {sideLabel}
+          {answer}
         </span>
         <span className="text-ink-muted">on round {roundId.toString()}</span>
       </div>
@@ -474,10 +476,10 @@ function PositionForm({
         {busy
           ? "Working…"
           : invalid
-            ? `Take ${sideLabel}`
+            ? `Take ${answer}`
             : needsTokenApproval || needsDelegation
-            ? `Approve and take ${sideLabel}`
-            : `Take ${sideLabel} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
+            ? `Approve and take ${answer}`
+            : `Take ${answer} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
       </button>
 
       <TxStatus tx={tx} />

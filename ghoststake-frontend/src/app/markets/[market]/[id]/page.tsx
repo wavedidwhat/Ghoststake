@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // stake and whether they can still join.
   const description =
     round.status === "resolved"
-      ? `${round.winner === "up" ? "Up" : "Down"} won. Locked at ${price(round.lockPrice)}, closed at ${price(round.closePrice)}.`
+      ? `${round.winner === "up" ? "Yes" : "No"} won. Struck at ${price(round.lockPrice)}, closed at ${price(round.closePrice)}.`
       : round.status === "void"
         ? `Voided${round.voidReason ? ` — ${round.voidReason}` : ""}. Every stake was refunded.`
         : `${round.phase}. ${pool(round.upPool)} up against ${pool(round.downPool)} down.`;
