@@ -6,7 +6,7 @@ import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
 import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
 import { Figure } from "@/components/ui/Figure";
@@ -26,7 +26,7 @@ export default function VaultPage() {
   const position = useVaultPosition();
 
   return (
-    <AppShell title="Stake" subtitle="Earns while it sits, and backs everything you borrow">
+    <Page title="Stake" subtitle="Earns while it sits, and backs everything you borrow">
       {!wallet.isConnected ? (
         <NeedsWallet what="Your stake, what it earns, and what you can borrow against it all live at your address." />
       ) : !contractsConfigured ? (
@@ -34,7 +34,7 @@ export default function VaultPage() {
       ) : (
         <VaultScreen position={position} address={wallet.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

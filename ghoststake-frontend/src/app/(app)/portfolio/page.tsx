@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useWallet } from "@/hooks/useWallet";
-import { AppShell } from "@/components/AppShell";
+import { Page } from "@/components/Page";
 import { ClaimAllPanel } from "@/components/ClaimAllPanel";
 import { buttonClass } from "@/components/ui/Button";
 import { LoadFailed } from "@/components/ui/LoadFailed";
@@ -36,7 +36,7 @@ export default function PortfolioPage() {
   // on the status rendered "connect a wallet" over a page already showing that
   // address's balances (GHO-77). If we have an address, we have a wallet.
   return (
-    <AppShell title="Portfolio" subtitle="What you have staked, borrowed and riding on a market">
+    <Page title="Portfolio" subtitle="What you have staked, borrowed and riding on a market">
       {!wallet.isConnected ? (
         <Disconnected />
       ) : !contractsConfigured ? (
@@ -53,7 +53,7 @@ export default function PortfolioPage() {
       ) : (
         <Position position={position} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

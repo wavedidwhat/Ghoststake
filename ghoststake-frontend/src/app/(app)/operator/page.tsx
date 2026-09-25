@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePublicClient, useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
 import { Card } from "@/components/ui/Card";
 import { FeesPanel } from "@/components/FeesPanel";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
@@ -64,7 +64,7 @@ export default function OperatorPage() {
   const wallet = useWallet();
 
   return (
-    <AppShell title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
+    <Page title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : !wallet.isConnected ? (
@@ -72,7 +72,7 @@ export default function OperatorPage() {
       ) : (
         <Console address={wallet.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

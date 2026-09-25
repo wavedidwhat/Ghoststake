@@ -5,8 +5,8 @@ import { Eyebrow } from "./Eyebrow";
  * The frame for a screen that stands in for the app: a crash, a 404, a
  * deployment that cannot run (GHO-85).
  *
- * Deliberately not `AppShell`. The shell renders the wallet button and the
- * network guard, both of which read wagmi, and a fallback built from the
+ * Deliberately not the app frame (`app/(app)/layout.tsx`) or `Page`. Those
+ * render the wallet button and the network guard, both of which read wagmi, and a fallback built from the
  * thing that may have thrown is a fallback that throws. No hooks here either,
  * so the server-rendered screens and the client error boundaries share it.
  */

@@ -13,14 +13,23 @@ import { useIsOperator } from "@/hooks/useIsOperator";
  *
  * The destinations and the reasoning about their order live in `@/lib/nav`,
  * so both navs cannot disagree.
+ *
+ * Pinned to the window, not the page (GHO-96). In a flex row a child
+ * stretches to its tallest sibling, so the sidebar grew to the height of
+ * whatever page it sat beside and scrolled away with it — the nav was gone
+ * the moment you scrolled a long page. `sticky` + `h-dvh` holds it at
+ * window height while the document scrolls. The document still scrolls,
+ * rather than an inner `<main>`, because that is what keeps a phone's
+ * address bar collapsing, pull-to-refresh, and Next's scroll restoration on
+ * back and forward. If the nav outgrows a short window, it scrolls itself.
  */
 export function Sidebar() {
   const pathname = usePathname();
   const sections = sidebarSections(useIsOperator());
 
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
-      <div className="border-b border-border px-5 py-4">
+    <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
+      <div className="shrink-0 border-b border-border px-5 py-4">
         {/*
          * A wordmark set in Nippo, deliberately a placeholder until Enoch's
          * mark lands (GHO-58). What it replaced — a letter "G" in a rounded
@@ -35,7 +44,7 @@ export function Sidebar() {
         </p>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 p-3">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-3">
         {sections.map((section) => (
           <div key={section.section} className="flex flex-col gap-0.5">
             {section.items.length > 0 && (
@@ -73,7 +82,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border px-5 py-4">
+      <div className="shrink-0 border-t border-border px-5 py-4">
         <p className="text-xs leading-relaxed text-ink-faint">
           Testnet. Your stake keeps earning while it backs a position.
         </p>

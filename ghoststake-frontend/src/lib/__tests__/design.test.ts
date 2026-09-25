@@ -146,7 +146,7 @@ describe("screens use the primitives in components/ui (GHO-96)", () => {
       "components/MobileNav.tsx": "tab-bar items",
       "components/ConnectButton.tsx": "the wallet menu rows and the pre-hydration placeholder",
       "components/AmountField.tsx": "the Max shortcut beside the label",
-      "app/activity/ActivityScreen.tsx": "the full-width load-more row",
+      "activity/ActivityScreen.tsx": "the full-width load-more row",
     };
     const unexpected = offending(/<button\b/).filter(
       (p) => !Object.keys(bespoke).some((f) => p.endsWith(f)),

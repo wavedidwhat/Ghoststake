@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/AppShell";
+import { Page } from "@/components/Page";
 import { Card } from "@/components/ui/Card";
 import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
@@ -40,7 +40,7 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
   const round = query.data?.rounds.find((r) => String(r.id) === id);
 
   return (
-    <AppShell title={`Round ${id}`} subtitle="What was staked, what settled it, and who won">
+    <Page title={`Round ${id}`} subtitle="What was staked, what settled it, and who won">
       <div className="flex flex-col gap-4">
         <Link
           href={`/markets/${market}`}
@@ -80,7 +80,7 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
           />
         )}
       </div>
-    </AppShell>
+    </Page>
   );
 }
 

@@ -152,6 +152,13 @@ redraw them, and never use an AI-generated illustration or avatar.
 
 ## Components
 
+**The frame** (sidebar, phone tab bar, network banner) is
+`src/app/(app)/layout.tsx`, mounted once and kept across navigations. A
+screen renders `<Page title subtitle>` for its header and body, and never
+the frame itself. The sidebar is pinned to the window and the document
+scrolls past it. Don't make `<main>` the scroller: that loses the phone's
+collapsing address bar, pull-to-refresh and back/forward scroll restoration.
+
 `src/components/ui/` holds the primitives (GHO-96). They take props and
 render; none of them reads wagmi, a hook with data, or the network. Feature
 components (`MarketBlock`, `FeesPanel`, `ConnectButton`) and screens build on

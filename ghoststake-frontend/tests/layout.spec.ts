@@ -213,4 +213,46 @@ test.describe("desktop", () => {
     await expect(page.getByText("Stake earns. Borrow against it.")).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
   });
+
+  test("the sidebar stays put while the page scrolls", async ({ page }) => {
+    // The shell was `flex min-h-dvh`, and a flex child stretches to its
+    // tallest sibling: on any page longer than the window the sidebar grew to
+    // the page's height and scrolled away with it, taking the nav with it.
+    // A short window makes any overflowing route show it.
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await page.goto("/how-it-works");
+    await expect(page.locator("aside")).toBeVisible();
+
+    const box = await page.evaluate(() => {
+      const docHeight = document.documentElement.scrollHeight;
+      window.scrollTo(0, docHeight);
+      const r = document.querySelector("aside")!.getBoundingClientRect();
+      return { docHeight, scrolled: window.scrollY, top: r.top, height: r.height };
+    });
+
+    // Guard the premise: a page that fits the window proves nothing.
+    expect(box.scrolled).toBeGreaterThan(100);
+    // Within half a pixel, not exactly 0: the page's height is fractional and
+    // scroll positions are whole pixels, so a sticky element can sit a
+    // quarter-pixel above the top at the very bottom of the page. The bug
+    // this pins was -402.
+    expect(Math.abs(box.top)).toBeLessThan(0.5);
+    expect(box.height).toBe(600);
+  });
+
+  test("navigating keeps the same frame rather than rebuilding it", async ({ page }) => {
+    // Each screen used to render its own shell, so every navigation tore the
+    // sidebar down and built a new one. Mark the element, move, and check the
+    // mark survived.
+    await page.goto("/how-it-works");
+    const aside = page.locator("aside");
+    await expect(aside).toBeVisible();
+    await aside.evaluate((el) => el.setAttribute("data-probe", "kept"));
+
+    await aside.getByRole("link", { name: /^Stake/ }).click();
+    await expect(page).toHaveURL(/\/stake$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Stake" })).toBeVisible();
+
+    await expect(page.locator("aside")).toHaveAttribute("data-probe", "kept");
+  });
 });

@@ -6,7 +6,7 @@ import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { AppShell, NotConfigured } from "@/components/AppShell";
+import { Page, NotConfigured } from "@/components/Page";
 import { LoadFailed } from "@/components/ui/LoadFailed";
 import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
@@ -46,7 +46,7 @@ export default function LendPage() {
   const pool = useLendPosition();
 
   return (
-    <AppShell title="Lend" subtitle="Supply the pool that borrowers draw from, and earn what they pay">
+    <Page title="Lend" subtitle="Supply the pool that borrowers draw from, and earn what they pay">
       {!poolConfigured ? (
         <NotConfigured what="No lending pool is configured for this network." />
       ) : pool.isError ? (
@@ -63,7 +63,7 @@ export default function LendPage() {
       ) : (
         <LendScreen pool={pool} decimals={pool.decimals} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

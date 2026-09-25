@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type ReactNode } from "react";
 import { useConnection } from "wagmi";
-import { AppShell, NeedsWallet } from "@/components/AppShell";
+import { Page, NeedsWallet } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
 import { LoadFailed } from "@/components/ui/LoadFailed";
 import { Card } from "@/components/ui/Card";
@@ -84,7 +84,7 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
   };
 
   return (
-    <AppShell title="Positions" subtitle="Every view you have taken, and how it went">
+    <Page title="Positions" subtitle="Every view you have taken, and how it went">
       {!address ? (
         <NeedsWallet what="Connect a wallet to see its positions, or open this page with ?address=0x…" />
       ) : (
@@ -149,7 +149,7 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
           )}
         </div>
       )}
-    </AppShell>
+    </Page>
   );
 }
 

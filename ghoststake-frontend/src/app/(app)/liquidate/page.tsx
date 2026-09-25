@@ -1,7 +1,7 @@
 "use client";
 
 import { useWallet } from "@/hooks/useWallet";
-import { AppShell, NotConfigured } from "@/components/AppShell";
+import { Page, NotConfigured } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
 import { LoadFailed } from "@/components/ui/LoadFailed";
 import { Card } from "@/components/ui/Card";
@@ -38,7 +38,7 @@ export default function LiquidatePage() {
   const decimals = useActivityDecimals();
 
   return (
-    <AppShell title="Liquidate" subtitle="Positions past the line, and what closing them pays">
+    <Page title="Liquidate" subtitle="Positions past the line, and what closing them pays">
       {!env.vaultAddress ? (
         <NotConfigured what="No vault is configured for this network." />
       ) : (
@@ -79,7 +79,7 @@ export default function LiquidatePage() {
           )}
         </div>
       )}
-    </AppShell>
+    </Page>
   );
 }
 

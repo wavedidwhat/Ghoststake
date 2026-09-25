@@ -6,7 +6,7 @@ import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
 import { Card, Stat } from "@/components/ui/Card";
 import { Figure } from "@/components/ui/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
@@ -25,7 +25,7 @@ export default function BorrowPage() {
   const position = useVaultPosition();
 
   return (
-    <AppShell title="Borrow" subtitle="Draw against your collateral, or repay what you owe">
+    <Page title="Borrow" subtitle="Draw against your collateral, or repay what you owe">
       {!wallet.isConnected ? (
         <NeedsWallet what="Borrowing capacity is a property of your deposited collateral." />
       ) : !contractsConfigured ? (
@@ -37,7 +37,7 @@ export default function BorrowPage() {
       ) : (
         <BorrowScreen position={position} decimals={position.decimals} address={wallet.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { SideArrow } from "@/components/ui/icons";
-import { AppShell, NotConfigured } from "@/components/AppShell";
+import { Page, NotConfigured } from "@/components/Page";
 import { Card } from "@/components/ui/Card";
 import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
@@ -48,13 +48,13 @@ import { Badge } from "@/components/ui/Badge";
  */
 export function MarketsScreen() {
   return (
-    <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
+    <Page title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : (
         <RoundsScreen />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

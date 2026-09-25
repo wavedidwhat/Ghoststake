@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useConnection } from "wagmi";
-import { AppShell, NotConfigured } from "@/components/AppShell";
+import { Page, NotConfigured } from "@/components/Page";
 import { Card } from "@/components/ui/Card";
 import { MarketBlock } from "@/components/MarketBlock";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
@@ -27,7 +27,7 @@ export function MarketScreen({ market }: { market: string }) {
   const connection = useConnection();
 
   return (
-    <AppShell
+    <Page
       title="Market"
       subtitle="Take a view with borrowed capital — your stake keeps earning"
     >
@@ -41,7 +41,7 @@ export function MarketScreen({ market }: { market: string }) {
         // reading one never did.
         <Body market={market} address={connection.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 

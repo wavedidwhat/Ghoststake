@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnection } from "wagmi";
-import { AppShell, NeedsWallet } from "@/components/AppShell";
+import { Page, NeedsWallet } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
 import { LoadFailed } from "@/components/ui/LoadFailed";
 import { Card } from "@/components/ui/Card";
@@ -50,7 +50,7 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
   const decimals = useActivityDecimals();
 
   return (
-    <AppShell title="Activity" subtitle="Everything this address has done here, newest first">
+    <Page title="Activity" subtitle="Everything this address has done here, newest first">
       {!address ? (
         <NeedsWallet what="Connect a wallet to see its history, or open this page with ?address=0x…" />
       ) : (
@@ -96,7 +96,7 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
           )}
         </div>
       )}
-    </AppShell>
+    </Page>
   );
 }
 
