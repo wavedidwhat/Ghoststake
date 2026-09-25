@@ -6,6 +6,7 @@ import {
   erc20Abi,
   maxUint256,
   numberToHex,
+  toFunctionSelector,
 } from "viem";
 import {
   aggregatorV3InterfaceAbi,
@@ -127,7 +128,10 @@ function defaults(): Table {
       closeTime: now() + 1200n,
       status: 1, // Open
       winner: 0,
-      lockPrice: 0n,
+      // The strike, known from the moment the round opened (GHO-79). It used
+      // to be zero until lock, which is what made a market unable to state
+      // what it was asking.
+      lockPrice: 2_690n * 10n ** 18n,
       closePrice: 0n,
       lockOracleRoundId: 0n,
       upPool: unit(300),
@@ -214,6 +218,11 @@ export class MockChain {
         return ok(numberToHex(1000));
       case "eth_getBlockByNumber":
         return ok({ number: numberToHex(1000), timestamp: numberToHex(now), hash: `0x${"11".repeat(32)}` });
+      case "eth_getCode":
+        // The dispatch table the app reads to tell which shape of contract a
+        // market is (GHO-79). The mock market is a current one, so it carries
+        // the strike-at-open selector.
+        return ok(`0x60806040${toFunctionSelector("openRound(uint64,uint64,uint64,uint256)").slice(2)}`);
       case "eth_call":
         return this.call(req);
       default:

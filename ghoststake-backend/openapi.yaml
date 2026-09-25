@@ -722,7 +722,13 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Uint256"
             - type: "null"
-          description: Null until the round locks.
+          description: >
+            The level the round settles against — its strike. Known from the
+            moment the round opens on markets deployed since GHO-79, which is
+            what lets a market state its question. Markets deployed before it
+            leave this null until the round locks. Named `lockPrice` because
+            that is where it used to come from, and because renaming it would
+            break every consumer for a word.
         closePrice:
           oneOf:
             - $ref: "#/components/schemas/Uint256"

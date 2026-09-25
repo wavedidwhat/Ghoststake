@@ -85,6 +85,23 @@ func (c *Client) BalanceOf(ctx context.Context, address string) (*big.Int, error
 	return bal, nil
 }
 
+// CodeAt returns the deployed bytecode at an address.
+//
+// Used to ask what a deployment can do before calling it. Contracts here are
+// not upgradeable (GHO-52), so several versions of the same contract are live
+// at once and a caller cannot assume the newest ABI — see the keeper's
+// strike-at-open probe.
+func (c *Client) CodeAt(ctx context.Context, address string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	code, err := c.eth.CodeAt(ctx, commonAddress(address), nil)
+	if err != nil {
+		return nil, fmt.Errorf("code at %s: %w", address, err)
+	}
+	return code, nil
+}
+
 // FilterLogs and HeaderByNumber back the indexer.
 //
 // No internal timeout on either: a log range can legitimately take a while on

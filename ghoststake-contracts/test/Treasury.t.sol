@@ -158,9 +158,11 @@ contract TreasuryTest is Test {
         vm.prank(loser);
         token.approve(address(market), type(uint256).max);
 
+        uint256 strike0_ = MockRoundOracle(address(market.oracle())).price();
         vm.prank(owner);
-        roundId =
-            market.openRound(uint64(block.timestamp + 1), uint64(block.timestamp + 100), uint64(block.timestamp + 200));
+        roundId = market.openRound(
+            uint64(block.timestamp + 1), uint64(block.timestamp + 100), uint64(block.timestamp + 200), strike0_
+        );
 
         vm.warp(block.timestamp + 2);
         market.takePosition(roundId, ParimutuelRound.Side.Up, 100e18);

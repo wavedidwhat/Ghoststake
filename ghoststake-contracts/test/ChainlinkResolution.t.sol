@@ -41,6 +41,12 @@ contract ChainlinkResolutionTest is Test {
     address internal alice = makeAddr("alice"); // Up
     address internal carol = makeAddr("carol"); // Down
 
+    /// @dev The feed price right now — what a keeper picks as the strike
+    /// when it opens a round, since GHO-79 fixed the strike at open.
+    function _spot() internal view returns (uint256 price) {
+        (, price,) = adapter.readLatest();
+    }
+
     function setUp() public {
         vm.warp(BASE_TIME);
 
@@ -85,11 +91,13 @@ contract ChainlinkResolutionTest is Test {
     /// @dev Opens a two-sided round and locks it at `lockTime`, with the feed
     /// publishing on a believable cadence around the schedule.
     function _openAndLock() internal returns (uint256 roundId, uint64 closeTime) {
+        uint256 strike0_ = _spot();
         vm.prank(owner);
         roundId = market.openRound(
             uint64(block.timestamp),
             uint64(block.timestamp) + ENTRY_WINDOW,
-            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW
+            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW,
+            strike0_
         );
 
         vm.prank(alice);
@@ -215,15 +223,23 @@ contract ChainlinkResolutionTest is Test {
         assertEq(market.protocolFees(), 0);
     }
 
-    /// @dev Sequencer down at lock time: the strike cannot be captured, and
-    /// the lock window runs out. Everyone gets their money back rather than
-    /// betting on a chain nobody could reach.
-    function test_sequencerDowntimeAtLockVoidsTheRound() public {
+    /// @dev ~~Sequencer downtime at lock voided the round.~~ Since GHO-79
+    /// locking reads no feed, so an L2 sequencer that is down at `lockTime`
+    /// costs the round nothing: the strike was fixed at open and the outcome
+    /// is read at `closeTime`. That is one fewer way for a funded round to be
+    /// refunded over an infrastructure hiccup.
+    ///
+    /// Downtime that reaches `closeTime` still blocks settlement, which is
+    /// the half that has to keep working: the price during an outage is not
+    /// one anybody should be paid against.
+    function test_sequencerDowntimeAtLockNoLongerVoidsTheRound() public {
+        uint256 strike1_ = _spot();
         vm.prank(owner);
         uint256 roundId = market.openRound(
             uint64(block.timestamp),
             uint64(block.timestamp) + ENTRY_WINDOW,
-            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW
+            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW,
+            strike1_
         );
         vm.prank(alice);
         market.takePosition(roundId, ParimutuelRound.Side.Up, 100 ether);
@@ -231,18 +247,30 @@ contract ChainlinkResolutionTest is Test {
         market.takePosition(roundId, ParimutuelRound.Side.Down, 100 ether);
 
         ParimutuelRound.Round memory round = market.rounds(roundId);
-        sequencer.set(1, uint256(round.lockTime) - 60); // down
+        sequencer.set(1, uint256(round.lockTime) - 60); // down across the lock
 
         vm.warp(round.lockTime);
-        feed.push(2000e8, round.lockTime);
+        market.lockRound(roundId);
+        assertEq(
+            uint256(market.phaseOf(roundId)),
+            uint256(ParimutuelRound.Phase.Observation),
+            "an outage at lock no longer costs the round"
+        );
+        assertEq(market.rounds(roundId).lockPrice, strike1_, "the strike is the one announced at open");
+
+        // Still down at close: no settlement, and no refund by default either.
+        vm.warp(round.closeTime);
+        uint80 pinned = feed.push(2100e8, uint256(round.closeTime) - 10);
+        feed.push(2100e8, uint256(round.closeTime) + 10); // the successor that proves it
         vm.expectRevert(abi.encodeWithSelector(ParimutuelRound.OracleUnavailable.selector, roundId));
-        market.lockRound(roundId);
+        market.resolveRound(roundId, pinned);
 
-        vm.warp(uint256(round.lockTime) + LOCK_WINDOW + 1);
-        market.lockRound(roundId);
-
-        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Void));
-        assertEq(market.claimableOf(roundId, alice), 100 ether);
+        // Recovered, and past the grace period: the round settles normally,
+        // against the strike it announced.
+        sequencer.set(0, uint256(round.closeTime) - SEQUENCER_GRACE - 1);
+        market.resolveRound(roundId, pinned);
+        assertEq(uint256(market.phaseOf(roundId)), uint256(ParimutuelRound.Phase.Resolved));
+        assertEq(uint256(market.rounds(roundId).winner), uint256(ParimutuelRound.Side.Up), "2100 is above the strike");
     }
 
     /// @dev Downtime that straddles the close is worse than downtime now: the

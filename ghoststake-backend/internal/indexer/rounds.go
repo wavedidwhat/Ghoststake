@@ -34,6 +34,12 @@ func decodeRound(name string, f *fields, _ types.Log) ledger.Batch {
 			},
 		})
 
+	case ledger.RoundStrikeSet:
+		return roundBatch(ledger.RoundEvent{
+			RoundID: f.roundID("roundId"),
+			Data:    map[string]string{"strikePrice": f.amount("strikePrice").String()},
+		})
+
 	case ledger.PositionTaken:
 		side, err := ledger.SideFromEnum(f.enum("side"))
 		if err != nil {
