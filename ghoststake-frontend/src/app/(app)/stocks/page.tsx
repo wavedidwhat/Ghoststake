@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { AmountField, TxStatus } from "@/components/AmountField";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
+import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
 import { AssetLogo } from "@/components/AssetLogo";
-import { Card, Stat } from "@/components/Card";
+import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
-import { Figure } from "@/components/Figure";
+import { Figure } from "@/components/ui/Figure";
+import { Button } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { useNow } from "@/hooks/useNow";
 import { useStockLoan } from "@/hooks/useStockLoan";
@@ -30,9 +34,6 @@ import {
 
 const ROBINHOOD_FAUCET = "https://faucet.testnet.chain.robinhood.com";
 
-const button =
-  "cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50";
-
 type Loan = ReturnType<typeof useStockLoan>;
 
 export default function StocksPage() {
@@ -40,7 +41,7 @@ export default function StocksPage() {
   const loan = useStockLoan();
 
   return (
-    <AppShell title="Stock loans" subtitle="Borrow dollars against your shares, without selling them">
+    <Page title="Stock loans" subtitle="Borrow dollars against your shares, without selling them">
       {!loan.configured ? (
         <NotConfigured what="Stock loans need tokenized stock, which only Robinhood Chain has. No stock vault is configured for this network." />
       ) : !wallet.isConnected ? (
@@ -51,7 +52,7 @@ export default function StocksPage() {
         </Card>
       ) : !loan.ready || loan.stableDecimals === undefined || loan.originationFee === undefined ? (
         <Card>
-          <div className="h-24 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-24" />
         </Card>
       ) : (
         <StockScreen
@@ -61,7 +62,7 @@ export default function StocksPage() {
           address={wallet.address}
         />
       )}
-    </AppShell>
+    </Page>
   );
 }
 
@@ -135,7 +136,7 @@ function StockScreen({
       <div className="lg:col-span-3">
         <Card>
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">Your stock</h2>
+            <Eyebrow as="h2">Your stock</Eyebrow>
             <a
               href={ROBINHOOD_FAUCET}
               target="_blank"
@@ -235,32 +236,6 @@ function CollateralRow({
   );
 }
 
-function Toggle<T extends string>({
-  modes,
-  mode,
-  onChange,
-}: {
-  modes: readonly T[];
-  mode: T;
-  onChange: (m: T) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1 rounded-sm bg-raised p-1">
-      {modes.map((m) => (
-        <button
-          key={m}
-          onClick={() => onChange(m)}
-          className={`flex-1 cursor-pointer rounded-sm px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
-            mode === m ? "bg-surface text-ink" : "text-ink-muted hover:text-ink"
-          }`}
-        >
-          {m}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral; blocked: boolean }) {
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("");
@@ -309,9 +284,10 @@ function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral;
         </div>
       </div>
       <div className="mt-4">
-        <Toggle
-          modes={["deposit", "withdraw"] as const}
-          mode={mode}
+        <SegmentedControl
+          label="Deposit or withdraw stock"
+          options={[{ value: "deposit", label: "Deposit" }, { value: "withdraw", label: "Withdraw" }] as const}
+          value={mode}
           onChange={(m) => {
             setMode(m);
             setAmount("");
@@ -330,9 +306,9 @@ function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral;
           maxLabel={mode === "deposit" ? "Wallet" : loan.debt ? "Free" : "Deposited"}
           disabled={busy}
         />
-        <button onClick={submit} disabled={disabled} className={button}>
+        <Button onClick={submit} disabled={disabled}>
           {busy ? "Working…" : needsApproval ? `Approve and deposit` : mode === "deposit" ? "Deposit" : "Withdraw"}
-        </button>
+        </Button>
         {overMax && (
           <p className="text-xs text-negative">
             {mode === "deposit" ? "More than your wallet holds." : "Your loan needs this much to stay within its limit."}
@@ -419,9 +395,10 @@ function LoanPanel({
         plus a one-off {formatPercent(fee, 1)} fee on each borrow.
       </p>
       <div className="mt-4">
-        <Toggle
-          modes={["borrow", "repay"] as const}
-          mode={mode}
+        <SegmentedControl
+          label="Borrow or repay"
+          options={[{ value: "borrow", label: "Borrow" }, { value: "repay", label: "Repay" }] as const}
+          value={mode}
           onChange={(m) => {
             setMode(m);
             setAmount("");
@@ -462,9 +439,9 @@ function LoanPanel({
             </span>
           </div>
         </div>
-        <button onClick={submit} disabled={disabled} className={button}>
+        <Button onClick={submit} disabled={disabled}>
           {busy ? "Working…" : needsApproval ? "Approve and repay" : mode === "borrow" ? "Borrow" : "Repay"}
-        </button>
+        </Button>
         {mode === "borrow" && blocked && (
           <p className="text-xs text-warning">Paused until the stale price updates.</p>
         )}
@@ -536,9 +513,10 @@ function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; 
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
-          <Toggle
-            modes={["supply", "withdraw"] as const}
-            mode={mode}
+          <SegmentedControl
+            label="Lend or withdraw"
+            options={[{ value: "supply", label: "Lend" }, { value: "withdraw", label: "Withdraw" }] as const}
+            value={mode}
             onChange={(m) => {
               setMode(m);
               setAmount("");
@@ -555,9 +533,9 @@ function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; 
             maxLabel={mode === "supply" ? "Wallet" : "Available"}
             disabled={busy}
           />
-          <button onClick={submit} disabled={disabled} className={button}>
+          <Button onClick={submit} disabled={disabled}>
             {busy ? "Working…" : needsApproval ? "Approve and lend" : mode === "supply" ? "Lend" : "Withdraw"}
-          </button>
+          </Button>
           {overMax && (
             <p className="text-xs text-negative">
               {mode === "supply" ? "More than your wallet holds." : "More than is free to withdraw right now."}
