@@ -19,6 +19,12 @@ services:
         NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
         NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ghoststake.dev.wavedidwhat.com}
+        # Where this deployment is served from. Only the share card reads it
+        # — and that is exactly why it was missed for so long: nothing on the
+        # site looks wrong without it, because `og:image` is fetched by
+        # somebody else's server (GHO-90). A build with this unset is now
+        # refused outright in next.config.ts.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://ghoststake.dev.wavedidwhat.com}
         NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0x0ea31e490f9a9a21d2410add76668e4c2c24ba0e}
         NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0x1b851497a6f17af723eb93bdeebe4a3d1a19a6f6}
         NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0x4650029f444997f76f4c6e0e0159865582da6ab5}
