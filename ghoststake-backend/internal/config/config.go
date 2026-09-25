@@ -65,6 +65,24 @@ type IndexerConfig struct {
 	// fingerprint check exists to catch — no reason to create a new one.
 	MarketAddresses []string
 
+	// EventOracles is every EventRoundOracle to index, each named with the
+	// market and round it settles (GHO-91).
+	//
+	// Read from EVENT_ORACLES as a comma-separated list of
+	// `oracle:market:roundId`. The pair is configured rather than read off
+	// the chain because the indexer's stream identity is a fingerprint of the
+	// addresses it watches, fixed before any RPC call is made — resolving it
+	// later would change the fingerprint and start a fresh stream, which
+	// since GHO-89 means a full re-read a pruned endpoint refuses outright.
+	//
+	// A configured copy of a fact the contract also stores is the thing this
+	// codebase argues against everywhere else, so it is *checked* rather than
+	// trusted: the oracle emits `MarketSet(market, roundId)` when it is
+	// pointed at a round, and the decoder refuses a log whose pair disagrees
+	// with the one configured here. A typo then stops the indexer instead of
+	// filing a question's whole lifecycle under somebody else's round.
+	EventOracles []EventOracle
+
 	// StartBlock should be the deployment block. Scanning from genesis on a
 	// public RPC is slow and returns nothing for the whole range.
 	StartBlock uint64
@@ -116,6 +134,7 @@ func Load() (Config, error) {
 			VaultAddress:      env("VAULT_ADDRESS", ""),
 			PoolAddress:       env("POOL_ADDRESS", ""),
 			MarketAddresses:   envList("MARKET_ADDRESSES", env("MARKET_ADDRESS", "")),
+			EventOracles:      parseEventOracles(envList("EVENT_ORACLES", "")),
 			StartBlock:        uint64(envInt64("INDEXER_START_BLOCK", 0)),
 			Confirmations:     uint64(envInt64("INDEXER_CONFIRMATIONS", 5)),
 			SkipDecoderReplay: envBool("INDEXER_SKIP_DECODER_REPLAY", false),
@@ -197,11 +216,73 @@ func Load() (Config, error) {
 				return Config{}, err
 			}
 		}
+		for i, o := range c.Indexer.EventOracles {
+			if o.Malformed != "" {
+				return Config{}, fmt.Errorf("EVENT_ORACLES[%d] is not oracle:market:roundId: %q", i, o.Malformed)
+			}
+			if err := validateAddress(fmt.Sprintf("EVENT_ORACLES[%d] oracle", i), o.Oracle); err != nil {
+				return Config{}, err
+			}
+			if err := validateAddress(fmt.Sprintf("EVENT_ORACLES[%d] market", i), o.Market); err != nil {
+				return Config{}, err
+			}
+			// Round ids start at 1. Zero means the round was left off the
+			// entry, and a lifecycle filed under round 0 would be attached to
+			// nothing and visible nowhere.
+			if o.RoundID == 0 {
+				return Config{}, fmt.Errorf("EVENT_ORACLES[%d] has no round id: %q", i, o.Raw)
+			}
+		}
 		if c.Indexer.StartBlock == 0 {
 			return Config{}, fmt.Errorf("INDEXER_START_BLOCK is required when INDEXER_ENABLED=true")
 		}
 	}
 	return c, nil
+}
+
+// EventOracle is one question's oracle and the round it settles.
+type EventOracle struct {
+	Oracle  string
+	Market  string
+	RoundID uint64
+
+	// Raw is the entry as it was written, for error messages.
+	Raw string
+
+	// Malformed is set, to Raw, when the entry could not be split into three
+	// parts. Carried rather than returned as an error from the parser so
+	// that, like every other bad value here, it is reported by Load's
+	// validation with the variable named — a parser that returned an error
+	// would fail before the "is the indexer even enabled" check.
+	Malformed string
+}
+
+// parseEventOracles splits `oracle:market:roundId` entries.
+func parseEventOracles(entries []string) []EventOracle {
+	out := make([]EventOracle, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parts := strings.Split(entry, ":")
+		if len(parts) != 3 {
+			out = append(out, EventOracle{Raw: entry, Malformed: entry})
+			continue
+		}
+		id, err := strconv.ParseUint(strings.TrimSpace(parts[2]), 10, 64)
+		if err != nil {
+			out = append(out, EventOracle{Raw: entry, Malformed: entry})
+			continue
+		}
+		out = append(out, EventOracle{
+			Raw:     entry,
+			Oracle:  strings.TrimSpace(parts[0]),
+			Market:  strings.TrimSpace(parts[1]),
+			RoundID: id,
+		})
+	}
+	return out
 }
 
 var addressRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)

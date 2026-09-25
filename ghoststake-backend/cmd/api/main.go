@@ -150,6 +150,7 @@ func prepareIndexer(ctx context.Context, cfg config.Config, st *store.Store) (ht
 		VaultAddress:      cfg.Indexer.VaultAddress,
 		PoolAddress:       cfg.Indexer.PoolAddress,
 		MarketAddresses:   cfg.Indexer.MarketAddresses,
+		EventOracles:      cfg.Indexer.EventOracles,
 		StartBlock:        cfg.Indexer.StartBlock,
 		Confirmations:     cfg.Indexer.Confirmations,
 		SkipDecoderReplay: cfg.Indexer.SkipDecoderReplay,
