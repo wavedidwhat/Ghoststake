@@ -13,12 +13,17 @@ import (
 // is a compile error in the projection instead of a status that silently
 // stops arriving.
 const (
-	RoundOpened   = "RoundOpened"
-	PositionTaken = "PositionTaken"
-	RoundLocked   = "RoundLocked"
-	RoundResolved = "RoundResolved"
-	RoundVoided   = "RoundVoided"
-	Claimed       = "Claimed"
+	RoundOpened = "RoundOpened"
+	// RoundStrikeSet carries the level a round asks about, emitted when it
+	// opens (GHO-79). Its own event rather than a field on RoundOpened, so
+	// markets deployed before the change keep decoding unchanged — they
+	// simply never emit it, and their strike still arrives at lock.
+	RoundStrikeSet = "RoundStrikeSet"
+	PositionTaken  = "PositionTaken"
+	RoundLocked    = "RoundLocked"
+	RoundResolved  = "RoundResolved"
+	RoundVoided    = "RoundVoided"
+	Claimed        = "Claimed"
 )
 
 // Sides, as the contract's `Side` enum orders them.
@@ -219,6 +224,12 @@ func applyRoundEvent(r *Round, e RoundEvent) {
 		case SideDown:
 			r.DownPool = new(big.Int).Add(r.DownPool, e.Amount)
 		}
+
+	case RoundStrikeSet:
+		// The strike, known while entry is still open. RoundLocked sets the
+		// same field later with the same value, which is deliberate: a market
+		// deployed before GHO-79 only ever learns it there.
+		r.LockPrice = bigField(e.Data, "strikePrice")
 
 	case RoundLocked:
 		r.Status = StatusLocked

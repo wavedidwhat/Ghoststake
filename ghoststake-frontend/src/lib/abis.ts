@@ -667,6 +667,11 @@ export const parimutuelRoundAbi = [
         "name": "closeTime",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "strikePrice",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [

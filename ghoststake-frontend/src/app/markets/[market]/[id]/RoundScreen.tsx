@@ -149,10 +149,10 @@ function Detail({
                 decimals, so a price is WAD here whatever the aggregator
                 underneath reports. */}
             <Line
-              label="Strike (at lock)"
+              label="Strike"
               value={
                 round.lockPrice === null
-                  ? "not locked yet"
+                  ? "not set"
                   : formatAmount(BigInt(round.lockPrice), 18, 2)
               }
             />

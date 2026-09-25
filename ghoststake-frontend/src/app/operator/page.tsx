@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { usePublicClient, useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
-import { TxStatus } from "@/components/AmountField";
+import { AmountField, TxStatus } from "@/components/AmountField";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { FeesPanel } from "@/components/FeesPanel";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
+import { useMarketShape } from "@/hooks/useMarketShape";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useNow } from "@/hooks/useNow";
 import { useMarketParams, useRounds, type MarketParams, type MarketRound } from "@/hooks/useRounds";
@@ -18,13 +19,16 @@ import {
   demoPriceFeedAbi,
   parimutuelRoundAbi,
 } from "@/lib/abis";
+import { parseAmount } from "@/lib/amount";
 import { formatAmount } from "@/lib/format";
+import { strikeFor } from "@/lib/strike";
 import { anyMarketConfigured, type Market } from "@/lib/markets";
 import {
   Action,
   actionFor,
   findCloseRound,
   isOwnerOnly,
+  legacyOpenRoundAbi,
   scheduleFrom,
   scheduleProblem,
   warningsFor,
@@ -239,7 +243,27 @@ function OpenRoundForm({
   const [lead, setLead] = useState("60");
   const [entry, setEntry] = useState("300");
   const [observation, setObservation] = useState("300");
+  const [strike, setStrike] = useState("");
   const tx = useTransaction();
+
+  // Which shape of `openRound` this deployment takes, and what it would
+  // strike against (GHO-79). Both read from the chain rather than assumed:
+  // the markets on Sepolia predate the strike and still have to be openable
+  // from here.
+  const shape = useMarketShape(market);
+  const suggested = strikeFor(shape.spot);
+
+  // The field is prefilled with the suggestion and stays editable — the
+  // operator is the one person who should be able to ask a different
+  // question, e.g. a round deliberately struck away from spot.
+  const strikeInput = strike === "" ? (suggested === null ? "" : formatAmount(suggested, 18, 2)) : strike;
+  const strikeAmount = strike === "" ? suggested : parseAmount(strike, 18);
+  const strikeProblem =
+    shape.strikeAtOpen && strikeAmount === null
+      ? shape.spot === undefined
+        ? "The feed has no usable price to strike against yet."
+        : "That is not a price."
+      : null;
 
   const seconds = (value: string) => {
     const parsed = Number(value);
@@ -270,8 +294,34 @@ function OpenRoundForm({
         <SecondsField label="Entry window" value={entry} onChange={setEntry} disabled={busy}
           hint={`Open to locked. Entry actually stops ${params.entryCutoff}s before the lock.`} />
         <SecondsField label="Observation" value={observation} onChange={setObservation} disabled={busy}
-          hint="Locked to close. The strike is measured against the price at the end of this." />
+          hint="Locked to close. The outcome is the price at the end of this." />
       </div>
+
+      {shape.strikeAtOpen && (
+        <div className="mt-4">
+          <AmountField
+            label="Strike"
+            value={strikeInput}
+            onChange={setStrike}
+            max={undefined}
+            decimals={18}
+            symbol="USD"
+            disabled={busy}
+            hint={
+              suggested === null
+                ? "The level the round asks about. Stated from the moment it opens."
+                : `The level the round asks about, stated from the moment it opens. Spot rounds to ${formatAmount(suggested, 18, 2)}.`
+            }
+          />
+        </div>
+      )}
+
+      {shape.strikeAtOpen === false && (
+        <p className="mt-4 text-xs text-ink-faint">
+          This market was deployed before rounds carried a strike, so its rounds ask only whether the
+          price will be higher at the close, and the level is read when the round locks.
+        </p>
+      )}
 
       {schedule && (
         <dl className="mt-4 grid gap-2 rounded-sm border border-border bg-raised/40 p-3 text-xs sm:grid-cols-3">
@@ -290,6 +340,7 @@ function OpenRoundForm({
       </p>
 
       {problem && <p className="mt-3 text-xs text-negative">{problem}</p>}
+      {strikeProblem && <p className="mt-3 text-xs text-negative">{strikeProblem}</p>}
 
       {!isOwner && (
         <p className="mt-3 text-xs text-warning">
@@ -299,15 +350,34 @@ function OpenRoundForm({
 
       <div className="mt-4 flex items-center gap-3">
         <button
-          disabled={busy || !schedule || problem !== null || !isOwner}
+          disabled={
+            busy ||
+            !schedule ||
+            problem !== null ||
+            !isOwner ||
+            shape.strikeAtOpen === undefined ||
+            strikeProblem !== null
+          }
           onClick={async () => {
             if (!schedule) return;
-            const ok = await tx.send({
-              address: market.address,
-              abi: parimutuelRoundAbi,
-              functionName: "openRound",
-              args: [schedule.openTime, schedule.lockTime, schedule.closeTime],
-            });
+            // The two live shapes of this contract. Sending the wrong one
+            // reverts, so the argument list follows what the bytecode says
+            // rather than what this build was compiled against.
+            const ok = await tx.send(
+              shape.strikeAtOpen && strikeAmount !== null
+                ? {
+                    address: market.address,
+                    abi: parimutuelRoundAbi,
+                    functionName: "openRound",
+                    args: [schedule.openTime, schedule.lockTime, schedule.closeTime, strikeAmount],
+                  }
+                : {
+                    address: market.address,
+                    abi: legacyOpenRoundAbi,
+                    functionName: "openRound",
+                    args: [schedule.openTime, schedule.lockTime, schedule.closeTime],
+                  },
+            );
             if (ok) onDone();
           }}
           className="cursor-pointer rounded-sm bg-action px-4 py-2 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"

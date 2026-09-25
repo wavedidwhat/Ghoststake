@@ -193,7 +193,7 @@ contract DemoPriceFeedTest is Test {
         feed.push(2000e8);
 
         vm.prank(operator);
-        uint256 roundId = market.openRound(uint64(BASE_TIME), uint64(BASE_TIME + 30), uint64(BASE_TIME + 60));
+        uint256 roundId = market.openRound(uint64(BASE_TIME), uint64(BASE_TIME + 30), uint64(BASE_TIME + 60), 2000e18);
 
         vm.startPrank(up);
         asset.approve(address(market), 100e6);
