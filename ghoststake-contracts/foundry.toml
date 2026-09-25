@@ -30,9 +30,22 @@ quote_style = "double"
 [rpc_endpoints]
 arbitrum_sepolia = "${ARBITRUM_SEPOLIA_RPC_URL}"
 arbitrum_one = "${ARBITRUM_ONE_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+# GHO-21. Robinhood Chain is an Arbitrum Orbit/Nitro L2 with ETH gas, so
+# Foundry needs nothing but the endpoint. Verified live on 2026-09-25:
+# chain 46630, nitro/v3.12.0-rc.3, gas 0.01 gwei, multicall3 deployed at the
+# canonical address (which wagmi's batched reads depend on).
+robinhood_testnet = "${ROBINHOOD_TESTNET_RPC_URL}"
+robinhood = "${ROBINHOOD_RPC_URL}"
 
 [etherscan]
 arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}", chain = 421614 }
 arbitrum_one = { key = "${ARBISCAN_API_KEY}", chain = 42161 }
+# Blockscout, not Etherscan, so the key is unused and any non-empty string
+# does. Confirmed the instance accepts verification: 1657 solc builds offered,
+# 0.8.26 among them, and `standard-input` supported — which is the mode that
+# reproduces our via_ir/optimizer settings exactly rather than by flattening.
+robinhood_testnet = { key = "unused", chain = 46630, url = "https://explorer.testnet.chain.robinhood.com/api" }
+robinhood = { key = "unused", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
