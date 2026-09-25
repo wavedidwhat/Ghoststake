@@ -15,9 +15,12 @@ services:
       #
       # None of it is secret: it is all inlined into a public client bundle.
       # After deploying new contracts, update these and rebuild.
+      #
+      # Robinhood Chain testnet (46630) since GHO-21; the Sepolia values are in
+      # git history.
       args:
-        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
-        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-46630}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://rpc.testnet.chain.robinhood.com}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ghoststake.dev.wavedidwhat.com}
         # Where this deployment is served from. Only the share card reads it
         # — and that is exactly why it was missed for so long: nothing on the
@@ -25,20 +28,20 @@ services:
         # somebody else's server (GHO-90). A build with this unset is now
         # refused outright in next.config.ts.
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://ghoststake.dev.wavedidwhat.com}
-        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0x0ea31e490f9a9a21d2410add76668e4c2c24ba0e}
-        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0x1b851497a6f17af723eb93bdeebe4a3d1a19a6f6}
-        NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0x4650029f444997f76f4c6e0e0159865582da6ab5}
-        NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0x09f2ac4b5d14c27a13d5d6b35405baaf4afc8730}
+        NEXT_PUBLIC_VAULT_ADDRESS: ${NEXT_PUBLIC_VAULT_ADDRESS:-0xf7b312a0f0976adc336976208c5493d8c7129c5f}
+        NEXT_PUBLIC_POOL_ADDRESS: ${NEXT_PUBLIC_POOL_ADDRESS:-0x87d56efef24d675ea50d6e74b99c2731affc03bb}
+        NEXT_PUBLIC_MARKET_ADDRESS: ${NEXT_PUBLIC_MARKET_ADDRESS:-0x4fe9eece463483a5eaf29964b13fdc58fc15967f}
+        NEXT_PUBLIC_ROUTER_ADDRESS: ${NEXT_PUBLIC_ROUTER_ADDRESS:-0x004de549bb740a0ffa2a1d817915b97f04d2a593}
         # The demo market (GHO-29) is deployed on this network now, so these
         # carry defaults like the rest. It runs on an operator-driven feed, so
         # a round can be settled on cue for a demo rather than waiting on
         # Chainlink's heartbeat.
-        NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-0x529f47c019a9fba9dac816b4a53c196800b45305}
-        NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-0x873a35843f0b9f156ebc957ebcbf1abe97a2caaa}
+        NEXT_PUBLIC_DEMO_MARKET_ADDRESS: ${NEXT_PUBLIC_DEMO_MARKET_ADDRESS:-0xb9d9c94433b4371b7f1772f9dc5ed23a1ad67e6a}
+        NEXT_PUBLIC_DEMO_ROUTER_ADDRESS: ${NEXT_PUBLIC_DEMO_ROUTER_ADDRESS:-0x7a160fe4b62ee57b03655f299ef53e9e26ef53d0}
         # Set this and the four addresses above stop being read: the market
         # list comes from the chain, and adding a market is a transaction
         # rather than a rebuild of this image (GHO-34).
-        NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-0xec64d918d12fb0ce59c26e72b1a234a18e983c68}
+        NEXT_PUBLIC_REGISTRY_ADDRESS: ${NEXT_PUBLIC_REGISTRY_ADDRESS:-0x9483596918790fc12d297da5db10dd9a50980ee1}
         # Reown (WalletConnect) project id. Public, like everything here; the
         # Reown dashboard's allowed-origins list is what stops reuse (GHO-60).
         NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-f7da3a436480ac37fb519c982b6923c7}
