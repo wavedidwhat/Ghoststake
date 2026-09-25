@@ -42,6 +42,61 @@ function optionalAddress(variable: string, value: string | undefined): Address |
   return value as Address;
 }
 
+/**
+ * The origin this deployment is served from.
+ *
+ * Unset is **not** a recorded problem, deliberately, and the distinction is
+ * the whole of GHO-90. `http://localhost:3000` is the right answer for
+ * `next dev` and a silent lie in anything built for deployment — but the app
+ * works perfectly either way, so rendering the misconfigured screen over it
+ * would take down a working site for a wrong `og:image`. The refusal belongs
+ * at build time instead, where it costs nobody anything: see `appUrlMissing`
+ * and `next.config.ts`.
+ *
+ * A value that is *set and unusable* is a different thing, and is recorded,
+ * because `new URL()` in the root layout throws on it — which is a blank 500
+ * on every page rather than a bad preview.
+ */
+function siteUrl(value: string | undefined): string {
+  if (!value) return LOCAL_SITE_URL;
+  try {
+    const parsed = new URL(value);
+    // A `mailto:` or a bare host would parse and then resolve an image URL to
+    // somewhere no crawler will follow.
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      problems.push({
+        variable: "NEXT_PUBLIC_APP_URL",
+        value,
+        reason: "is not an http(s) URL, so share images would resolve to nothing",
+      });
+      return LOCAL_SITE_URL;
+    }
+    return value;
+  } catch {
+    problems.push({
+      variable: "NEXT_PUBLIC_APP_URL",
+      value,
+      reason: "is not an absolute URL (it needs a scheme and a host, e.g. https://example.com)",
+    });
+    return LOCAL_SITE_URL;
+  }
+}
+
+/** The dev default, and the value a deployed build must not be left with. */
+const LOCAL_SITE_URL = "http://localhost:3000";
+
+/**
+ * Whether this build would ship share cards pointing at the reader's own
+ * machine (GHO-90).
+ *
+ * Separate from `envProblems` because the consequence is different: the app
+ * runs, every page works, and the only thing broken is an unfurl — which is
+ * visible to everyone except the people who deployed it. That is exactly the
+ * failure a build refusal is for, and exactly the wrong reason to replace a
+ * working site with an error screen.
+ */
+export const appUrlMissing = !process.env.NEXT_PUBLIC_APP_URL;
+
 function requiredChainId(value: string | undefined): number {
   if (!value) return 421614;
   const parsed = Number(value);
@@ -65,7 +120,7 @@ export const env = {
    * server, so a relative path resolves against the wrong host and the
    * preview silently comes back blank.
    */
-  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  appUrl: siteUrl(process.env.NEXT_PUBLIC_APP_URL),
 
   /** Must match the backend's CHAIN_ID: it is bound into the SIWE message,
    *  so a mismatch means signing for a different chain. 421614 = Arb Sepolia. */
