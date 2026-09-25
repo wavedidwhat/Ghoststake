@@ -6,10 +6,11 @@ import { useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { AppShell, NotConfigured } from "@/components/AppShell";
-import { Card, Stat } from "@/components/Card";
+import { Page, NotConfigured } from "@/components/Page";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
-import { Figure } from "@/components/Figure";
+import { Figure } from "@/components/ui/Figure";
 import { useLendPosition } from "@/hooks/useLendPosition";
 import { useTransaction } from "@/hooks/useTransaction";
 import { borrowLiquidityPoolAbi } from "@/lib/abis";
@@ -23,6 +24,10 @@ import {
   withdrawProblem,
 } from "@/lib/lend";
 import { activeChain } from "@/lib/wagmi";
+import { Button } from "@/components/ui/Button";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * The supply side of the lending market.
@@ -41,17 +46,24 @@ export default function LendPage() {
   const pool = useLendPosition();
 
   return (
-    <AppShell title="Lend" subtitle="Supply the pool that borrowers draw from, and earn what they pay">
+    <Page title="Lend" subtitle="Supply the pool that borrowers draw from, and earn what they pay">
       {!poolConfigured ? (
         <NotConfigured what="No lending pool is configured for this network." />
       ) : pool.isError ? (
-        <ReadFailed onRetry={pool.refetch} />
+        <LoadFailed
+          title="Could not read the pool"
+          onRetry={pool.refetch}
+          className="mx-auto mt-16 max-w-md text-center"
+        >
+          The RPC call failed. Any balance you have supplied is unchanged — this screen just cannot
+          see it right now.
+        </LoadFailed>
       ) : pool.decimals === undefined ? (
         <Loading />
       ) : (
         <LendScreen pool={pool} decimals={pool.decimals} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 
@@ -329,23 +341,19 @@ function SupplyWithdraw({
 
   return (
     <Card>
-      <div className="flex items-center gap-1 rounded-sm bg-raised p-1">
-        {(["supply", "withdraw"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => {
-              setMode(m);
-              setAmount("");
-              tx.reset();
-            }}
-            className={`flex-1 cursor-pointer rounded-sm px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
-              mode === m ? "bg-surface text-ink" : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        label="Supply or withdraw"
+        options={[
+          { value: "supply", label: "Supply" },
+          { value: "withdraw", label: "Withdraw" },
+        ]}
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          setAmount("");
+          tx.reset();
+        }}
+      />
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -360,10 +368,9 @@ function SupplyWithdraw({
             disabled={busy}
           />
 
-          <button
+          <Button
             onClick={submit}
             disabled={disabled}
-            className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
               ? "Working…"
@@ -372,7 +379,7 @@ function SupplyWithdraw({
                 : mode === "supply"
                   ? "Supply"
                   : "Withdraw"}
-          </button>
+          </Button>
 
           {overWallet && <p className="text-xs text-negative">More than your wallet holds.</p>}
           {problem === "over-balance" && (
@@ -429,9 +436,9 @@ function Line({
 
   return (
     <div className="flex flex-col gap-1 rounded-sm border border-border bg-raised/30 p-4">
-      <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">{label}</span>
+      <Eyebrow as="span">{label}</Eyebrow>
       {value === undefined ? (
-        <div className="h-7 w-24 animate-pulse rounded bg-raised" />
+        <Skeleton className="h-7 w-24" />
       ) : (
         <span className={`tabular text-2xl font-medium ${toneClass}`}>{value}</span>
       )}
@@ -445,27 +452,10 @@ function Loading() {
     <div className="grid gap-4 lg:grid-cols-3">
       {[0, 1, 2].map((i) => (
         <Card key={i}>
-          <div className="h-8 w-32 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-8 w-32" />
         </Card>
       ))}
     </div>
   );
 }
 
-function ReadFailed({ onRetry }: { onRetry: () => void }) {
-  return (
-    <Card className="mx-auto mt-16 max-w-md text-center">
-      <h2 className="text-lg font-semibold text-warning">Could not read the pool</h2>
-      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-        The RPC call failed. Any balance you have supplied is unchanged — this screen just cannot
-        see it right now.
-      </p>
-      <button
-        onClick={onRetry}
-        className="mt-5 rounded-sm border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
-      >
-        Try again
-      </button>
-    </Card>
-  );
-}

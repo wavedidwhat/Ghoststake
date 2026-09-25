@@ -4,8 +4,8 @@ import { useState } from "react";
 import { usePublicClient, useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
-import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
-import { Card } from "@/components/Card";
+import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
+import { Card } from "@/components/ui/Card";
 import { FeesPanel } from "@/components/FeesPanel";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
 import { useMarketShape } from "@/hooks/useMarketShape";
@@ -37,6 +37,9 @@ import {
 import { Phase, Status, formatCountdown, phaseLabel, type PhaseValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/Badge";
 
 /**
  * The operator console.
@@ -61,7 +64,7 @@ export default function OperatorPage() {
   const wallet = useWallet();
 
   return (
-    <AppShell title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
+    <Page title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : !wallet.isConnected ? (
@@ -69,7 +72,7 @@ export default function OperatorPage() {
       ) : (
         <Console address={wallet.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 
@@ -98,7 +101,7 @@ function Console({ address }: { address: `0x${string}` }) {
   if (marketsLoading || isLoading || params.byMarket.size === 0) {
     return (
       <Card>
-        <div className="h-24 animate-pulse rounded bg-raised" />
+        <Skeleton className="h-24" />
       </Card>
     );
   }
@@ -171,9 +174,9 @@ function MarketConsole({
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold text-ink">{label}</h2>
         {feed?.isDemo && (
-          <span className="rounded-sm bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
+          <Badge>
             Demo feed
-          </span>
+          </Badge>
         )}
         <span className="text-xs text-ink-faint">
           {isOwner ? (
@@ -349,7 +352,7 @@ function OpenRoundForm({
       )}
 
       <div className="mt-4 flex items-center gap-3">
-        <button
+        <Button
           disabled={
             busy ||
             !schedule ||
@@ -380,10 +383,9 @@ function OpenRoundForm({
             );
             if (ok) onDone();
           }}
-          className="cursor-pointer rounded-sm bg-action px-4 py-2 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Opening…" : "Open round"}
-        </button>
+        </Button>
         <TxStatus tx={tx} />
       </div>
     </Card>
@@ -496,7 +498,8 @@ function SimpleAction({
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-3">
-      <button
+      <Button
+        size="sm"
         disabled={busy || (ownerOnly && !isOwner)}
         onClick={async () => {
           const ok = await tx.send({
@@ -507,10 +510,9 @@ function SimpleAction({
           });
           if (ok) onDone();
         }}
-        className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Working…" : actionLabel(action)}
-      </button>
+      </Button>
       <span className="text-xs text-ink-faint">
         {ownerOnly
           ? isOwner
@@ -638,13 +640,14 @@ function ResolveControl({
   return (
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           disabled={searching || !feed.data}
           onClick={search}
-          className="cursor-pointer rounded-sm border border-border-strong px-3 py-1.5 text-sm text-ink transition-colors hover:border-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {searching ? "Searching the feed…" : "Find the closing feed round"}
-        </button>
+        </Button>
         <span className="text-xs text-ink-faint">
           Resolving names the feed round at the close. Permissionless — anyone may send it.
         </span>
@@ -675,7 +678,9 @@ function ResolveControl({
             </p>
           )}
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              size="sm"
+              className="w-fit"
               disabled={busy || behindLock}
               onClick={async () => {
                 const ok = await tx.send({
@@ -690,10 +695,9 @@ function ResolveControl({
                 });
                 if (ok) onDone();
               }}
-              className="w-fit cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Resolving…" : "Resolve"}
-            </button>
+            </Button>
             <TxStatus tx={tx} />
           </div>
         </div>
@@ -777,7 +781,9 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
           />
         </label>
 
-        <button
+        <Button
+          variant="warning"
+          size="sm"
           disabled={busy || parsed === null || !isFeedOwner}
           onClick={async () => {
             if (parsed === null || !feed.data) return;
@@ -789,10 +795,9 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
             });
             if (ok) void latestRoundId.refetch();
           }}
-          className="cursor-pointer rounded-sm bg-warning px-3 py-2 text-sm font-medium text-ground transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Publishing…" : "Publish"}
-        </button>
+        </Button>
 
         {latestRoundId.data !== undefined && (
           <span className="text-xs text-ink-faint">

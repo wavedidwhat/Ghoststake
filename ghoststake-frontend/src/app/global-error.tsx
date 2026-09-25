@@ -2,7 +2,8 @@
 
 import "./globals.css";
 import { useEffect } from "react";
-import { Notice, noticePrimary } from "@/components/Notice";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 /**
  * A throw in the root layout itself, which `error.tsx` cannot catch because
@@ -35,9 +36,9 @@ export default function GlobalError({
           title="The app could not start"
           actions={
             <>
-              <button type="button" onClick={() => retry()} className={noticePrimary}>
+              <Button size="lg" onClick={() => retry()}>
                 Try again
-              </button>
+              </Button>
               {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full reload is the point */}
               <a href="/" className="inline-flex min-h-11 items-center rounded-control border border-border px-5 py-2.5 text-sm text-ink">
                 Reload

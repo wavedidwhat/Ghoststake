@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useConnection } from "wagmi";
-import { AppShell, NotConfigured } from "@/components/AppShell";
-import { Card } from "@/components/Card";
+import { Page, NotConfigured } from "@/components/Page";
+import { Card } from "@/components/ui/Card";
 import { MarketBlock } from "@/components/MarketBlock";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
 import { useSpot } from "@/hooks/useSpot";
@@ -14,6 +14,7 @@ import { useMarketParams, useRounds } from "@/hooks/useRounds";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import type { SideValue } from "@/lib/rounds";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * The interactive half of `/markets/[market]`.
@@ -26,7 +27,7 @@ export function MarketScreen({ market }: { market: string }) {
   const connection = useConnection();
 
   return (
-    <AppShell
+    <Page
       title="Market"
       subtitle="Take a view with borrowed capital — your stake keeps earning"
     >
@@ -40,7 +41,7 @@ export function MarketScreen({ market }: { market: string }) {
         // reading one never did.
         <Body market={market} address={connection.address} />
       )}
-    </AppShell>
+    </Page>
   );
 }
 
@@ -76,7 +77,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
   if (marketsLoading || isLoading || position.decimals === undefined) {
     return (
       <Card>
-        <div className="h-24 animate-pulse rounded bg-raised" />
+        <Skeleton className="h-24" />
       </Card>
     );
   }

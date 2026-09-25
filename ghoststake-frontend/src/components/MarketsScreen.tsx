@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { SideArrow } from "@/components/icons";
-import { AppShell, NotConfigured } from "@/components/AppShell";
-import { Card } from "@/components/Card";
+import { SideArrow } from "@/components/ui/icons";
+import { Page, NotConfigured } from "@/components/Page";
+import { Card } from "@/components/ui/Card";
 import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
 import { useSpot, type Spot } from "@/hooks/useSpot";
@@ -26,6 +26,9 @@ import {
   upShare,
   type Round,
 } from "@/lib/rounds";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/Badge";
 
 /**
  * Readable without a wallet, deliberately.
@@ -45,13 +48,13 @@ import {
  */
 export function MarketsScreen() {
   return (
-    <AppShell title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
+    <Page title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : (
         <RoundsScreen />
       )}
-    </AppShell>
+    </Page>
   );
 }
 
@@ -86,7 +89,7 @@ function RoundsScreen() {
   if (marketsLoading || isLoading || asset.decimals === undefined) {
     return (
       <Card>
-        <div className="h-24 animate-pulse rounded bg-raised" />
+        <Skeleton className="h-24" />
       </Card>
     );
   }
@@ -125,7 +128,7 @@ function RoundsScreen() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">Markets</h2>
+          <Eyebrow as="h2">Markets</Eyebrow>
           <span className="h-px flex-1 bg-border" />
           {listed.length !== visible.length && (
             <span className="text-[11px] text-ink-faint">
@@ -225,9 +228,9 @@ function MarketRow({
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-xs text-ink-faint">{label}</span>
           {demo && (
-            <span className="rounded-sm bg-warning/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warning uppercase">
+            <Badge size="sm">
               Demo feed
-            </span>
+            </Badge>
           )}
           {!market.enabled && (
             <span className="rounded-sm bg-raised px-2 py-0.5 text-[11px] text-ink-faint">

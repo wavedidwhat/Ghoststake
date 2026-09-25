@@ -11,6 +11,8 @@ import {
   shortenAddress,
 } from "@/lib/format";
 import type { Market } from "@/lib/markets";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * The rules governing a position, read live from the contracts.
@@ -46,9 +48,9 @@ export function Terms({
   return (
     <section aria-labelledby="terms-heading" className="mt-2">
       <div className="mb-3 flex items-center gap-3">
-        <h2 id="terms-heading" className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="h2" id="terms-heading">
           Terms
-        </h2>
+        </Eyebrow>
         <span className="h-px flex-1 bg-border" />
         <span className="text-xs text-ink-faint">read from the contracts</span>
       </div>
@@ -280,9 +282,9 @@ function Term({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs font-medium tracking-wide text-ink-muted uppercase">{name}</dt>
+        <Eyebrow as="dt">{name}</Eyebrow>
         {value === undefined ? (
-          <span className="h-4 w-12 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-4 w-12" />
         ) : (
           <span className="tabular text-sm font-medium text-ink">{value}</span>
         )}

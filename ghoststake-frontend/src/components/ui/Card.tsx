@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Eyebrow } from "./Eyebrow";
 
 export function Card({
   children,
@@ -29,9 +30,9 @@ export function Stat({
   return (
     <Card>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="span">
           {label}
-        </span>
+        </Eyebrow>
         {hint && <span className="text-xs text-ink-faint">{hint}</span>}
       </div>
       <div className="mt-3">{children}</div>

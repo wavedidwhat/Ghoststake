@@ -1,4 +1,4 @@
-import { Notice } from "./Notice";
+import { Notice } from "@/components/ui/Notice";
 import type { ConfigProblem } from "@/lib/env";
 
 /**

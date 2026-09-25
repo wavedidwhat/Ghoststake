@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useReadContracts } from "wagmi";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { Card } from "@/components/Card";
+import { Card } from "@/components/ui/Card";
 import { useTransaction } from "@/hooks/useTransaction";
 import { borrowLiquidityPoolAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env, poolConfigured } from "@/lib/env";
 import { formatAmount, shortenAddress } from "@/lib/format";
 import type { Market } from "@/lib/markets";
 import { activeChain } from "@/lib/wagmi";
+import { Button, TextButton } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * Where the protocol's earnings are, and how they leave.
@@ -47,9 +50,9 @@ export function FeesPanel({
   return (
     <section aria-labelledby="fees-heading" className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <h2 id="fees-heading" className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="h2" id="fees-heading">
           Protocol earnings
-        </h2>
+        </Eyebrow>
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -214,7 +217,7 @@ function Balance({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium text-ink">{title}</h3>
         {balance === undefined || decimals === undefined ? (
-          <span className="h-6 w-24 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-6 w-24" />
         ) : (
           <span className="tabular text-base font-medium text-ink">
             {formatAmount(balance, decimals, 4)} {symbol}
@@ -248,12 +251,11 @@ function Balance({
               )}
             </span>
             {isOwner && (
-              <button
+              <TextButton
                 onClick={() => setRepointing((v) => !v)}
-                className="cursor-pointer text-xs text-ink-faint underline-offset-2 hover:text-ink hover:underline"
               >
                 {repointing ? "Cancel" : "Change"}
-              </button>
+              </TextButton>
             )}
           </>
         )}
@@ -268,7 +270,9 @@ function Balance({
             spellCheck={false}
             className="min-w-0 flex-1 rounded-sm border border-border bg-ground px-3 py-1.5 font-mono text-xs text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
           />
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             disabled={!/^0x[0-9a-fA-F]{40}$/.test(nextTreasury.trim())}
             onClick={async () => {
               const ok = await repoint.send({
@@ -283,10 +287,9 @@ function Balance({
                 onDone();
               }
             }}
-            className="cursor-pointer rounded-sm border border-border px-3 py-1.5 text-xs text-ink transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
             Set destination
-          </button>
+          </Button>
           <TxStatus tx={repoint} />
         </div>
       )}
@@ -307,7 +310,8 @@ function Balance({
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <button
+            <Button
+              size="sm"
               disabled={busy || !isOwner || parsed === null || parsed === 0n || overBalance}
               onClick={async () => {
                 const ok = await withdraw.send({
@@ -321,10 +325,9 @@ function Balance({
                   onDone();
                 }
               }}
-              className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Working…" : "Withdraw"}
-            </button>
+            </Button>
             <span className="text-xs text-ink-faint">
               {isOwner
                 ? "Owner-only, and that is you."

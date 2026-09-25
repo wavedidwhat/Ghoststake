@@ -7,6 +7,7 @@ import { shortenAddress } from "@/lib/format";
 import { orderWallets } from "@/lib/wallets";
 import { useStalled } from "@/hooks/useStalled";
 import { useWallet } from "@/hooks/useWallet";
+import { Button } from "@/components/ui/Button";
 
 /**
  * Connect and disconnect.
@@ -149,14 +150,15 @@ export function ConnectButton() {
 
   return (
     <div className="flex items-center gap-2">
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         onClick={() => disconnect()}
         title="Disconnect"
-        className="flex items-center gap-2 rounded-sm border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition hover:border-border-strong"
       >
         <span className="size-2 rounded-full bg-positive" />
         <span className="tabular">{shortenAddress(address)}</span>
-      </button>
+      </Button>
     </div>
   );
 }
@@ -174,14 +176,13 @@ function ConnectAction({
 }) {
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
         onClick={onClick}
         aria-haspopup={expanded === undefined ? undefined : "menu"}
         aria-expanded={expanded}
-        className="rounded-sm bg-action px-4 py-2 text-sm font-medium text-ground transition hover:bg-action-strong"
       >
         {label}
-      </button>
+      </Button>
       {/* Quiet rather than alarming: every reason this appears — a dismissed
           prompt, a wallet that went quiet — is recoverable by clicking again. */}
       {hint && <span className="text-xs text-ink-faint">{hint}</span>}

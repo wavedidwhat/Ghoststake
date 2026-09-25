@@ -204,6 +204,7 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
             if (c.liquidationThreshold * (WAD + c.liquidationBonus) >= WAD * WAD) revert InvalidConfig();
             if (c.maxAge == 0 || c.liquidationMaxAge < c.maxAge) revert InvalidConfig();
 
+            // slither-disable-next-line calls-loop -- constructor, over the operator's own config
             _collaterals.push(
                 Collateral({
                     token: c.token,
@@ -356,6 +357,7 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
     /// @notice Repay part of an underwater loan and take `token` collateral at
     /// a discount. Open to anyone; never pausable.
     /// @param repayAmount Stablecoin to repay; `type(uint256).max` for the most allowed.
+    // slither-disable-next-line reentrancy-benign -- the preceding call is accrue() on the immutable pool: no callback, and nonReentrant
     function liquidate(address user, address token, uint256 repayAmount) external nonReentrant {
         Collateral storage c = _get(token);
         pool.accrue();
@@ -376,13 +378,19 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
         // liquidator in stablecoin, so the treasury never receives stock.
         uint256 protocolFee = Math.mulDiv(repayAmount, c.liquidationBonus * liquidationProtocolShare, WAD * WAD);
 
+        // Effects before interactions: the seized collateral leaves the
+        // borrower's balance before any token moves. `nonReentrant` and an
+        // immutable `pool` already made the old order safe, but a guard being
+        // the only thing holding a write in place is how the next edit to this
+        // function becomes a bug.
+        collateralOf[user][token] = held - seized;
+
         // Liquidator pays first, then is paid.
         stable.safeTransferFrom(msg.sender, address(this), repayAmount + protocolFee);
         stable.forceApprove(address(pool), repayAmount);
         pool.repay(repayAmount, user);
         if (protocolFee != 0) stable.safeTransfer(pool.treasury(), protocolFee);
 
-        collateralOf[user][token] = held - seized;
         IERC20(token).safeTransfer(msg.sender, seized);
 
         emit Liquidated(msg.sender, user, token, repayAmount, seized, protocolFee, debtOf(user));
@@ -418,6 +426,7 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
     /// same discount a liquidator gets — and that cash reduces the loan before
     /// the remainder is absorbed, so lenders receive what the collateral was
     /// worth, less only the discount that makes anyone show up.
+    // slither-disable-next-line reentrancy-benign -- accrue() on the immutable pool has no callback, and nonReentrant guards the rest
     function writeOffBadDebt(address user) external nonReentrant {
         pool.accrue();
         uint256 debt = debtOf(user);
@@ -443,6 +452,7 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
     /// Using the largest keeps the rule to one number and errs towards the
     /// buyer only by the difference between bonuses.
     function _priceOfEverything(address user, uint256 value) internal view returns (uint256) {
+        // slither-disable-next-line uninitialized-local -- zero is the identity for the Math.max below
         uint256 bonus;
         for (uint256 i; i < _collaterals.length; ++i) {
             if (collateralOf[user][address(_collaterals[i].token)] != 0) {
@@ -474,11 +484,13 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
     }
 
     function _multiplier(Collateral storage c) internal view returns (uint256) {
+        // slither-disable-next-line calls-loop -- the loop is the fixed collateral list, not caller-supplied
         return c.scaledUI ? IScaledUI(address(c.token)).uiMultiplier() : WAD;
     }
 
     /// @dev (price, decimals-scaled) with the staleness and sanity checks.
     function _price(Collateral storage c, uint256 maxAge) internal view returns (uint256) {
+        // slither-disable-next-line unused-return,calls-loop -- roundId and answeredInRound are unused; the loop is the fixed collateral list
         (, int256 answer,, uint256 updatedAt,) = c.feed.latestRoundData();
         // A timestamp in the future is a broken feed, not a fresh one.
         if (answer <= 0 || updatedAt == 0 || updatedAt > block.timestamp) revert InvalidPrice(address(c.token));
