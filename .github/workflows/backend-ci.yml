@@ -71,3 +71,7 @@ jobs:
       # break in cmd/keeper ships green.
       - name: Build keeper
         run: make build-keeper
+
+      # Same reason for the mirror (GHO-21): no tests compile cmd/mirror.
+      - name: Build mirror
+        run: make build-mirror
