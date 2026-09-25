@@ -164,6 +164,14 @@ export const env = {
   registryAddress: optionalAddress("NEXT_PUBLIC_REGISTRY_ADDRESS", process.env.NEXT_PUBLIC_REGISTRY_ADDRESS),
 
   /**
+   * Borrowing against tokenized stock (GHO-95). The only address the stock
+   * screen needs: the pool, the stablecoin and the collateral list are all
+   * read from the vault. Optional, because only Robinhood Chain has stock
+   * tokens; unset, the screen says so rather than rendering empty.
+   */
+  stockVaultAddress: optionalAddress("NEXT_PUBLIC_STOCK_VAULT_ADDRESS", process.env.NEXT_PUBLIC_STOCK_VAULT_ADDRESS),
+
+  /**
    * Reown (WalletConnect) project id. Public by design — what stops a clone
    * site reusing it is the allowed-origins list in the Reown dashboard, not
    * secrecy. Optional so local dev works without one; WalletConnect is simply

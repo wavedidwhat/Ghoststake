@@ -142,13 +142,39 @@ room. Market screens follow one shape:
 
 ## Icons
 
-Our own glyphs, in `src/components/icons.tsx`. There is no icon library
-dependency: the app needs two triangles, and an icon set in the signing path
-is a supply-chain decision (GHO-68), not a styling one. If a real set becomes
+Our own glyphs, in `src/components/icons.tsx`, for our own concepts (the Up
+and Down arrows). Still no general icon set: an icon set in the signing path
+is a supply-chain decision (GHO-68), not a styling one. If one becomes
 necessary, use one human-drawn family (Phosphor) and add it deliberately.
 
-Token and chain logos come from the issuer's official brand kit. Never
-redraw them, and never use an AI-generated illustration or avatar.
+### Logos (GHO-97)
+
+~~Token and chain logos come from the issuer's official brand kit.~~ Company
+and token logos come from three open libraries, through one component,
+`src/components/AssetLogo.tsx`. That was the user's call once stock loans made
+the app a list of companies, and a list of companies is read by recognising
+their marks:
+
+| Library | Licence | Covers |
+|---|---|---|
+| `simple-icons` | CC0 | Tesla, AMD, Palantir, Netflix |
+| `@fortawesome/free-brands-svg-icons` | CC BY 4.0 | Amazon (absent from Simple Icons and `logos` at Amazon's request) |
+| `@web3icons/react` | MIT | USDC, ETH |
+
+These are faithful community reproductions of the marks, not the issuers' own
+brand kits. The rules:
+
+- **Never redraw a logo**, never recolour one to suit the theme, never use an
+  AI-generated one. A mark goes on a white disc in every theme, because some
+  brand colours (Palantir's is near-black) vanish on our ground.
+- **Static SVG in the bundle only.** No logo CDN, no runtime fetch.
+- **A symbol with no entry gets its ticker**, in a plain circle. That is a
+  label, not a logo, so it does not fall under the slop list's "letter in a
+  rounded square". Never substitute a similar company's mark.
+- Matching is by the token's reported symbol, so the logo says which company
+  a token *claims* to be. The address is what says it is genuine.
+- A brand colour that is not carried as data (Amazon's orange) is a
+  `--color-logo-*` token in `globals.css`, used nowhere but `AssetLogo`.
 
 ## The AI-slop list (from GHO-57)
 

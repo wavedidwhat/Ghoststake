@@ -69,6 +69,11 @@
   --color-up-edge: #1c9c59;
   --color-down-edge: #c93a52;
 
+  /* A third party's colour, not ours (GHO-97). Font Awesome ships Amazon's
+     mark as a shape only; the other logos carry their colour as data from
+     simple-icons. Not for use anywhere but AssetLogo. */
+  --color-logo-amazon: #ff9900;
+
   /* Semantic. Deltas and P/L only, never decoration. Same pair as the sides
      so a winning round and a positive balance agree. */
   --color-positive: #2fd07a;

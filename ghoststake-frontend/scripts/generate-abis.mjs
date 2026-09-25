@@ -101,6 +101,16 @@ const WANTED = {
     // The fees panel (GHO-40).
     "totalReserves", "withdrawReserves", "treasury", "setTreasury", "owner",
   ],
+  // Borrowing against tokenized stock (GHO-95, GHO-97). Everything the screen
+  // needs is read from the vault — its pool, its stablecoin, its collateral
+  // list and each one's feed — so one address configures the whole surface.
+  StockLoanVault: [
+    "pool", "stable", "stableDecimals", "originationFee", "liquidationProtocolShare", "closeFactor",
+    "collateralCount", "collateralAt", "collateralOf", "debtOf", "positionOf", "healthFactor",
+    "isLiquidatable", "valueOf",
+    // writes
+    "deposit", "withdraw", "borrow", "repay", "liquidate", "writeOffBadDebt",
+  ],
 };
 
 const out = [];
