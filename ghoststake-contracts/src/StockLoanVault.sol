@@ -151,7 +151,9 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
         uint256 protocolFee,
         uint256 debtAfter
     );
-    event BadDebtWrittenOff(address indexed user, uint256 loss, uint256 collateralsSeized);
+    event BadDebtWrittenOff(
+        address indexed user, address indexed buyer, uint256 paid, uint256 loss, uint256 collateralsSold
+    );
 
     error ZeroAmount();
     error ZeroAddress();
@@ -399,35 +401,66 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
         return Math.mulDiv(debt, factor, WAD);
     }
 
-    /// @notice Close a loan that collateral can no longer cover: hand every
-    /// remaining collateral token to the treasury and write the rest off to
-    /// the pool (reserves first, then suppliers).
+    /// @notice Close a loan that collateral can no longer cover: the caller
+    /// buys every remaining collateral token at a discount, the payment
+    /// goes to the pool against the loan, and the rest is written off
+    /// (reserves first, then suppliers).
     ///
     /// Permissionless, on evidence: the condition is `debt > collateral value`
     /// at liquidation-grade prices, both read here. Below that line a
     /// liquidation still comes out ahead; above it none can, because the bonus
-    /// is paid out of collateral that does not exist. The collateral goes to
-    /// the treasury rather than the caller so that a write-off is not a prize.
-    /// Recovering its value for suppliers is manual in this version.
+    /// is paid out of collateral that does not exist.
+    ///
+    /// The collateral is sold, not held. An earlier version sent it to the
+    /// treasury, which left the pool absorbing the whole loss while the
+    /// treasury held assets worth part of it: lenders paid for a recovery
+    /// somebody else kept. Here the buyer pays `value / (1 + bonus)` — the
+    /// same discount a liquidator gets — and that cash reduces the loan before
+    /// the remainder is absorbed, so lenders receive what the collateral was
+    /// worth, less only the discount that makes anyone show up.
     function writeOffBadDebt(address user) external nonReentrant {
         pool.accrue();
         uint256 debt = debtOf(user);
         (uint256 value,,) = _totals(user, true);
         if (debt == 0 || value >= debt) revert NotWritableOff(user);
 
-        address treasury = pool.treasury();
-        uint256 seizedCount;
+        uint256 payment = _priceOfEverything(user, value);
+        uint256 seizedCount = _handOverCollateral(user);
+
+        if (payment != 0) {
+            stable.safeTransferFrom(msg.sender, address(this), payment);
+            stable.forceApprove(address(pool), payment);
+            pool.repay(payment, user);
+        }
+
+        uint256 loss = pool.absorbBadDebt(user);
+        emit BadDebtWrittenOff(user, msg.sender, payment, loss, seizedCount);
+    }
+
+    /// @dev What the buyer of a written-off position pays: its value less the
+    /// largest liquidation bonus among the tokens it holds, so that no
+    /// collateral is sold at a bigger discount than a liquidator would get.
+    /// Using the largest keeps the rule to one number and errs towards the
+    /// buyer only by the difference between bonuses.
+    function _priceOfEverything(address user, uint256 value) internal view returns (uint256) {
+        uint256 bonus;
+        for (uint256 i; i < _collaterals.length; ++i) {
+            if (collateralOf[user][address(_collaterals[i].token)] != 0) {
+                bonus = Math.max(bonus, _collaterals[i].liquidationBonus);
+            }
+        }
+        return Math.mulDiv(value, WAD, WAD + bonus);
+    }
+
+    function _handOverCollateral(address user) internal returns (uint256 count) {
         for (uint256 i; i < _collaterals.length; ++i) {
             IERC20 token = _collaterals[i].token;
             uint256 held = collateralOf[user][address(token)];
             if (held == 0) continue;
             collateralOf[user][address(token)] = 0;
-            token.safeTransfer(treasury, held);
-            ++seizedCount;
+            token.safeTransfer(msg.sender, held);
+            ++count;
         }
-
-        uint256 loss = pool.absorbBadDebt(user);
-        emit BadDebtWrittenOff(user, loss, seizedCount);
     }
 
     // ------------------------------------------------------------------

@@ -361,22 +361,43 @@ contract StockLoanVaultTest is Test {
     // Bad debt
     // ---------------------------------------------------------------
 
-    function test_writeOffMovesCollateralToTreasuryAndClearsTheDebt() public {
+    function test_writeOffSellsCollateralAndTheProceedsGoToLenders() public {
         _borrowToTheLimit();
         _pushTsla(100e8); // value 10,000 < debt 15,979.5
         assertEq(pool.balanceOfDebt(alice), 15_979_500_000);
 
         uint256 lenderBefore = pool.balanceOfSupply(lender);
+        uint256 usdcBefore = usdc.balanceOf(liquidator);
 
         vm.prank(liquidator);
         vault.writeOffBadDebt(alice);
 
+        // Buyer pays value / 1.08 = 9,259.259259 and gets all 100 TSLA.
+        assertEq(usdcBefore - usdc.balanceOf(liquidator), 9_259_259_259, "buyer pays a discount");
+        assertEq(tsla.balanceOf(liquidator), 100 ether, "buyer gets the collateral");
+        assertEq(tsla.balanceOf(owner), 0, "the treasury holds none of it");
         assertEq(pool.balanceOfDebt(alice), 0);
         assertEq(vault.collateralOf(alice, address(tsla)), 0);
-        assertEq(tsla.balanceOf(owner), 100 ether, "collateral to the treasury, not the caller");
-        assertEq(tsla.balanceOf(liquidator), 0);
-        // No reserves have accrued at 0% rates, so the lender bears it all.
-        assertLt(pool.balanceOfSupply(lender), lenderBefore);
+
+        // Lenders lose the shortfall, not the whole loan: 15,979.5 owed,
+        // 9,259.26 recovered, ~6,720 lost, against 15,979.5 before the fix.
+        uint256 lost = lenderBefore - pool.balanceOfSupply(lender);
+        assertApproxEqAbs(lost, 15_979_500_000 - 9_259_259_259, 2);
+    }
+
+    function test_writeOffWithNothingLeftJustAbsorbsTheDebt() public {
+        _borrowToTheLimit();
+        _pushTsla(100e8);
+        // A liquidator takes all 100 TSLA by repaying what it is worth to them
+        // (10,000 / 1.08, rounded up so nothing is left); the loan is left with a shortfall and no collateral.
+        vm.prank(liquidator);
+        vault.liquidate(alice, address(tsla), 9_260e6);
+        assertEq(vault.collateralOf(alice, address(tsla)), 0);
+        assertGt(vault.debtOf(alice), 0);
+
+        vm.prank(liquidator);
+        vault.writeOffBadDebt(alice);
+        assertEq(vault.debtOf(alice), 0);
     }
 
     function test_writeOffRefusesARecoverablePosition() public {
