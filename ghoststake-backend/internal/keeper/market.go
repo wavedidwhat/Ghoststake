@@ -27,6 +27,14 @@ type Market struct {
 	oracle *chain.Contract
 	feed   *chain.Contract
 
+	// preStrike is the same address bound to the pre-GHO-79 `openRound`, and
+	// is nil unless this market needs it. Two bindings rather than one
+	// because an ABI cannot hold both shapes: Go's abi package keys methods
+	// by name, so a document declaring `openRound` twice silently renames the
+	// second to `openRound0`, and which one answered to `openRound` would
+	// depend on the order forge happened to emit them in.
+	preStrike *chain.Contract
+
 	Timing Timing
 
 	// Session is the trading calendar this market's feed is expected to
@@ -178,6 +186,17 @@ func LoadMarket(ctx context.Context, client *chain.Client, address string, horiz
 		return nil, err
 	}
 	m.StrikeAtOpen = SupportsStrikeAtOpen(code)
+	if !m.StrikeAtOpen {
+		// Bound at load, not at the first open. This is the branch that broke
+		// on 2026-09-25: the code chose the three-argument call correctly and
+		// then failed to pack it, because the only ABI in hand had four
+		// arguments. Binding here makes that a startup error on a market the
+		// keeper cannot actually drive, rather than a warning every twenty
+		// seconds while rounds quietly stop opening.
+		if m.preStrike, err = client.Bind(abis.ParimutuelRoundPreStrike, address); err != nil {
+			return nil, err
+		}
+	}
 
 	if m.Event {
 		// A question has no feed, no trading session and no cadence. It is
