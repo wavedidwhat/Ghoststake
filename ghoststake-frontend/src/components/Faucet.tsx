@@ -7,6 +7,7 @@ import { mockUSDCAbi } from "@/lib/abis";
 import { formatAmount } from "@/lib/format";
 import { isRevert } from "@/lib/probe";
 import { activeChain } from "@/lib/wagmi";
+import { Button } from "@/components/ui/Button";
 
 /** What one tap hands out. Enough to deposit, borrow and take a position. */
 const GRANT = 10_000n;
@@ -69,13 +70,13 @@ export function Faucet({
         <p className="text-xs text-ink-muted">
           Could not check whether test {symbol} can be minted here. The network did not answer.
         </p>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => void mintable.refetch()}
-          className="cursor-pointer rounded-sm border border-border px-3 py-2 text-sm text-ink hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         >
           Check again
-        </button>
+        </Button>
       </div>
     );
   }
@@ -94,7 +95,9 @@ export function Faucet({
       </div>
       <div className="flex items-center gap-3">
         <TxStatus tx={tx} />
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           disabled={busy}
           onClick={async () => {
             const ok = await tx.send({
@@ -105,10 +108,9 @@ export function Faucet({
             });
             if (ok) onMinted();
           }}
-          className="cursor-pointer rounded-sm border border-border bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-border-strong hover:bg-raised focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Minting…" : `Get ${formatAmount(amount, decimals, 0)} ${symbol}`}
-        </button>
+        </Button>
       </div>
     </div>
   );

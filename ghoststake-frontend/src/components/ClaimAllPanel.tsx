@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/components/Card";
+import { Card } from "@/components/ui/Card";
 import { useClaimAll } from "@/hooks/useClaimAll";
 import { formatAmount } from "@/lib/format";
 import {

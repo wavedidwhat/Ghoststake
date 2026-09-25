@@ -4,6 +4,7 @@ import { useConnection, useSwitchChain } from "wagmi";
 import { useStalled } from "@/hooks/useStalled";
 import { useState } from "react";
 import { activeChain } from "@/lib/wagmi";
+import { Button } from "@/components/ui/Button";
 
 /**
  * A banner rather than a blocking modal: on the wrong network the page behind
@@ -32,17 +33,18 @@ export function NetworkGuard() {
         {connection.chain ? ` — your wallet is on ${connection.chain.name}.` : "."}
       </p>
       <div className="flex flex-col items-end gap-1">
-        <button
+        <Button
+          variant="warning"
+          size="sm"
           onClick={() => {
             reset();
             setAttempt((n) => n + 1);
             switchChain({ chainId: activeChain.id });
           }}
           disabled={isPending}
-          className="rounded-sm bg-warning px-3.5 py-1.5 text-sm font-medium text-ground transition hover:opacity-90 disabled:opacity-60"
         >
           {isPending ? "Switching…" : `Switch to ${activeChain.name}`}
-        </button>
+        </Button>
 
         {/* This had no error path at all (GHO-83): a rejected switch, or a
             wallet that cannot add the chain, left `isPending` false and showed

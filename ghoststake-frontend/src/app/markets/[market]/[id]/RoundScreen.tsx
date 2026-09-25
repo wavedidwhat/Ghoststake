@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
-import { Card } from "@/components/Card";
+import { Card } from "@/components/ui/Card";
 import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
@@ -12,6 +12,8 @@ import { winnerLabel } from "@/lib/question";
 import type { PositionRound } from "@/lib/positions";
 import { fetchRounds, type RoundsResponse } from "@/lib/roundsApi";
 import { activeChain } from "@/lib/wagmi";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * One round's receipt.
@@ -54,7 +56,7 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
           </Card>
         ) : query.isLoading ? (
           <Card>
-            <div className="h-24 animate-pulse rounded bg-raised" />
+            <Skeleton className="h-24" />
           </Card>
         ) : !round ? (
           <Card>
@@ -113,7 +115,7 @@ function Detail({
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Outcome</p>
+            <Eyebrow>Outcome</Eyebrow>
             <p className="mt-1 text-lg font-medium text-ink">
               <Outcome round={round} />
             </p>
@@ -128,7 +130,7 @@ function Detail({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">The pool</p>
+          <Eyebrow>The pool</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
             <Line label="Yes" value={`${fmt(round.upPool)} ${symbol}`} />
             <Line label="No" value={`${fmt(round.downPool)} ${symbol}`} />
@@ -140,7 +142,7 @@ function Detail({
         </Card>
 
         <Card>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">The clock</p>
+          <Eyebrow>The clock</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
             <Line label="Opened" value={new Date(round.openTime).toLocaleString()} />
             <Line label="Locked" value={new Date(round.lockTime).toLocaleString()} />
@@ -149,7 +151,7 @@ function Detail({
         </Card>
 
         <Card>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">The price</p>
+          <Eyebrow>The price</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
             {/* The two reads the settlement is pinned to. Shown because they
                 are the whole basis of the result — a round page that states an
@@ -180,7 +182,7 @@ function Detail({
         </Card>
 
         <Card>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Terms</p>
+          <Eyebrow>Terms</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
             <Line label="Status" value={round.status} />
             <Line label="Phase" value={round.phase} />

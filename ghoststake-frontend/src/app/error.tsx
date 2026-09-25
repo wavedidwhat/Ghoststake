@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { Notice, noticePrimary, noticeSecondary } from "@/components/Notice";
+import { Button, buttonClass } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 /**
  * Any render throw below the root layout (GHO-85). Before this there was no
@@ -34,10 +35,10 @@ export default function RouteError({
       title="This page could not be shown"
       actions={
         <>
-          <button type="button" onClick={() => retry()} className={noticePrimary}>
+          <Button size="lg" onClick={() => retry()}>
             Try again
-          </button>
-          <Link href="/" className={noticeSecondary}>
+          </Button>
+          <Link href="/" className={buttonClass({ variant: "outline", size: "lg" })}>
             Go to markets
           </Link>
         </>

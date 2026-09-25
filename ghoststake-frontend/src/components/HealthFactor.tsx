@@ -1,5 +1,7 @@
-import { Figure } from "./Figure";
+import { Figure } from "@/components/ui/Figure";
 import { formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * Shown when the contract reports the position liquidatable, which is the
@@ -55,10 +57,10 @@ export function HealthFactorCard({
   if (value === undefined) {
     return (
       <div className="rounded-card border border-border bg-surface p-6">
-        <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="span">
           Health factor
-        </span>
-        <div className="mt-3 h-9 w-28 animate-pulse rounded bg-raised" />
+        </Eyebrow>
+        <Skeleton className="mt-3 h-9 w-28" />
       </div>
     );
   }
@@ -74,9 +76,9 @@ export function HealthFactorCard({
   return (
     <div className={`rounded-card border bg-surface p-6 ${style.border}`}>
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="span">
           Health factor
-        </span>
+        </Eyebrow>
         <span className={`rounded-sm px-2.5 py-1 text-xs font-medium ${style.chip}`}>
           {copy.label}
         </span>

@@ -7,9 +7,9 @@ import { useWallet } from "@/hooks/useWallet";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
 import { AppShell, NeedsWallet, NotConfigured } from "@/components/AppShell";
-import { Card, Stat } from "@/components/Card";
+import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
-import { Figure } from "@/components/Figure";
+import { Figure } from "@/components/ui/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
@@ -17,6 +17,9 @@ import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
 import { formatAmount, formatOptional } from "@/lib/format";
 import { activeChain } from "@/lib/wagmi";
+import { Button } from "@/components/ui/Button";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function VaultPage() {
   const wallet = useWallet();
@@ -195,23 +198,19 @@ function DepositWithdraw({
 
   return (
     <Card>
-      <div className="flex items-center gap-1 rounded-sm bg-raised p-1">
-        {(["deposit", "withdraw"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => {
-              setMode(m);
-              setAmount("");
-              tx.reset();
-            }}
-            className={`flex-1 cursor-pointer rounded-sm px-3 py-2 text-sm font-medium capitalize transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
-              mode === m ? "bg-surface text-ink" : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        label="Deposit or withdraw"
+        options={[
+          { value: "deposit", label: "Deposit" },
+          { value: "withdraw", label: "Withdraw" },
+        ]}
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          setAmount("");
+          tx.reset();
+        }}
+      />
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -226,10 +225,9 @@ function DepositWithdraw({
             disabled={busy}
           />
 
-          <button
+          <Button
             onClick={submit}
             disabled={disabled}
-            className="cursor-pointer rounded-sm bg-action px-4 py-2.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
               ? "Working…"
@@ -238,7 +236,7 @@ function DepositWithdraw({
                 : mode === "deposit"
                   ? "Deposit"
                   : "Withdraw"}
-          </button>
+          </Button>
 
           {overMax && (
             <p className="text-xs text-negative">
@@ -295,7 +293,7 @@ function Loading() {
     <div className="grid gap-4 lg:grid-cols-3">
       {[0, 1, 2].map((i) => (
         <Card key={i}>
-          <div className="h-8 w-32 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-8 w-32" />
         </Card>
       ))}
     </div>

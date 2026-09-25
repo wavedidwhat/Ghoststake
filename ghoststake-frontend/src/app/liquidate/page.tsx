@@ -2,8 +2,9 @@
 
 import { useWallet } from "@/hooks/useWallet";
 import { AppShell, NotConfigured } from "@/components/AppShell";
-import { RowCard, RowField, RowList } from "@/components/Rows";
-import { Card } from "@/components/Card";
+import { RowCard, RowField, RowList } from "@/components/ui/Rows";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { Card } from "@/components/ui/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { useAtRisk } from "@/hooks/useAtRisk";
 import { useTransaction } from "@/hooks/useTransaction";
@@ -12,6 +13,8 @@ import { shortHash } from "@/lib/activity";
 import { actionFor, netToLiquidator, type Action, type AtRiskPosition } from "@/lib/atRisk";
 import { env } from "@/lib/env";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
  * The liquidator's screen (GHO-42).
@@ -48,7 +51,11 @@ export default function LiquidatePage() {
           />
 
           {atRisk.isError ? (
-            <Failed message={String(atRisk.error)} onRetry={() => void atRisk.refetch()} />
+            <LoadFailed
+              title="Could not read the borrower list"
+              detail={String(atRisk.error)}
+              onRetry={() => void atRisk.refetch()}
+            />
           ) : atRisk.isLoading ? (
             <Card>
               <p className="text-sm text-ink-muted">Reading borrowers…</p>
@@ -100,9 +107,9 @@ function Header({
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+          <Eyebrow>
             {scanned} borrower{scanned === 1 ? "" : "s"} scanned
-          </p>
+          </Eyebrow>
           <p className="mt-1 max-w-lg text-xs text-ink-faint">
             Names come from the indexer, which has every borrow and repayment. Figures are read from
             the chain at the head, so a health factor here is current.
@@ -379,8 +386,9 @@ function ActionCell({
         {!connected ? (
           <span className="text-xs text-ink">Connect a wallet to write off</span>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             disabled={busy}
             onClick={async () => {
               const ok = await tx.send({
@@ -391,10 +399,9 @@ function ActionCell({
               });
               if (ok) onDone();
             }}
-            className="cursor-pointer rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-raised/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Writing off…" : "Write off"}
-          </button>
+          </Button>
         )}
         <span className="text-[11px] text-ink-faint">
           Owes more than it holds, so no liquidation closes it. Pays you nothing; it ends the
@@ -417,8 +424,8 @@ function ActionCell({
 
   return (
     <div className="flex flex-col gap-1">
-      <button
-        type="button"
+      <Button
+        size="sm"
         disabled={busy}
         onClick={async () => {
           // `maxUint256` rather than the API's `maxRepay`. The quote was
@@ -435,10 +442,9 @@ function ActionCell({
           });
           if (ok) onDone();
         }}
-        className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Liquidating…" : "Liquidate"}
-      </button>
+      </Button>
       <span className="text-[11px] text-ink-faint">
         {position.fullLiquidation ? "Clears the whole lien" : "Capped at the close factor"} · you
         need {decimals === undefined ? "…" : formatAmount(BigInt(position.maxRepay), decimals, 2)}{" "}
@@ -448,18 +454,3 @@ function ActionCell({
   );
 }
 
-function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <Card>
-      <p className="text-sm text-ink">Could not read the borrower list.</p>
-      <p className="mt-2 text-xs text-ink-faint">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-3 rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
-      >
-        Try again
-      </button>
-    </Card>
-  );
-}

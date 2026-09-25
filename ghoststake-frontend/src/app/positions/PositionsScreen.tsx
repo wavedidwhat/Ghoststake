@@ -4,8 +4,9 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { AppShell, NeedsWallet } from "@/components/AppShell";
-import { RowCard, RowField, RowList } from "@/components/Rows";
-import { Card } from "@/components/Card";
+import { RowCard, RowField, RowList } from "@/components/ui/Rows";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { Card } from "@/components/ui/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
 import { useMarkets } from "@/hooks/useMarkets";
@@ -23,6 +24,8 @@ import {
   type Outcome,
   type Position,
 } from "@/lib/positions";
+import { Button } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
  * Every view an address has taken, and how each one went (GHO-38).
@@ -93,7 +96,11 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
           />
 
           {positions.isError ? (
-            <Failed message={String(positions.error)} onRetry={refresh} />
+            <LoadFailed
+              title="Could not read your positions"
+              detail={String(positions.error)}
+              onRetry={refresh}
+            />
           ) : positions.isLoading ? (
             <Card>
               <p className="text-sm text-ink-muted">Reading your positions…</p>
@@ -167,7 +174,7 @@ function Header({
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Address</p>
+          <Eyebrow>Address</Eyebrow>
           <p className="mt-1 font-mono text-sm text-ink">{address}</p>
           {viewingSomeoneElse && (
             <p className="mt-1 text-xs text-ink-faint">
@@ -243,9 +250,9 @@ function Unclaimed({
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+          <Eyebrow>
             Unclaimed winnings
-          </p>
+          </Eyebrow>
           <p className="tabular mt-1 text-lg font-medium text-positive">
             {decimals === undefined ? "…" : formatAmount(total, decimals, 2)} {symbol}
           </p>
@@ -303,8 +310,8 @@ function ClaimRow({
         <span className="tabular text-sm text-positive">
           {decimals === undefined ? "…" : formatAmount(amount, decimals, 2)} {symbol}
         </span>
-        <button
-          type="button"
+        <Button
+          size="sm"
           disabled={busy}
           onClick={async () => {
             const ok = await tx.send({
@@ -315,10 +322,9 @@ function ClaimRow({
             });
             if (ok) onDone();
           }}
-          className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Claiming…" : "Claim"}
-        </button>
+        </Button>
       </span>
     </li>
   );
@@ -405,7 +411,7 @@ function Stat({
     tone === "positive" ? "text-positive" : tone === "negative" ? "text-negative" : "text-ink";
   return (
     <div>
-      <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">{label}</p>
+      <Eyebrow>{label}</Eyebrow>
       <p className={`tabular mt-1 text-lg font-medium ${colour}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-ink-faint">{hint}</p>}
     </div>
@@ -424,7 +430,7 @@ function Section({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">{title}</h2>
+        <Eyebrow as="h2">{title}</Eyebrow>
         <span className="h-px flex-1 bg-border" />
         <span className="text-[11px] text-ink-faint">{count}</span>
       </div>
@@ -662,18 +668,3 @@ function Empty({ indexedBlock }: { indexedBlock?: number }) {
   );
 }
 
-function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <Card>
-      <p className="text-sm text-ink">Could not read your positions.</p>
-      <p className="mt-2 text-xs text-ink-faint">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-3 rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
-      >
-        Try again
-      </button>
-    </Card>
-  );
-}

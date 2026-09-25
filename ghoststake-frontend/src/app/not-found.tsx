@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Notice, noticeSecondary } from "@/components/Notice";
+import { buttonClass } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 export const metadata: Metadata = { title: "Not found · GhostStake" };
 
@@ -19,7 +20,7 @@ export default function NotFound() {
       eyebrow="404"
       title="Nothing here"
       actions={
-        <Link href="/" className={noticeSecondary}>
+        <Link href="/" className={buttonClass({ variant: "outline", size: "lg" })}>
           Go to markets
         </Link>
       }

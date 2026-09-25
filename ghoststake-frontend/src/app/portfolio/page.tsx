@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useWallet } from "@/hooks/useWallet";
 import { AppShell } from "@/components/AppShell";
 import { ClaimAllPanel } from "@/components/ClaimAllPanel";
-import { Card, Stat } from "@/components/Card";
-import { Figure } from "@/components/Figure";
+import { buttonClass } from "@/components/ui/Button";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { Card, Stat } from "@/components/ui/Card";
+import { Figure } from "@/components/ui/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { PipelineSummary } from "@/components/PipelineSummary";
 import { Terms } from "@/components/Terms";
@@ -18,6 +20,8 @@ import { contractsConfigured } from "@/lib/env";
 import { formatAmount, formatApr, formatPercent } from "@/lib/format";
 import { stakeStanding } from "@/lib/stake";
 import { activeChain } from "@/lib/wagmi";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function PortfolioPage() {
   const wallet = useWallet();
@@ -38,7 +42,14 @@ export default function PortfolioPage() {
       ) : !contractsConfigured ? (
         <NotDeployed />
       ) : position.isError ? (
-        <ReadFailed onRetry={() => position.refetch()} />
+        <LoadFailed
+          title="Could not read your position"
+          onRetry={() => position.refetch()}
+          className="mx-auto mt-16 max-w-md text-center"
+        >
+          The RPC call failed. Your position is unchanged — this screen just cannot see it right
+          now.
+        </LoadFailed>
       ) : (
         <Position position={position} />
       )}
@@ -136,7 +147,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
           balance it holds. */}
       <Stat label="Debt" hint="principal + interest">
         {position.lien === undefined || decimals === undefined ? (
-          <Skeleton />
+          <Skeleton className="h-8 w-32" />
         ) : position.lien === 0n ? (
           <Figure value={formatAmount(0n, decimals)} unit={symbol} size="stat" tone="muted" />
         ) : (
@@ -197,7 +208,7 @@ function PipelineStrip({
   // defaulted to 18. A 6-decimal balance of 10,000 rendered as 0.00.
   const { decimals } = position;
   if (decimals === undefined) {
-    return <div className="h-40 animate-pulse rounded-card bg-raised" />;
+    return <Skeleton className="h-40" shape="card" />;
   }
 
   let atRisk = 0n;
@@ -248,12 +259,9 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
   return (
     <section aria-labelledby="pool-heading" className="mt-2">
       <div className="mb-3 flex items-center gap-3">
-        <h2
-          id="pool-heading"
-          className="text-xs font-medium tracking-wide text-ink-muted uppercase"
-        >
+        <Eyebrow as="h2" id="pool-heading">
           Lending pool
-        </h2>
+        </Eyebrow>
         <span className="h-px flex-1 bg-border" />
         {/* The way in. These figures described a pool nobody outside the seed
             script could join until GHO-39. */}
@@ -322,12 +330,8 @@ function PendingFigure({
   unit: string;
   tone?: "positive" | "muted";
 }) {
-  if (value === undefined) return <Skeleton />;
+  if (value === undefined) return <Skeleton className="h-8 w-32" />;
   return <Figure value={value} unit={unit} size="stat" tone={tone} />;
-}
-
-function Skeleton() {
-  return <div className="h-8 w-32 animate-pulse rounded bg-raised" />;
 }
 
 /**
@@ -349,13 +353,13 @@ function Disconnected() {
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <Link
           href="/"
-          className="display rounded-control border border-border px-4 py-2.5 text-sm uppercase hover:border-border-strong"
+          className={buttonClass({ variant: "outline", className: "display uppercase" })}
         >
           Browse markets
         </Link>
         <Link
           href="/how-it-works"
-          className="display rounded-control border border-border px-4 py-2.5 text-sm uppercase hover:border-border-strong"
+          className={buttonClass({ variant: "outline", className: "display uppercase" })}
         >
           How it works
         </Link>
@@ -382,20 +386,3 @@ function NotDeployed() {
   );
 }
 
-function ReadFailed({ onRetry }: { onRetry: () => void }) {
-  return (
-    <Card className="mx-auto mt-16 max-w-md text-center">
-      <h2 className="text-lg font-semibold text-warning">Could not read your position</h2>
-      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-        The RPC call failed. Your position is unchanged — this screen just
-        cannot see it right now.
-      </p>
-      <button
-        onClick={onRetry}
-        className="mt-5 rounded-sm border border-border px-4 py-2 text-sm text-ink transition hover:border-border-strong"
-      >
-        Try again
-      </button>
-    </Card>
-  );
-}

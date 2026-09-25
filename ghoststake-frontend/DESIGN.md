@@ -150,6 +150,40 @@ necessary, use one human-drawn family (Phosphor) and add it deliberately.
 Token and chain logos come from the issuer's official brand kit. Never
 redraw them, and never use an AI-generated illustration or avatar.
 
+## Components
+
+`src/components/ui/` holds the primitives (GHO-96). They take props and
+render; none of them reads wagmi, a hook with data, or the network. Feature
+components (`MarketBlock`, `FeesPanel`, `ConnectButton`) and screens build on
+them.
+
+| Primitive | Use it for |
+|---|---|
+| `Button` / `buttonClass` | every button that is not a market side. `action` (green, default), `outline`, `warning` (amber, for fix-it steps like switching network). Sizes `sm`, `md`, `lg` (44px). `buttonClass()` styles a `<Link>` the same way. |
+| `TextButton` | a small underlined action inside copy: "stop waiting", "change" |
+| `SegmentedControl` | the modes of one form: Supply / Withdraw |
+| `Eyebrow` | the small uppercase label. Pass `as` so it stays the right element: `h2` for a section, `label` for a field, `dt` in a list |
+| `Card`, `Stat` | a bordered surface, and a label over a figure |
+| `Figure` | every number |
+| `Skeleton` | a placeholder the size of what is loading |
+| `Badge` | a short warning chip, e.g. "Demo feed" |
+| `LoadFailed` | a read that failed: what couldn't be read, what is unaffected, Try again |
+| `RowList` / `RowCard` / `RowField` | a table's phone form |
+| `Sheet` | the one decision a screen asks for |
+| `Notice` | a screen that stands in for the app: crash, 404, misconfigured |
+| `icons` | our glyphs |
+
+`src/lib/__tests__/design.test.ts` fails the build when a screen writes an
+action button, an uppercase label or a loading pulse by hand, or adds a raw
+`<button>` outside the short list of deliberate exceptions (the market sides,
+the tab bar, the wallet menu). If yours really is different, add it to that
+list with the reason. It then shows up in review as a decision rather than
+slipping through as a copy.
+
+`className` on a primitive is for layout (margin, width, alignment). There is
+no class merger, so a colour or padding passed in may or may not beat the
+primitive's own. If you need a new look, add a variant.
+
 ## The AI-slop list (from GHO-57)
 
 Don't ship any of these, even if a component library hands them over for free:

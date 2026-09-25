@@ -6,6 +6,8 @@ import { formatAmount } from "@/lib/format";
 import { explorerTxUrl } from "@/lib/activity";
 import type { useTransaction } from "@/hooks/useTransaction";
 import { useStalled } from "@/hooks/useStalled";
+import { TextButton } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
  * An amount input backed by a bigint, with the balance it is bounded by.
@@ -42,9 +44,9 @@ export function AmountField({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="label" htmlFor={id}>
           {label}
-        </label>
+        </Eyebrow>
         {max !== undefined && (
           <button
             type="button"
@@ -185,15 +187,11 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
       )}
 
       {stalled && (
-        <button
-          type="button"
-          onClick={stopWaiting}
-          className="text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
-        >
+        <TextButton onClick={stopWaiting}>
           {signingStalled
             ? "Your wallet hasn\u2019t answered \u2014 stop waiting"
             : "Still not confirmed \u2014 stop waiting"}
-        </button>
+        </TextButton>
       )}
     </div>
   );

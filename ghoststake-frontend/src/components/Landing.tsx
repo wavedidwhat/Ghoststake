@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ConnectButton } from "@/components/ConnectButton";
 import { useLendingTerms } from "@/hooks/useTerms";
 import { formatApr, formatOptional, formatPercent } from "@/lib/format";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { buttonClass } from "@/components/ui/Button";
 
 /**
  * What GhostStake is, for someone who has nothing.
@@ -41,7 +43,7 @@ export function Landing() {
           <ConnectButton />
           <Link
             href="/"
-            className="rounded-sm border border-border px-4 py-2 text-sm text-ink transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+            className={buttonClass({ variant: "outline" })}
           >
             Browse markets first →
           </Link>
@@ -146,7 +148,7 @@ function Step({
       </div>
       <div className="mt-3 flex items-baseline gap-2">
         {figure === undefined ? (
-          <span className="h-6 w-16 animate-pulse rounded bg-raised" />
+          <Skeleton className="h-6 w-16" />
         ) : (
           <span className="tabular text-lg font-medium text-brand">{figure}</span>
         )}

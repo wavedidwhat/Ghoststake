@@ -6,7 +6,7 @@ import { useReadContract } from "wagmi";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
 import { sideLabel } from "@/lib/question";
-import { Card } from "@/components/Card";
+import { Card } from "@/components/ui/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
 import type { MarketFeed } from "@/hooks/useMarketFeeds";
@@ -17,11 +17,14 @@ import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { borrowToPositionRouterAbi, collateralVaultAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env } from "@/lib/env";
 import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
-import { SideArrow } from "@/components/icons";
-import { Sheet } from "@/components/Sheet";
+import { SideArrow } from "@/components/ui/icons";
+import { Sheet } from "@/components/ui/Sheet";
 import type { Market } from "@/lib/markets";
 import { Phase, Side, type PhaseValue, type SideValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
+import { Button, TextButton } from "@/components/ui/Button";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Badge } from "@/components/ui/Badge";
 
 /**
  * One market and its rounds, with the forms to enter and to claim.
@@ -219,9 +222,9 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="display text-lg text-ink">{label}</h2>
         {demo ? (
-          <span className="rounded-sm bg-warning/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-warning uppercase">
+          <Badge>
             Demo feed
-          </span>
+          </Badge>
         ) : knownFeed ? (
           <span className="rounded-sm bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
             Chainlink
@@ -268,7 +271,7 @@ function Section({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">{title}</h2>
+        <Eyebrow as="h2">{title}</Eyebrow>
         <span className="h-px flex-1 bg-border" />
       </div>
       {children.length === 0 ? (
@@ -589,12 +592,11 @@ function ConnectToTake({ onClose }: { onClose: () => void }) {
       </p>
       <div className="flex items-center gap-2">
         <ConnectButton />
-        <button
+        <TextButton
           onClick={onClose}
-          className="text-xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
         >
           Not now
-        </button>
+        </TextButton>
       </div>
     </div>
   );
@@ -649,7 +651,8 @@ function ClaimRow({
       </p>
       <div className="flex items-center gap-3">
         <TxStatus tx={tx} />
-        <button
+        <Button
+          size="sm"
           disabled={busy}
           onClick={async () => {
             const ok = await tx.send({
@@ -660,10 +663,9 @@ function ClaimRow({
             });
             if (ok) onDone();
           }}
-          className="cursor-pointer rounded-sm bg-action px-3 py-1.5 text-sm font-medium text-ground transition-colors hover:bg-action-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Claiming…" : "Claim"}
-        </button>
+        </Button>
       </div>
     </div>
   );

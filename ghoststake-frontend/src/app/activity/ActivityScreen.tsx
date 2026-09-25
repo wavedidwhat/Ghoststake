@@ -2,8 +2,9 @@
 
 import { useConnection } from "wagmi";
 import { AppShell, NeedsWallet } from "@/components/AppShell";
-import { RowCard, RowField, RowList } from "@/components/Rows";
-import { Card } from "@/components/Card";
+import { RowCard, RowField, RowList } from "@/components/ui/Rows";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { Card } from "@/components/ui/Card";
 import { useActivity, useActivityDecimals } from "@/hooks/useActivity";
 import {
   activityDirection,
@@ -14,6 +15,7 @@ import {
   type ActivityEvent,
 } from "@/lib/activity";
 import { formatAmount } from "@/lib/format";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
  * Everything one address has done here, on one page (GHO-49).
@@ -60,7 +62,11 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
           />
 
           {activity.isError ? (
-            <Failed message={String(activity.error)} onRetry={() => void activity.refetch()} />
+            <LoadFailed
+              title="Could not read the history"
+              detail={String(activity.error)}
+              onRetry={() => void activity.refetch()}
+            />
           ) : activity.isLoading ? (
             <Card>
               <p className="text-sm text-ink-muted">Reading the ledger…</p>
@@ -115,7 +121,7 @@ function Header({
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <p className="text-xs font-medium tracking-wide text-ink-muted uppercase">Address</p>
+          <Eyebrow>Address</Eyebrow>
           <p className="mt-1 font-mono text-sm text-ink">{address}</p>
           {viewingSomeoneElse && (
             <p className="mt-1 text-xs text-ink-faint">
@@ -373,18 +379,3 @@ function Empty({ indexedBlock }: { indexedBlock?: number }) {
   );
 }
 
-function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <Card>
-      <p className="text-sm text-ink">Could not read the history.</p>
-      <p className="mt-2 text-xs text-ink-faint">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-3 rounded-sm border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-raised/60 hover:text-ink"
-      >
-        Try again
-      </button>
-    </Card>
-  );
-}
