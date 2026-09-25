@@ -10,6 +10,7 @@ import { Card } from "@/components/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
 import type { MarketFeed } from "@/hooks/useMarketFeeds";
+import type { Spot } from "@/hooks/useSpot";
 import type { MarketRound } from "@/hooks/useRounds";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
@@ -37,6 +38,7 @@ export function MarketBlock({
   market,
   params,
   feed,
+  spot,
   rounds,
   address,
   position,
@@ -49,6 +51,8 @@ export function MarketBlock({
   market: Market;
   params: { entryCutoff: bigint; minSidePool: bigint; rake: bigint } | undefined;
   feed: MarketFeed | undefined;
+  /** The live price, for the card's "which side is ahead" line (GHO-64). */
+  spot: Spot | undefined;
   rounds: MarketRound[];
   /** Undefined when nobody is connected: the market still reads, and only
    *  the actions need an address. See GHO-44. */
@@ -106,6 +110,10 @@ export function MarketBlock({
       symbol={position.symbol}
       feed={feed?.description}
       isQuestion={feed?.isQuestion}
+      feedAddress={feed?.feed}
+      // A question is not settled by a price, so there is no "ahead" to show:
+      // its oracle answers the sentinel strike and nothing else (GHO-91).
+      spot={feed?.isQuestion ? undefined : spot}
       now={now}
       yourUp={r.up}
       yourDown={r.down}

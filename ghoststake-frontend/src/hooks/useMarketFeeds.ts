@@ -35,6 +35,14 @@ export type MarketFeed = {
   isQuestion: boolean;
   /** The oracle's address, for reading and acting on the claim. */
   oracle?: `0x${string}`;
+  /**
+   * The aggregator behind the adapter, or undefined on a question.
+   *
+   * Exposed because this hook already resolves it as its second hop, and
+   * `useSpot` needs it to ask *when* a price was printed (GHO-64). Resolving
+   * it a second time there would be two identical batches for one immutable.
+   */
+  feed?: `0x${string}`;
 };
 
 /**
@@ -149,10 +157,11 @@ export function useMarketFeeds(markets: Market[]) {
         isDemo: description.includes(DEMO_MARKER),
         isQuestion: false,
         oracle,
+        feed: feedAddresses[i],
       });
     });
     return out;
-  }, [descriptions.data, questions.data, oracleAddresses, markets]);
+  }, [descriptions.data, questions.data, oracleAddresses, feedAddresses, markets]);
 
   return {
     isLoading: oracles.isLoading || feeds.isLoading || questions.isLoading || descriptions.isLoading,
