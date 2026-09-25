@@ -376,13 +376,19 @@ contract StockLoanVault is ReentrancyGuard, EntryPausable {
         // liquidator in stablecoin, so the treasury never receives stock.
         uint256 protocolFee = Math.mulDiv(repayAmount, c.liquidationBonus * liquidationProtocolShare, WAD * WAD);
 
+        // Effects before interactions: the seized collateral leaves the
+        // borrower's balance before any token moves. `nonReentrant` and an
+        // immutable `pool` already made the old order safe, but a guard being
+        // the only thing holding a write in place is how the next edit to this
+        // function becomes a bug.
+        collateralOf[user][token] = held - seized;
+
         // Liquidator pays first, then is paid.
         stable.safeTransferFrom(msg.sender, address(this), repayAmount + protocolFee);
         stable.forceApprove(address(pool), repayAmount);
         pool.repay(repayAmount, user);
         if (protocolFee != 0) stable.safeTransfer(pool.treasury(), protocolFee);
 
-        collateralOf[user][token] = held - seized;
         IERC20(token).safeTransfer(msg.sender, seized);
 
         emit Liquidated(msg.sender, user, token, repayAmount, seized, protocolFee, debtOf(user));
