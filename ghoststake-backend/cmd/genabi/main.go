@@ -54,6 +54,10 @@ var contracts = []artifact{
 	{name: "EventRoundOracle", hasEvents: true},
 	{name: "AggregatorV3Interface"},
 	{name: "IPausableOracle", file: "AggregatorV3Interface"},
+	// GHO-21. The only contract the backend *writes* to that is not a market:
+	// the mirror publishes real Robinhood Chain mainnet equity prices onto one
+	// of these on testnet, where Chainlink runs no feeds at all.
+	{name: "DemoPriceFeed", hasEvents: true},
 }
 
 func main() {

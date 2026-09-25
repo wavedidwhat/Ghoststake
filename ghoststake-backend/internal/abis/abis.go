@@ -65,6 +65,11 @@ const (
 	// ParimutuelRound; a second full copy would be the drift this package
 	// exists to prevent.
 	ParimutuelRoundPreStrike = "ParimutuelRoundPreStrike"
+
+	// DemoPriceFeed is the operator-published aggregator a mirrored market
+	// settles against (GHO-21). Written to, not just read: `pushAt` is the
+	// only state-changing call the backend makes outside a market.
+	DemoPriceFeed = "DemoPriceFeed"
 )
 
 var (
