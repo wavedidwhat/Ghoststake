@@ -338,7 +338,7 @@ function Detail({ event }: { event: ActivityEvent }) {
     return (
       <span>
         Round {event.roundId}
-        {event.side && <> · {event.side}</>}
+        {event.side && <> · {event.side === "up" ? "yes" : "no"}</>}
         {/* The market is shown, not just the round id. Round ids restart at 1
             in every market, so "round 7" on its own names as many different
             rounds as there are markets. */}

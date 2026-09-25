@@ -23,7 +23,7 @@ const ESCAPE = /stop waiting|hasn.t answered|could not|declined/i;
 const connected = (page: import("@playwright/test").Page) =>
   page.getByRole("button", { name: /0x1111/i });
 
-async function openTicket(page: import("@playwright/test").Page, side: "Up" | "Down" = "Up") {
+async function openTicket(page: import("@playwright/test").Page, side: "Yes" | "No" = "Yes") {
   await page.goto(MARKET_URL);
   await expect(connected(page)).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: new RegExp(`^${side}\\b`) }).first().click();
@@ -47,8 +47,8 @@ test.describe("taking a position", () => {
 
     await expect(dialog.getByText("This token has 6 decimal places; that amount has 7.")).toBeVisible();
     // Before GHO-86 the refusal was coerced to zero: the button read
-    // "Take Up · 0.00" beside a field showing 1.1234567.
-    const commit = dialog.getByRole("button", { name: /^Take Up/ });
+    // "Take Yes · 0.00" beside a field showing 1.1234567.
+    const commit = dialog.getByRole("button", { name: /^Take Yes/ });
     await expect(commit).toBeDisabled();
     await expect(commit).not.toContainText("0.00");
   });
@@ -61,7 +61,7 @@ test.describe("taking a position", () => {
 
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("From your wallet").fill("10");
-    await dialog.getByRole("button", { name: /take up/i }).click();
+    await dialog.getByRole("button", { name: /take yes/i }).click();
 
     await expect(dialog.getByText(ESCAPE)).toBeVisible({ timeout: 30_000 });
   });

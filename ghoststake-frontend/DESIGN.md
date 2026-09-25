@@ -112,11 +112,26 @@ stamped on every surface.
 The phone screen is the design; the desktop is the same components with more
 room. Market screens follow one shape:
 
-1. **The odds bar is the card.** Where the split sits *is* the information,
-   and it reads before any figure. An empty round draws no bar — a
-   half-and-half bar would invent a crowd.
-2. **Each side is a button**, with what it pays on the button rather than
-   beside it. The multiple and the press are one thought.
+0. **A market is a question, answered Yes or No** (GHO-78). "ETH above $2,690
+   at 14:30", not "ETH / USD" with an arrow. Up and Down stay in the
+   contracts, where they are the enum the pools are keyed by; nothing above
+   `lib/question.ts` uses those words. A market with no strike yet asks the
+   weaker question honestly — "ETH higher at 14:30" — rather than inventing a
+   level.
+1. **The belief leads, the bar illustrates it, the multiple follows.**
+   `63% say yes` is the hero figure, with a slim bar beside it and
+   `pays 1.55×` on the button. ~~The odds bar is the card: where the split
+   sits *is* the information, and it reads before any figure.~~ That was
+   right when a side was a direction, and it is what shipped in GHO-58 — but
+   the split and the payout are one fact seen from two ends, and stating both
+   is the cheapest honest explanation of parimutuel this app can give. An
+   empty round still draws no bar: a half-and-half bar would invent a crowd.
+2. **Each side is a button**, with what it pays *and what the crowd thinks*
+   on the button rather than beside it. Tinted, not filled — eight saturated
+   slabs a screen fight the figures that matter, and a filled 7% Yes reads
+   heavier than the 93% No next to it. A side you already hold fills, because
+   then the colour reports a fact about you rather than competing for a
+   decision.
 3. **The countdown fills with the brand colour only inside the entry cutoff**,
    because that is the one moment the urgency is real.
 4. **The loss is stated at the same size as the win.** Losses weigh about
