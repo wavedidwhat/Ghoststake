@@ -1,0 +1,25 @@
+# The price mirror (GHO-21), as an opt-in overlay, like the keeper.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.mirror.yml up -d
+#
+# It republishes Robinhood Chain mainnet's equity feeds onto the testnet
+# DemoPriceFeeds the markets and the stock-loan vault (GHO-95) price against.
+# Stopped, those feeds go stale: markets stop locking, and after a day
+# StockLoanVault refuses new borrows.
+#
+# The key reaches it through `.env.mirror` and nothing else, and it must own
+# every destination feed — the mirror refuses to boot otherwise.
+services:
+  mirror:
+    build:
+      context: .
+      dockerfile: Dockerfile.mirror
+    image: ghoststake-mirror
+    env_file:
+      # deploy.defaults.env still says CHAIN_ID=421614 from the Arbitrum days,
+      # so .env.mirror must set CHAIN_ID and RPC_URL itself (the keeper's trap).
+      - path: deploy.defaults.env
+        required: true
+      - path: .env.mirror
+        required: true
+    restart: unless-stopped
