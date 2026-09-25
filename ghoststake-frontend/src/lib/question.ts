@@ -41,7 +41,22 @@ export function questionFor(input: {
   feed: string | undefined;
   strike: bigint | null | undefined;
   closeTime: bigint | number | undefined;
+  /**
+   * Set when this market settles a question rather than a price (GHO-91).
+   *
+   * `feed` then holds the oracle's own `question()` and is used verbatim: the
+   * strike on such a round is the sentinel the outcome is compared against
+   * (1e18), not a price level, so deriving a sentence from it would render
+   * "Brazil win the World Cup" as "Brazil above $1.00 at 14:30".
+   */
+  isQuestion?: boolean;
 }): string {
+  if (input.isQuestion) {
+    // The contract's own words, or nothing. An event market with no readable
+    // question is a market nobody should be shown a made-up sentence for.
+    return input.feed?.trim() || "An outcome somebody has to report";
+  }
+
   const asset = assetOf(input.feed);
   const at = input.closeTime === undefined ? null : timeOf(input.closeTime);
 

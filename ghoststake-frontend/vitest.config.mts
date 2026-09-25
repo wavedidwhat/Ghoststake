@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -10,5 +11,16 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+  },
+  // The `@/` alias `tsconfig.json` and Next both understand.
+  //
+  // Absent until GHO-91, which is why no component importing runtime code
+  // through it had a unit test: a type-only `@/` import is erased by the
+  // transform and resolves fine, so the gap looked like a choice rather than
+  // four missing lines.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
   },
 });

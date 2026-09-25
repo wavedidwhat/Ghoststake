@@ -65,7 +65,66 @@ export interface PositionRound {
   rakeTaken: string | null;
   voidReason?: string;
 
+  /**
+   * The claim on this round's outcome, for a round settled by an external
+   * question rather than a price feed (GHO-91).
+   *
+   * Absent on a price round — not an empty object — so "this is a price
+   * round" and "nobody has claimed an outcome yet" are different states.
+   */
+  question?: RoundQuestion;
+
   lastBlock: number;
+}
+
+/** Where a question's outcome has got to. Mirrors EventRoundOracle's state. */
+export type QuestionState =
+  | "open"
+  | "proposed"
+  | "challenged"
+  | "final"
+  | "abandoned"
+  | (string & {});
+
+/** "yes", "no", or "none" before anything is claimed. */
+export type QuestionOutcome = "yes" | "no" | "none" | (string & {});
+
+/**
+ * Everything somebody needs to decide whether to argue with a claimed
+ * outcome.
+ *
+ * All of it, not just the answer. What makes the outcome trustworthy is that
+ * the evidence was named, the window was open, the proposer's own position
+ * was on the record, and nobody paid to disagree — an outcome shown on its
+ * own is the operator call this whole mechanism replaces.
+ */
+export interface RoundQuestion {
+  oracle?: string;
+  state: QuestionState;
+  outcome?: QuestionOutcome;
+
+  proposer?: string;
+  proposedAt?: string;
+  evidenceUri?: string;
+  /** Checkable by hand against `sha256sum` of the document at the URI. */
+  evidenceDigest?: string;
+  /** What the proposer had riding on this round when they claimed it. */
+  proposerStake?: string;
+
+  /** When an unchallenged claim becomes final. */
+  challengeClosesAt?: string;
+
+  challenger?: string;
+  challengedAt?: string;
+  rulingDueAt?: string;
+
+  arbiter?: string;
+  ruledAt?: string;
+  reasonUri?: string;
+  /** Whose side the ruling took, and so who received both bonds. */
+  paidTo?: string;
+
+  abandonedAt?: string;
 }
 
 export interface Position {
