@@ -98,11 +98,43 @@ describe("design tokens", () => {
     expect(source(join(SRC, "app/manifest.ts"))).toContain("maskable");
   });
 
-  it("keeps an arrow beside every Up and Down label", () => {
+  it("keeps an arrow beside every answer", () => {
     // Colour alone must never carry the side (GHO-57 rule 2). Both surfaces
-    // that name a side render the glyph from our own icon set.
+    // that name an answer render the glyph from our own icon set.
     for (const path of ["components/RoundCard.tsx", "components/MarketBlock.tsx"]) {
       expect(code(join(SRC, path))).toMatch(/SideArrow|ArrowUp|ArrowDown/);
+    }
+  });
+});
+
+describe("a market is a question (GHO-78)", () => {
+  /**
+   * The words that came back as a complaint: *"I can't see where the bets like
+   * who would win the world cup are"*. Up and Down are the contract's enum and
+   * belong in the contract; a person is answering Yes or No.
+   *
+   * Checked as rendered strings rather than identifiers, so `Side.Up` and
+   * `upPool` — which are the chain's vocabulary and have to stay — do not trip
+   * it.
+   */
+  it("says Yes and No in the copy, not Up and Down", () => {
+    const offenders: string[] = [];
+    for (const path of components.filter((p) => p.endsWith(".tsx"))) {
+      const body = code(path);
+      // A quoted or JSX-rendered "Up"/"Down" on its own.
+      if (/(["'>]\s*)(Up|Down)(\s*[<"'])/.test(body)) offenders.push(path.replace(SRC, ""));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("never shows a payout multiple without the belief beside it", () => {
+    // One number without the other reads as odds somebody set, rather than
+    // the crowd's own position. Both surfaces that render a multiple render a
+    // percentage in the same component.
+    for (const path of ["components/RoundCard.tsx", "components/MarketsScreen.tsx"]) {
+      const body = code(join(SRC, path));
+      expect(body).toMatch(/×/);
+      expect(body).toMatch(/%/);
     }
   });
 });

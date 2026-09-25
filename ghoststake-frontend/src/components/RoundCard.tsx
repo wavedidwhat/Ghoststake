@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { formatAmount } from "@/lib/format";
+import { questionFor, sideLabel } from "@/lib/question";
 import { SideArrow } from "@/components/icons";
 import {
   Phase,
@@ -40,6 +41,7 @@ export function RoundCard({
   yourUp,
   yourDown,
   onStake,
+  feed,
   href,
   children,
 }: {
@@ -55,6 +57,10 @@ export function RoundCard({
   yourUp?: bigint;
   yourDown?: bigint;
   onStake?: (side: SideValue) => void;
+  /** The feed's own description ("ETH / USD"), which is what the round is
+   *  about. Without it the question falls back to "The price…" rather than
+   *  guessing an asset. */
+  feed?: string;
   /** Where this round lives on its own (GHO-41). Omitted on the round's own page. */
   href?: string;
   children?: React.ReactNode;
@@ -71,19 +77,29 @@ export function RoundCard({
   const thin = willVoidOnLock(round, minSidePool);
   const youAreIn = (yourUp ?? 0n) > 0n || (yourDown ?? 0n) > 0n;
 
+  // The question this round is asking (GHO-78). A market used to be an asset
+  // and a direction — "ETH / USD", answered Up or Down — which is not a
+  // question anybody outside this codebase thinks in.
+  const question = questionFor({ feed, strike: round.lockPrice, closeTime: round.closeTime });
+
   return (
     <article className="rounded-card border border-border bg-surface p-4">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h3 className="display text-base leading-snug text-ink">{question}</h3>
+
+      <header className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
           {/* The round's permalink. A card and not a link before GHO-41,
               which meant the smallest shareable thing in the product — one
               round, one outcome — had no address at all. */}
           {href ? (
-            <Link href={href} className="display text-base uppercase underline-offset-4 hover:underline">
+            <Link
+              href={href}
+              className="text-xs text-ink-faint underline-offset-4 hover:text-ink-muted hover:underline"
+            >
               Round {id.toString()}
             </Link>
           ) : (
-            <span className="display text-base uppercase">Round {id.toString()}</span>
+            <span className="text-xs text-ink-faint">Round {id.toString()}</span>
           )}
           <PhaseChip phase={phase} />
           {youAreIn && (
@@ -225,37 +241,35 @@ function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; 
     );
   }
 
-  const up = Math.round(share);
-  const label = (n: number) => `${n}%`;
+  const yes = Math.round(share);
 
   return (
     <div className="mt-3">
-      <div
-        className="flex h-9 overflow-hidden rounded-control bg-raised"
-        role="img"
-        aria-label={`${label(up)} of the pool is on Up, ${label(100 - up)} on Down`}
-      >
-        {/* Each side is at least wide enough to hold its own label, so a
-            lopsided round still says which way it is lopsided. */}
-        <div
-          className="display flex min-w-16 items-center gap-1.5 bg-up px-2.5 text-sm text-up-ink"
-          style={{ width: `${share}%` }}
-        >
-          <SideArrow up className="size-2.5" />
-          {label(up)}
+      {/* The percentage leads and the bar sits beside it, because they are the
+          same fact: a figure next to its own picture needs no legend. The
+          multiple on each button is the third view of it — what the crowd
+          believes is *why* that side pays what it pays. */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-baseline gap-1.5">
+          <span className="tabular text-2xl text-ink">{yes}%</span>
+          <span className="text-xs text-ink-muted">say yes</span>
         </div>
-        <div className="display flex min-w-16 flex-1 items-center justify-end gap-1.5 bg-down px-2.5 text-sm text-down-ink">
-          {label(100 - up)}
-          <SideArrow up={false} className="size-2.5" />
+
+        <div
+          className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-down"
+          role="img"
+          aria-label={`${yes}% of the pool says yes, ${100 - yes}% says no`}
+        >
+          <div className="h-full bg-up" style={{ width: `${share}%` }} />
         </div>
       </div>
 
-      <div className="tabular mt-1.5 flex justify-between text-xs text-ink-faint">
+      <div className="tabular mt-2 flex justify-between text-xs text-ink-faint">
         <span>
-          {formatAmount(round.upPool, decimals, 2)} {symbol} up
+          {formatAmount(round.upPool, decimals, 2)} {symbol} on yes
         </span>
         <span>
-          {formatAmount(round.downPool, decimals, 2)} {symbol} down
+          {formatAmount(round.downPool, decimals, 2)} {symbol} on no
         </span>
       </div>
     </div>
@@ -295,9 +309,24 @@ function SideButton({
   const multiple = multipleFor(round, side, rake);
   const mine = yours !== undefined && yours > 0n;
 
-  const tone = isUp
-    ? "bg-up text-up-ink [--edge:var(--color-up-edge)]"
-    : "bg-down text-down-ink [--edge:var(--color-down-edge)]";
+  // This side's share of the pool: what the crowd thinks of *this* answer,
+  // beside what it pays. No surface shows a bare multiple (GHO-78).
+  const total = round.upPool + round.downPool;
+  const sidePool = isUp ? round.upPool : round.downPool;
+  const percent = total === 0n ? null : Math.round(Number((sidePool * 100n) / total));
+
+  // Tinted, not filled. Eight saturated slabs a screen fight the figures that
+  // matter, and a filled side stopped tracking its own probability — a 7% Yes
+  // read heavier than the 93% No beside it (ADR 0058). A side you already
+  // hold fills, because then the colour reports a fact about you rather than
+  // competing for a decision.
+  const tone = mine
+    ? isUp
+      ? "bg-up text-up-ink [--edge:var(--color-up-edge)]"
+      : "bg-down text-down-ink [--edge:var(--color-down-edge)]"
+    : isUp
+      ? "bg-up-soft text-up [--edge:var(--color-up-edge)]"
+      : "bg-down-soft text-down [--edge:var(--color-down-edge)]";
 
   return (
     <div className="flex flex-col gap-1">
@@ -308,11 +337,15 @@ function SideButton({
         className={`pressable display flex min-h-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-control px-3 py-3 text-lg uppercase focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${tone}`}
       >
         <span className="flex items-center gap-1.5">
+          {/* The arrow stays: colour is never the only signal (DESIGN.md), and
+              Yes/No have to survive greyscale as much as Up/Down did. */}
           <SideArrow up={isUp} className="size-3" />
-          {isUp ? "Up" : "Down"}
+          {sideLabel(side)}
         </span>
         <span className="tabular text-xs font-normal normal-case opacity-80">
-          {multiple === null ? "no odds yet" : `pays ${formatAmount(multiple, 18, 2)}×`}
+          {multiple === null
+            ? "no odds yet"
+            : `${percent}% · pays ${formatAmount(multiple, 18, 2)}×`}
         </span>
       </button>
 

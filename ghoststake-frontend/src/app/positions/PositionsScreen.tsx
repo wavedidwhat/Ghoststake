@@ -13,6 +13,7 @@ import { roundKey, useClaimConfirmation, usePositions } from "@/hooks/usePositio
 import { useTransaction } from "@/hooks/useTransaction";
 import { parimutuelRoundAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
+import { takenLabel } from "@/lib/question";
 import { formatAmount } from "@/lib/format";
 import {
   byRecency,
@@ -476,8 +477,8 @@ function PositionsTable({
             >
               <RowField label="Side">
                 {side === "both"
-                  ? `up ${fmt(BigInt(position.upStake))} · down ${fmt(BigInt(position.downStake))}`
-                  : side}
+                  ? `yes ${fmt(BigInt(position.upStake))} · no ${fmt(BigInt(position.downStake))}`
+                  : takenLabel(side)}
               </RowField>
               <RowField label="Staked">
                 <span className="tabular font-mono text-ink">
@@ -601,11 +602,11 @@ function Row({
 
       <td className="px-4 py-3 text-ink-muted">
         {side === "both" ? (
-          <span title="Entered both sides of this round">
-            up {fmt(BigInt(position.upStake))} · down {fmt(BigInt(position.downStake))}
+          <span title="Answered both ways on this round">
+            yes {fmt(BigInt(position.upStake))} · no {fmt(BigInt(position.downStake))}
           </span>
         ) : (
-          side
+          takenLabel(side)
         )}
       </td>
 

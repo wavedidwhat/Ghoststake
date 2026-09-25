@@ -9,6 +9,8 @@ import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useMarketParams, useRounds } from "@/hooks/useRounds";
+import { MoneyStrip } from "@/components/MoneyStrip";
+import { questionFor } from "@/lib/question";
 import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
@@ -113,6 +115,11 @@ function RoundsScreen() {
 
   return (
     <div className="flex flex-col gap-8">
+      {/* What your money is doing, above the questions it could answer
+          (GHO-78). Deliberately first: the product is the two jobs one stake
+          does, and a feed of questions alone is a thinner Polymarket. */}
+      <MoneyStrip />
+
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-xs font-medium tracking-wide text-ink-muted uppercase">Markets</h2>
@@ -167,6 +174,17 @@ function MarketRow({
   const demo = market.kindHint === "demo" || feed?.isDemo === true;
   const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
 
+  // What this market is asking. Without a live round there is no strike and
+  // no close, so it falls back to naming the instrument rather than inventing
+  // a question nobody can answer.
+  const question = live
+    ? questionFor({
+        feed: feed?.description,
+        strike: live.round.lockPrice,
+        closeTime: live.round.closeTime,
+      })
+    : label;
+
   const upMultiple = live && params ? multipleFor(live.round, Side.Up, params.rake) : null;
   const downMultiple = live && params ? multipleFor(live.round, Side.Down, params.rake) : null;
 
@@ -180,9 +198,15 @@ function MarketRow({
       href={`/markets/${market.address}`}
       className="block cursor-pointer rounded-card border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* The question, not the instrument (GHO-78). "ETH / USD" names a feed;
+          it does not say what anyone is being asked. The feed's own label
+          stays underneath, because which feed settles this is a fact somebody
+          checking the market still wants. */}
+      <h3 className="display text-base leading-snug text-ink">{question}</h3>
+
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-sm font-medium text-ink">{label}</span>
+          <span className="text-xs text-ink-faint">{label}</span>
           {demo && (
             <span className="rounded-sm bg-warning/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warning uppercase">
               Demo feed
@@ -213,17 +237,19 @@ function MarketRow({
           <OddsSplit round={live.round} />
           <div className="mt-2 grid grid-cols-2 gap-3">
             <SideSummary
-              name="Up"
+              name="Yes"
               up
               pool={live.round.upPool}
+              percent={sharePercent(live.round, true)}
               multiple={upMultiple}
               decimals={decimals}
               symbol={symbol}
             />
             <SideSummary
-              name="Down"
+              name="No"
               up={false}
               pool={live.round.downPool}
+              percent={sharePercent(live.round, false)}
               multiple={downMultiple}
               decimals={decimals}
               symbol={symbol}
@@ -248,23 +274,22 @@ function OddsSplit({ round }: { round: Round }) {
     return <p className="mt-3 text-xs text-ink-faint">Nothing staked yet.</p>;
   }
 
-  const up = Math.round(share);
+  const yes = Math.round(share);
   return (
-    <div
-      className="mt-3 flex h-7 overflow-hidden rounded-control bg-raised"
-      role="img"
-      aria-label={`${up}% of the pool is on Up, ${100 - up}% on Down`}
-    >
-      <div
-        className="display flex min-w-12 items-center gap-1 bg-up px-2 text-xs text-up-ink"
-        style={{ width: `${share}%` }}
-      >
-        <SideArrow up className="size-2" />
-        {up}%
+    <div className="mt-3 flex items-center gap-3">
+      {/* The belief leads; the bar is its picture. Same shape as the round
+          card, so a market reads the same in the list and on its own page. */}
+      <div className="flex items-baseline gap-1.5">
+        <span className="tabular text-2xl text-ink">{yes}%</span>
+        <span className="text-xs text-ink-muted">say yes</span>
       </div>
-      <div className="display flex min-w-12 flex-1 items-center justify-end gap-1 bg-down px-2 text-xs text-down-ink">
-        {100 - up}%
-        <SideArrow up={false} className="size-2" />
+
+      <div
+        className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-down"
+        role="img"
+        aria-label={`${yes}% of the pool says yes, ${100 - yes}% says no`}
+      >
+        <div className="h-full bg-up" style={{ width: `${share}%` }} />
       </div>
     </div>
   );
@@ -274,6 +299,7 @@ function SideSummary({
   name,
   up,
   pool,
+  percent,
   multiple,
   decimals,
   symbol,
@@ -281,6 +307,8 @@ function SideSummary({
   name: string;
   up: boolean;
   pool: bigint;
+  /** This side's share of the pool: what the crowd thinks of this answer. */
+  percent: number | null;
   multiple: bigint | null;
   decimals: number;
   symbol: string;
@@ -291,12 +319,24 @@ function SideSummary({
         <SideArrow up={up} className="size-2.5" />
         {name}
       </div>
+      {/* Never a bare multiple (GHO-78): the crowd being on this side is why
+          it pays what it pays, and one number without the other reads as odds
+          somebody set. */}
       <p className="tabular mt-1 text-base text-ink">
         {multiple === null ? "—" : `${formatAmount(multiple, 18, 2)}×`}
+        {percent !== null && <span className="ml-1.5 text-xs text-ink-muted">{percent}%</span>}
       </p>
       <p className="tabular mt-0.5 text-[11px] text-ink-faint">
         {formatAmount(pool, decimals, 2)} {symbol}
       </p>
     </div>
   );
+}
+
+/** A side's share of the pool, rounded, or null when nothing is staked. */
+function sharePercent(round: Round, up: boolean): number | null {
+  const total = round.upPool + round.downPool;
+  if (total === 0n) return null;
+  const side = up ? round.upPool : round.downPool;
+  return Math.round(Number((side * 100n) / total));
 }
