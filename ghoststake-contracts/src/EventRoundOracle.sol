@@ -456,9 +456,8 @@ contract EventRoundOracle is IRoundOracle, Ownable {
     }
 
     function _stakeOfSide(address account, uint8 side) private view returns (uint256) {
-        (bool ok, bytes memory data) = market.staticcall(
-            abi.encodeWithSignature("stakeOf(uint256,address,uint8)", marketRoundId, account, side)
-        );
+        (bool ok, bytes memory data) =
+            market.staticcall(abi.encodeWithSignature("stakeOf(uint256,address,uint8)", marketRoundId, account, side));
         if (!ok || data.length != 32) return 0;
         return abi.decode(data, (uint256));
     }
