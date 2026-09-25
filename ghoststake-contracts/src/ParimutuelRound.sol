@@ -71,19 +71,26 @@ interface ISettlementSink {
 /// During OPEN this number moves with every entry, so anything the UI shows
 /// is provisional by construction. It is final only at lock.
 ///
-/// # The four phases, and why entry must close before the strike is known
+/// # The four phases, and why entry closes before the answer is obvious
 ///
-///   OPEN         entry window. No strike price exists yet.
+///   OPEN         entry window. The strike is already set and public.
 ///   CUTOFF       last `entryCutoff` seconds before lockTime. Entry refused.
-///   OBSERVATION  `lockRound()` has captured `lockPrice`. No entry, no exit,
-///                no changing sides.
+///   OBSERVATION  `lockRound()` has closed entry. No entry, no exit, no
+///                changing sides.
 ///   RESOLVED     `resolveRound()` captured `closePrice` and set the outcome.
 ///
-/// If entry stayed open until the strike were known, anyone could watch the
-/// price move and enter on the side that had already won. The cutoff buffer
-/// closes the narrower version of the same hole: without it, a bot watching
-/// the mempool could see the pending `lockRound()` transaction, read the
-/// price it is about to capture, and enter in the block before it lands.
+/// The strike is chosen when the round is opened and does not move (GHO-79),
+/// so a round states its question — "above $3,400 at 14:30?" — from its first
+/// second. ~~Entry had to close before the strike was known, because anyone
+/// who saw it first could enter on the side that had already won.~~ That
+/// reasoning applied to a strike captured mid-window; a strike everybody has
+/// from the start gives nobody an edge, and is *fairer* than one revealed at
+/// lock rather than less fair.
+///
+/// The cutoff buffer still matters, for the honest reason: it closes entry
+/// before the outcome is obvious. Without it, a bot could watch the price
+/// cross the strike a block before lockTime and enter on the side that is
+/// about to win.
 ///
 /// # Void: refund everyone, take no rake
 ///
@@ -190,10 +197,17 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
         Status status;
         /// @dev Meaningful only once `status == Resolved`.
         Side winner;
+        /// @dev The strike this round settles against, set when the round is
+        /// opened and never changed (GHO-79). Named `lockPrice` because that
+        /// is when it used to be captured, and because renaming it would
+        /// change the field every deployment's history is already indexed
+        /// under — the meaning is documented instead.
         uint256 lockPrice;
         uint256 closePrice;
-        /// @dev Feed round the lock price came from. The resolve read must be
-        /// strictly later than this.
+        /// @dev Always zero since GHO-79: nothing is read from the feed at
+        /// lock any more, so there is no lock round to be later than. The slot
+        /// stays so that one ABI still decodes markets deployed before the
+        /// change, whose value here is meaningful.
         uint80 lockOracleRoundId;
         uint256 upPool;
         uint256 downPool;
@@ -259,6 +273,11 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
     event RoundOpened(uint256 indexed roundId, uint64 openTime, uint64 lockTime, uint64 closeTime);
     event PositionTaken(uint256 indexed roundId, address indexed user, Side side, uint256 amount, address funder);
     event RoundLocked(uint256 indexed roundId, uint256 lockPrice, uint80 oracleRoundId);
+    /// @dev Emitted at open, carrying the strike the round asks about. A
+    /// separate event rather than a field on `RoundOpened`, so the decoders
+    /// that already read `RoundOpened` from every deployment keep working and
+    /// this is purely additive (GHO-79).
+    event RoundStrikeSet(uint256 indexed roundId, uint256 strikePrice);
     event RoundResolved(uint256 indexed roundId, uint256 closePrice, Side winner, uint256 rakeTaken);
     event RoundVoided(uint256 indexed roundId, string reason);
     event Claimed(uint256 indexed roundId, address indexed user, uint256 amount, address recipient);
@@ -272,8 +291,12 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
     error UnknownRound(uint256 roundId);
     error WrongPhase(uint256 roundId, Phase actual);
     error EntryClosed(uint256 roundId, uint64 cutoffAt);
+    error InvalidStrike();
     error TooEarly(uint256 roundId, uint64 notBefore);
     error OracleUnavailable(uint256 roundId);
+    /// @dev Unreachable since GHO-79 removed the lock-time oracle read. Kept
+    /// so this ABI still decodes a revert from a market deployed before the
+    /// change, which can very much still throw it.
     error OracleRoundNotAdvanced(uint256 roundId, uint80 lockRoundId, uint80 resolveRoundId);
     error NotRouter(address caller);
     error MixedFunding(uint256 roundId, address user);
@@ -402,7 +425,17 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
     /// `resolveRound`, `voidUnsettledRound` and `claim` all stay reachable
     /// while paused, because a halt that stranded an open round would trap
     /// every stake in it behind an operator's judgement.
-    function openRound(uint64 openTime, uint64 lockTime, uint64 closeTime)
+    /// @param strikePrice The level this round asks about, in the oracle's
+    /// 18-decimal scale. Public from the moment the round opens, which is the
+    /// whole point: a round can now state its question rather than asking the
+    /// shapeless "will it be higher in a few minutes" (GHO-79).
+    ///
+    /// @dev Not checked against the feed. A check would cost the oracle read
+    /// this change removes, and "within some percent of spot" is an arbitrary
+    /// bound; the owner already schedules the round, and an absurd strike is
+    /// visible to everyone before anyone stakes. What is checked is that a
+    /// strike exists, because zero would make every close price "above" it.
+    function openRound(uint64 openTime, uint64 lockTime, uint64 closeTime, uint256 strikePrice)
         external
         onlyOwner
         whenEntriesOpen
@@ -413,6 +446,7 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
         if (openTime < block.timestamp) revert InvalidSchedule();
         if (lockTime <= openTime + entryCutoff) revert InvalidSchedule();
         if (closeTime <= lockTime) revert InvalidSchedule();
+        if (strikePrice == 0) revert InvalidStrike();
 
         uint256 roundId = ++roundCount;
         Round storage round = _rounds[roundId];
@@ -420,8 +454,10 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
         round.lockTime = lockTime;
         round.closeTime = closeTime;
         round.status = Status.Open;
+        round.lockPrice = strikePrice;
 
         emit RoundOpened(roundId, openTime, lockTime, closeTime);
+        emit RoundStrikeSet(roundId, strikePrice);
         return roundId;
     }
 
@@ -515,26 +551,32 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
             return;
         }
 
-        // A lock is only valid inside its window. The strike is read as "the
-        // price now", so a caller who shows up late is choosing it — they can
-        // see the feed and wait for a level that suits their side. The window
-        // is exactly how much lateness is tolerated; beyond it the round is
-        // unwound rather than settled on a number someone picked.
+        // ~~A lock is only valid inside its window, because the strike is
+        // read as "the price now" and a caller who shows up late is choosing
+        // it.~~ That reason died with GHO-79: the strike was fixed when the
+        // round opened, so lateness picks nothing. The window stays because a
+        // round that sits unlocked for hours is still anomalous, and because
+        // removing it means removing a constructor parameter every deployment
+        // and the keeper's schedule check share. It is now the weaker of the
+        // two rules here, and voiding a funded round over a late keeper is a
+        // cost worth revisiting — see the ADR.
         if (block.timestamp > round.lockTime + lockWindow) {
             _void(roundId, round, "lock window missed");
             return;
         }
 
-        (bool ok, uint256 price, uint80 oracleRoundId) = oracle.readLatest();
-        // Inside the window a bad reading is a hiccup, not a verdict: revert
-        // so it can be retried on the next block.
-        if (!ok) revert OracleUnavailable(roundId);
-
+        // No oracle read. Locking is now bookkeeping: entry was already
+        // closed by the clock at `lockTime - entryCutoff`, and the strike has
+        // been public since open. That removes one feed read per round per
+        // market from the critical path — the budget an exhausted RPC key has
+        // twice taken this deployment down over (runbook Parts 7.69, 7.71).
         round.status = Status.Locked;
-        round.lockPrice = price;
-        round.lockOracleRoundId = oracleRoundId;
 
-        emit RoundLocked(roundId, price, oracleRoundId);
+        // The strike is re-emitted rather than a new event being invented, so
+        // every consumer that already reads RoundLocked keeps working and
+        // still learns what this round settles against. The round id is zero
+        // because nothing was read; see the field's own note.
+        emit RoundLocked(roundId, round.lockPrice, 0);
     }
 
     /// @notice Settle the outcome against the price at `closeTime`.
@@ -558,23 +600,15 @@ contract ParimutuelRound is Treasured, ReentrancyGuard, EntryPausable {
         if (round.status != Status.Locked) revert WrongPhase(roundId, phaseOf(roundId));
         if (block.timestamp < round.closeTime) revert TooEarly(roundId, round.closeTime);
 
-        // The feed cannot have gone *backwards* since the lock read. A round
-        // published before the strike was captured is not the price at
-        // `closeTime` under any reading, and naming one is a mistake worth
-        // reporting rather than absorbing.
-        //
-        // The lock's own round is allowed through, and deliberately so. If the
-        // feed published nothing between lock and close, then the last round
-        // at or before `closeTime` genuinely *is* the lock's — the adapter
-        // will only accept it if that is true — and the two prices are one
-        // observation, which lands in the tie branch below and voids. That is
-        // the same refund an owner would have to hand out otherwise, reached
-        // automatically instead. Rejecting it here would turn a quiet feed
-        // into an administrative action for no gain.
-        if (closeOracleRoundId < round.lockOracleRoundId) {
-            revert OracleRoundNotAdvanced(roundId, round.lockOracleRoundId, closeOracleRoundId);
-        }
-
+        // ~~The feed cannot have gone backwards since the lock read.~~ There
+        // is no lock read any more (GHO-79), so there is no earlier
+        // observation for this one to be after. What keeps the close price
+        // honest is unchanged and was always the stronger half: `readAt`
+        // accepts exactly one feed round — the last published at or before
+        // `closeTime`, proven by checking its successor — and the adapter
+        // refuses an answer staler than its own bound. So the caller still
+        // cannot shop for a price, and a feed that has published nothing near
+        // `closeTime` yields no settlement rather than a convenient one.
         // No usable feed round at `closeTime` — either none published yet, or
         // the one named is not the last one before it. Always a revert, never
         // a void: see `voidUnsettledRound` for why the liveness escape cannot

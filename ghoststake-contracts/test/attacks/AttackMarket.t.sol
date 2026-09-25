@@ -34,6 +34,12 @@ contract AttackMarketTest is Test {
     address internal bob = makeAddr("bob");
     address internal mallory = makeAddr("mallory");
 
+    /// @dev The feed price right now — what a keeper picks as the strike
+    /// when it opens a round, since GHO-79 fixed the strike at open.
+    function _spot() internal view returns (uint256 price) {
+        (, price,) = oracle.readLatest();
+    }
+
     function setUp() public {
         vm.warp(1_700_000_000);
         token = new ERC20Mock();
@@ -69,11 +75,13 @@ contract AttackMarketTest is Test {
     }
 
     function _openRound() internal returns (uint256 id) {
+        uint256 strike0_ = _spot();
         vm.prank(owner);
         id = market.openRound(
             uint64(block.timestamp),
             uint64(block.timestamp) + ENTRY_WINDOW,
-            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW
+            uint64(block.timestamp) + ENTRY_WINDOW + OBSERVATION_WINDOW,
+            strike0_
         );
     }
 
@@ -329,8 +337,18 @@ contract AttackMarketTest is Test {
     /// whoever calls it picks the strike from whatever the feed printed
     /// during the 60-second window. The window bounds the discretion; it does
     /// not remove it. A Down bettor waits for a local high.
-    function test_X4_theLockCallerPicksTheStrikeInsideTheWindow() public {
+    /// @dev X4 — the strike used to be whatever the feed said when
+    /// `lockRound` landed, so a caller could sit inside the lock window and
+    /// pick the moment. GHO-79 fixed the strike when the round is opened, so
+    /// there is nothing left to pick: an honest keeper on the second and a
+    /// participant waiting out the window get the same number.
+    ///
+    /// Kept as an attack test rather than deleted. This is the property that
+    /// has to keep holding, and it is cheap to notice if a future change hands
+    /// the discretion back.
+    function test_X4_theLockCallerCannotMoveTheStrike() public {
         uint256 id = _openRound();
+        uint256 announced = market.rounds(id).lockPrice;
         _enter(alice, id, ParimutuelRound.Side.Up, 100 ether);
         _enter(mallory, id, ParimutuelRound.Side.Down, 100 ether);
         uint64 lockTime = market.rounds(id).lockTime;
@@ -353,10 +371,8 @@ contract AttackMarketTest is Test {
         market.lockRound(id);
         uint256 chosenStrike = market.rounds(id).lockPrice;
 
-        assertGt(chosenStrike, honestStrike, "the caller moved the strike in their own favour");
-        emit log_named_uint(
-            "strike discretion available inside the window (bps)", (chosenStrike - honestStrike) * 10_000 / honestStrike
-        );
+        assertEq(chosenStrike, honestStrike, "waiting for a better price moved the strike");
+        assertEq(chosenStrike, announced, "the round settled against something other than what it announced");
     }
 
     /// @dev X5 — OWNER CAN TURN A WIN INTO A REFUND. Past the resolve

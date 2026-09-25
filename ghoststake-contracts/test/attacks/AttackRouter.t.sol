@@ -85,9 +85,13 @@ contract AttackRouterTest is Test {
     }
 
     function _openRound() internal returns (uint256 id) {
+        uint256 strike0_ = oracle.price();
         vm.prank(owner);
         id = market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
+            uint64(block.timestamp),
+            uint64(block.timestamp + 10 minutes),
+            uint64(block.timestamp + 20 minutes),
+            strike0_
         );
     }
 

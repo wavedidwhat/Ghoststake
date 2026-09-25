@@ -90,9 +90,13 @@ contract BorrowToPositionTest is Test {
         vm.prank(alice);
         vault.approveBorrowDelegate(address(router), allowance);
 
+        uint256 strike0_ = oracle.price();
         vm.prank(owner);
         roundId = market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
+            uint64(block.timestamp),
+            uint64(block.timestamp + 10 minutes),
+            uint64(block.timestamp + 20 minutes),
+            strike0_
         );
     }
 
@@ -436,9 +440,13 @@ contract BorrowToPositionTest is Test {
     function test_positionsInTwoRoundsSettleIndependently() public {
         uint256 first = _aliceReady(2_000 ether, 800 ether);
 
+        uint256 strike1_ = oracle.price();
         vm.prank(owner);
         uint256 second = market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
+            uint64(block.timestamp),
+            uint64(block.timestamp + 10 minutes),
+            uint64(block.timestamp + 20 minutes),
+            strike1_
         );
 
         vm.prank(alice);

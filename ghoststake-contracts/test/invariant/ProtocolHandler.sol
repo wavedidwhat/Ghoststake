@@ -401,9 +401,13 @@ contract ProtocolHandler is Test {
 
     function openRound() external {
         if (market.entriesPaused()) return;
+        uint256 strike0_ = oracle.price();
         vm.prank(owner);
         market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
+            uint64(block.timestamp),
+            uint64(block.timestamp + 10 minutes),
+            uint64(block.timestamp + 20 minutes),
+            strike0_
         );
         calls["openRound"]++;
     }
@@ -471,9 +475,13 @@ contract ProtocolHandler is Test {
     /// invariant holds over rounds that never paid anyone.
     function playRound(uint256 seed) external checkIndices(false) {
         if (market.entriesPaused()) return;
+        uint256 strike1_ = oracle.price();
         vm.prank(owner);
         uint256 roundId = market.openRound(
-            uint64(block.timestamp), uint64(block.timestamp + 10 minutes), uint64(block.timestamp + 20 minutes)
+            uint64(block.timestamp),
+            uint64(block.timestamp + 10 minutes),
+            uint64(block.timestamp + 20 minutes),
+            strike1_
         );
 
         uint256 floor = market.minSidePool();
