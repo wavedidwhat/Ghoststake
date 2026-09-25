@@ -1,4 +1,4 @@
-.PHONY: help run run-local run-keeper-local test-live build build-keeper test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
+.PHONY: help run run-local run-keeper-local test-live build build-keeper build-mirror test test-integration test-remote gen-abis lint check-go-version tidy up down logs migrate-status
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -27,6 +27,9 @@ build: ## Build a static linux binary into bin/
 
 build-keeper: ## Build the round keeper into bin/
 	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/keeper ./cmd/keeper
+
+build-mirror: ## Build the price mirror into bin/
+	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/mirror ./cmd/mirror
 
 test: ## Run unit tests (no database needed)
 	go test ./... -race

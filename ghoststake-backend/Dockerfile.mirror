@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+#
+# The price mirror (GHO-21), built as its own image.
+#
+# Separate from the keeper's image for the reason cmd/mirror gives for being a
+# separate binary: the two fail apart. A crash or a restart in one must not
+# stop the other.
+
+ARG GO_VERSION=1.27
+
+# ---- builder ----------------------------------------------------------------
+FROM golang:${GO_VERSION}-alpine AS builder
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux \
+    go build -trimpath -ldflags="-s -w" -o /out/mirror ./cmd/mirror
+
+# ---- runtime ----------------------------------------------------------------
+# Distroless for the same reason as the keeper: this process holds a key.
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+COPY --from=builder /out/mirror /app/mirror
+
+USER nonroot:nonroot
+
+# No EXPOSE: it reads one chain and writes another, and nothing connects to it.
+ENTRYPOINT ["/app/mirror"]
