@@ -847,7 +847,7 @@ func (k *Keeper) openRound(ctx context.Context, m *Market, now uint64) error {
 	// a keeper that quietly stopped opening their rounds would look like a
 	// dead market.
 	if !m.StrikeAtOpen {
-		return k.send(ctx, m, 0, actionOpen, "openRound",
+		return k.sendTo(ctx, m, m.preStrike, 0, actionOpen, "openRound",
 			schedule.OpenTime, schedule.LockTime, schedule.CloseTime)
 	}
 
@@ -927,7 +927,16 @@ func SplitHorizon(horizon, entryWindow, entryCutoff uint64) (uint64, uint64, err
 
 // send simulates, submits and waits, then clears or extends the backoff.
 func (k *Keeper) send(ctx context.Context, m *Market, id uint64, action Action, method string, args ...any) error {
-	hash, err := k.signer.Send(ctx, m.round, method, args...)
+	return k.sendTo(ctx, m, m.round, id, action, method, args...)
+}
+
+// sendTo is send against a specific binding of the market.
+//
+// Only the pre-GHO-79 `openRound` needs one: it lives at the same address as
+// everything else but under a different ABI, because the two shapes share a
+// name. See Market.preStrike.
+func (k *Keeper) sendTo(ctx context.Context, m *Market, c *chain.Contract, id uint64, action Action, method string, args ...any) error {
+	hash, err := k.signer.Send(ctx, c, method, args...)
 	if err != nil {
 		k.failed(m, id, action)
 		if hash != (common.Hash{}) {

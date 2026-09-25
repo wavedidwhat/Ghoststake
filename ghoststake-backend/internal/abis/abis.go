@@ -45,6 +45,26 @@ const (
 	// the keeper, which has to drive such a market without a feed, and by
 	// the indexer, which carries its lifecycle to the app.
 	EventRoundOracle = "EventRoundOracle"
+
+	// ParimutuelRoundPreStrike is the shape `openRound` had before GHO-79:
+	// three timestamps and no strike. Markets deployed then are still live,
+	// still hold positions and are still driven — see keeper.SupportsStrikeAtOpen.
+	//
+	// The one hand-written file in this package, and it has to be. Every
+	// other ABI here is copied from a forge artifact precisely so it cannot
+	// drift from the source, but this source no longer exists: GHO-79
+	// replaced `openRound` in place, so there is nothing left for
+	// `make gen-abis` to copy. The alternative — keeping a dead copy of the
+	// contract compiling in the repo purely to generate four lines of JSON —
+	// is worse. What keeps it honest instead is a test: the selector this
+	// file produces is checked against one computed from the signature by
+	// keccak, so a typo fails in CI rather than on a market tick.
+	//
+	// It holds only `openRound`. Everything else the keeper calls on a
+	// market is identical in both shapes and is read through
+	// ParimutuelRound; a second full copy would be the drift this package
+	// exists to prevent.
+	ParimutuelRoundPreStrike = "ParimutuelRoundPreStrike"
 )
 
 var (
