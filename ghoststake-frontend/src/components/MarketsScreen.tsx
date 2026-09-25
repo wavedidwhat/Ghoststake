@@ -7,10 +7,12 @@ import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { useNow } from "@/hooks/useNow";
 import { useMarketFeeds, type MarketFeed } from "@/hooks/useMarketFeeds";
+import { useSpot, type Spot } from "@/hooks/useSpot";
+import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "@/lib/spot";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useMarketParams, useRounds } from "@/hooks/useRounds";
 import { MoneyStrip } from "@/components/MoneyStrip";
-import { questionFor } from "@/lib/question";
+import { questionFor, sideLabel } from "@/lib/question";
 import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
@@ -66,6 +68,7 @@ function RoundsScreen() {
   const { markets, listed, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);
   const feeds = useMarketFeeds(markets);
+  const spot = useSpot(markets, feeds.byMarket);
   const { rounds, isLoading, isError } = useRounds(markets);
   const asset = useVaultAsset();
 
@@ -137,6 +140,7 @@ function RoundsScreen() {
               key={summary.market.key}
               summary={summary}
               feed={feeds.byMarket.get(summary.market.key)}
+              spot={spot.byMarket.get(summary.market.key)}
               decimals={decimals}
               symbol={asset.symbol}
               now={now}
@@ -160,12 +164,16 @@ function RoundsScreen() {
 function MarketRow({
   summary,
   feed,
+  spot,
   decimals,
   symbol,
   now,
 }: {
   summary: Summary;
   feed: MarketFeed | undefined;
+  /** The asset's last printed price (GHO-64). Undefined on a question, which
+   *  is not settled by one. */
+  spot: Spot | undefined;
   decimals: number;
   symbol: string;
   now: bigint | undefined;
@@ -240,6 +248,10 @@ function MarketRow({
           </span>
         )}
       </div>
+
+      {!feed?.isQuestion && (
+        <SpotSummary round={live?.round} spot={spot} now={now} />
+      )}
 
       {live ? (
         <>
@@ -348,4 +360,53 @@ function sharePercent(round: Round, up: boolean): number | null {
   if (total === 0n) return null;
   const side = up ? round.upPool : round.downPool;
   return Math.round(Number((side * 100n) / total));
+}
+
+/**
+ * The asset's price on a list row, with how old it is and which way the live
+ * round is leaning.
+ *
+ * The list showed pools and multiples and no price at all, which is the
+ * complaint GHO-64 opens with: a row that says what is at stake but not what
+ * it is at stake *on*.
+ *
+ * "1h change" was asked for and is deliberately not what this shows. The
+ * ETH/USD feed publishes on an hourly heartbeat, so a one-hour change and a
+ * change-since-last-print are the same number wearing a label that implies a
+ * continuous series behind it. What a row can honestly show is the distance
+ * from the level this round actually settles against — which is also the more
+ * useful number, because it is the one that decides the bet.
+ */
+function SpotSummary({
+  round,
+  spot,
+  now,
+}: {
+  round: Round | undefined;
+  spot: Spot | undefined;
+  now: bigint | undefined;
+}) {
+  if (!spot) return null;
+
+  const age = priceAge(spot.updatedAt, now);
+  const stale = age !== null && isStalePrint(age);
+  const { leading, bps } = standingOf(spot.price, round?.lockPrice);
+
+  return (
+    <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
+      <span>
+        {stale ? "Last price" : "Now"}{" "}
+        <span className="tabular text-ink">{formatAmount(spot.price, 18, 2)}</span>
+      </span>
+      {age !== null && <span className="text-[11px] text-ink-faint">printed {formatAge(age)}</span>}
+      {bps !== null && leading !== null && (
+        <span className="tabular">
+          {formatMove(bps)}{" "}
+          <span className="tabular-none">
+            {isNarrow(bps) ? "— too close to call" : `— ${sideLabel(leading)} ahead`}
+          </span>
+        </span>
+      )}
+    </p>
+  );
 }

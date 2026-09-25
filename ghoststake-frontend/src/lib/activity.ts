@@ -169,6 +169,20 @@ export function explorerTxUrl(txHash: string): string | undefined {
   return `${base.replace(/\/$/, "")}/tx/${txHash}`;
 }
 
+/**
+ * A link to a contract on the chain's own explorer.
+ *
+ * Same argument as `explorerTxUrl`, aimed at the other thing a user might
+ * want to check: which feed decides a market. "Settles on Chainlink ETH/USD"
+ * is a claim, and this is how somebody verifies it against a source that is
+ * not us (GHO-64).
+ */
+export function explorerAddressUrl(address: string): string | undefined {
+  const base = activeChain.blockExplorers?.default.url;
+  if (!base) return undefined;
+  return `${base.replace(/\/$/, "")}/address/${address}`;
+}
+
 /** Short form of an address or hash, for a dense table. */
 export function shortHash(value: string, lead = 6, tail = 4): string {
   if (value.length <= lead + tail + 2) return value;

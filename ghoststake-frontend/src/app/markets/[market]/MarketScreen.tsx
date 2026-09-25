@@ -7,6 +7,7 @@ import { AppShell, NotConfigured } from "@/components/AppShell";
 import { Card } from "@/components/Card";
 import { MarketBlock } from "@/components/MarketBlock";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
+import { useSpot } from "@/hooks/useSpot";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useNow } from "@/hooks/useNow";
 import { useMarketParams, useRounds } from "@/hooks/useRounds";
@@ -48,6 +49,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
   const { markets, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);
   const feeds = useMarketFeeds(markets);
+  const spot = useSpot(markets, feeds.byMarket);
   const { rounds, isLoading, isError, refetch } = useRounds(markets);
   const position = useVaultPosition();
 
@@ -111,6 +113,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
         market={found}
         params={params.byMarket.get(found.key)}
         feed={feeds.byMarket.get(found.key)}
+        spot={spot.byMarket.get(found.key)}
         rounds={rounds.filter((r) => r.market.key === found.key)}
         address={address}
         position={position}

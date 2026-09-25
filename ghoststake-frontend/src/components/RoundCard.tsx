@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 
+import { explorerAddressUrl } from "@/lib/activity";
 import { formatAmount } from "@/lib/format";
 import { questionFor, sideLabel } from "@/lib/question";
+import type { Spot } from "@/hooks/useSpot";
+import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "@/lib/spot";
 import { SideArrow } from "@/components/icons";
 import {
   Phase,
@@ -43,6 +46,8 @@ export function RoundCard({
   onStake,
   feed,
   isQuestion,
+  feedAddress,
+  spot,
   href,
   children,
 }: {
@@ -65,6 +70,13 @@ export function RoundCard({
   /** Set when this market settles a claimed outcome rather than a price
    *  (GHO-91). `feed` is then the oracle's own question, used verbatim. */
   isQuestion?: boolean;
+  /** The aggregator this market settles against, for the explorer link on
+   *  the settlement line (GHO-64). */
+  feedAddress?: `0x${string}`;
+  /** What the asset is worth right now, in the strike's 18-decimal scale
+   *  (GHO-64). Undefined while it loads, or on a market with no price at
+   *  all — a question is not settled by one. */
+  spot?: Spot;
   /** Where this round lives on its own (GHO-41). Omitted on the round's own page. */
   href?: string;
   children?: React.ReactNode;
@@ -144,10 +156,15 @@ export function RoundCard({
         )}
       </header>
 
-      {/* The strike, once there is one. Before the lock there is nothing to
-          show and inventing a placeholder would imply the round is already
-          measuring something. */}
-      {round.status !== Status.Open && round.lockPrice > 0n && (
+      {/*
+       * The strike, and where the price is against it.
+       *
+       * ~~Shown only once locked~~ — that was right when the strike did not
+       * exist until lock, and GHO-79 made it exist from the first second. The
+       * old condition then quietly hid the number the round is *asking about*
+       * during the only phase anyone can still act on it.
+       */}
+      {round.lockPrice > 0n && (
         <p className="mt-3 text-xs text-ink-muted">
           Strike{" "}
           <span className="tabular text-ink">{formatAmount(round.lockPrice, 18, 2)}</span>
@@ -160,7 +177,17 @@ export function RoundCard({
         </p>
       )}
 
+      {/* Where it is now, and so which answer is winning (GHO-64). */}
+      <SpotLine round={round} phase={phase} spot={spot} now={now} isQuestion={isQuestion} />
+
       <OddsBar round={round} decimals={decimals} symbol={symbol} />
+
+      <SettlementNote
+        round={round}
+        feed={feed}
+        feedAddress={feedAddress}
+        isQuestion={isQuestion}
+      />
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <SideButton
@@ -376,3 +403,192 @@ function SideButton({
   );
 }
 
+/**
+ * The live price, and which answer it currently favours.
+ *
+ * The "done when" of GHO-64 is that a visitor can tell within two seconds
+ * what the price is, what the strike is, which side is ahead and how long is
+ * left. The strike and the clock were already on the card; this is the other
+ * half.
+ *
+ * Renders nothing rather than a placeholder when either number is missing. A
+ * market deployed before GHO-79 has no strike until it locks, and a feed that
+ * has never published has no price — both are real states, and a dash where a
+ * price should be reads as a broken card.
+ */
+function SpotLine({
+  round,
+  phase,
+  spot,
+  now,
+  isQuestion,
+}: {
+  round: Round;
+  phase: PhaseValue;
+  spot?: Spot;
+  now?: bigint;
+  isQuestion?: boolean;
+}) {
+  const settled = round.status === Status.Resolved || round.status === Status.Void;
+  // A settled round has a close price on the line above, which is the number
+  // that decided it. Showing today's price beside it would invite reading the
+  // wrong one as the outcome.
+  if (settled) return null;
+
+  // No strike yet, on a market deployed before GHO-79 — the level is captured
+  // when entry closes, not when the round opens. Said out loud rather than
+  // left blank: the live Sepolia market is one of these, so "what am I
+  // betting against" is a question the card has to answer even when the
+  // answer is "not decided yet". A question has no strike at all and is not
+  // waiting for one, so it is excluded.
+  const awaitingStrike = !isQuestion && round.lockPrice === 0n;
+
+  if (spot === undefined) {
+    return awaitingStrike ? <AwaitingStrike phase={phase} /> : null;
+  }
+
+  const { leading, bps } = standingOf(spot.price, round.lockPrice);
+  const age = priceAge(spot.updatedAt, now);
+  // "Now" is a claim about freshness that an hourly feed cannot support. When
+  // the print is recent the word is fine; when it is not, the figure is named
+  // for what it actually is.
+  const stale = age !== null && isStalePrint(age);
+
+  return (
+    <>
+    {awaitingStrike && <AwaitingStrike phase={phase} />}
+    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
+      <span>
+        {stale ? "Last price" : "Now"}{" "}
+        <span className="tabular text-ink">{formatAmount(spot.price, 18, 2)}</span>
+      </span>
+
+      {/*
+       * When the feed printed it. The ETH/USD feed publishes about once an
+       * hour, and rounds are an hour long, so a price shown bare under the
+       * word "Now" could be fifty-nine minutes old on the one screen where
+       * that difference decides a bet.
+       */}
+      {age !== null && <span className="text-ink-faint">printed {formatAge(age)}</span>}
+
+      {bps !== null && leading !== null && (
+        <>
+          <span className="tabular">{formatMove(bps)}</span>
+          {/*
+           * Hedged deliberately when the lead is thin. "Yes is ahead" at
+           * +0.01% and at +4% are not the same claim, and an ETH/USD feed
+           * crosses a tenth of a percent several times an hour — so stating
+           * both the same way would be misleading in one of the two cases.
+           */}
+          <span>
+            {isNarrow(bps) ? "too close to call" : `${sideLabel(leading)} is ahead`}
+          </span>
+        </>
+      )}
+
+      {/*
+       * The adapter refuses stale readings, readings from behind a sequencer
+       * outage, and readings from a paused feed. A price the contract would
+       * not settle on must not be shown as if it would.
+       */}
+      {!spot.usable && (
+        <span className="text-ink-faint">
+          (the feed is stale — this is not a price the round could settle on)
+        </span>
+      )}
+    </p>
+    </>
+  );
+}
+
+/**
+ * Said when a live round has no strike yet.
+ *
+ * Markets deployed before GHO-79 capture the level at lock rather than at
+ * open, and the live Sepolia market is one of them — so for the whole of the
+ * entry window there is genuinely nothing to compare the price against. The
+ * card says which, because a price with no reference point and no explanation
+ * reads as a missing number rather than as a phase.
+ */
+function AwaitingStrike({ phase }: { phase: PhaseValue }) {
+  // Past the entry window the first wording would be false — entry *has*
+  // closed, and the level is being captured rather than waiting on a
+  // deadline. Two sentences rather than one, because a card that tells you
+  // something you can see is wrong is worse than one that says nothing.
+  const text =
+    phase === Phase.Open
+      ? "Start price is set when entry closes — this round measures the move from there."
+      : "Start price is being set now. This round measures the move from there.";
+
+  return <p className="mt-3 text-xs text-ink-muted">{text}</p>;
+}
+
+/**
+ * How this round will be decided, and by whom.
+ *
+ * The settlement path is pinned: the round resolves against a specific
+ * Chainlink round at a specific second, chosen by rule rather than by us at
+ * the time (runbook Part 7.31). That is the strongest honest claim this
+ * product makes — it is checkable by a stranger against a source we do not
+ * control — and until now it was stated nowhere in the app. A market that
+ * cannot say who decides it is asking for trust it has not earned.
+ *
+ * The time is spelled in UTC. A local time is friendlier and wrong for this
+ * one sentence: the reader is being invited to go and check a figure against
+ * a public feed, and the feed's own clock is UTC.
+ */
+function SettlementNote({
+  round,
+  feed,
+  feedAddress,
+  isQuestion,
+}: {
+  round: Round;
+  feed?: string;
+  feedAddress?: `0x${string}`;
+  isQuestion?: boolean;
+}) {
+  // A question is settled by a named arbiter against written criteria, not by
+  // a feed. Saying "settles on the price" there would be plainly false, and
+  // the resolution panel already explains the real path (GHO-91).
+  if (isQuestion) return null;
+
+  // A void round was not settled on the price — it was cancelled and the
+  // stakes handed back, and the feed had nothing to do with it. Claiming
+  // otherwise would be flatly false on the one line whose entire purpose is
+  // to be checkable. Round 417 on Sepolia is exactly this case.
+  if (round.status === Status.Void) return null;
+
+  const at = new Date(Number(round.closeTime) * 1000).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "UTC",
+  });
+
+  const name = feed?.split(" - ").pop() ?? "the price feed";
+  const href = feedAddress ? explorerAddressUrl(feedAddress) : undefined;
+  // Tense matters here more than it looks. This sentence exists to be
+  // checked, and a resolved round that still says "settles" reads as a
+  // pending one — which would send somebody to the explorer looking for a
+  // future they have already missed.
+  const done = round.status === Status.Resolved;
+
+  return (
+    <p className="mt-3 border-t border-border pt-3 text-[11px] text-ink-faint">
+      {done ? "Settled" : "Settles"} on the {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2 hover:text-ink-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+        >
+          Chainlink {name}
+        </a>
+      ) : (
+        <>Chainlink {name}</>
+      )}{" "}
+      price at {at} UTC. Anyone can check it.
+    </p>
+  );
+}
