@@ -20,6 +20,23 @@ case "$NETWORK" in
     RPC_URL="${RPC_URL:-https://rpc.testnet.chain.robinhood.com}"
     CHAIN_ID=46630
     EXPLORER="https://explorer.testnet.chain.robinhood.com"
+    # No FEED_ADDRESS, and that is not an omission (GHO-21). Chainlink runs no
+    # price feeds on this testnet at all — all 58 Robinhood feeds are mainnet
+    # only, and every Chainlink-named contract deployed here is another team's
+    # mock. So the headline market runs on a DemoPriceFeed with the *real*
+    # mainnet RHTSLA price mirrored into it by `cmd/mirror`.
+    #
+    # The label has to say so. Every screen downstream takes this string as the
+    # truth about what the market prices, and it is the only place a user is
+    # told the price crossed a bridge to get here.
+    FEED_LABEL="${FEED_LABEL:-RHTSLA / USD (mirrored from Robinhood Chain mainnet)}"
+    # Roughly Tesla, so the first round is not wildly off in the minute before
+    # the mirror publishes for real. The adapter refuses a stale read anyway.
+    FEED_SEED_PRICE="${FEED_SEED_PRICE:-37200000000}"
+    # Backdated a day, so the mirror's first real print always beats the seed.
+    # See the FEED_SEED_AGE comment in Deploy.s.sol: a seed stamped "now" left
+    # the mirror waiting on a source whose newest print was older than it.
+    FEED_SEED_AGE="${FEED_SEED_AGE:-86400}"
     ;;
   ethereum-sepolia)
     RPC_URL="${RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
@@ -42,6 +59,13 @@ case "$NETWORK" in
 esac
 
 export ARBISCAN_API_KEY="${ARBISCAN_API_KEY:-}"
+# Exported only when set. `vm.envOr` reads a *set but empty* variable as a
+# value, so exporting these unconditionally would hand Solidity an empty string
+# to parse as a uint and label a feed with nothing at all — on every network
+# that does not set them.
+[ -n "${FEED_LABEL:-}" ] && export FEED_LABEL || true
+[ -n "${FEED_SEED_PRICE:-}" ] && export FEED_SEED_PRICE || true
+[ -n "${FEED_SEED_AGE:-}" ] && export FEED_SEED_AGE || true
 export FEED_ADDRESS="${FEED_ADDRESS:-}"
 export SEQUENCER_FEED_ADDRESS="${SEQUENCER_FEED_ADDRESS:-}"
 # A second market on a feed the deployer publishes into, so a round can be

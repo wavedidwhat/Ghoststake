@@ -41,11 +41,20 @@ robinhood = "${ROBINHOOD_RPC_URL}"
 [etherscan]
 arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}", chain = 421614 }
 arbitrum_one = { key = "${ARBISCAN_API_KEY}", chain = 42161 }
-# Blockscout, not Etherscan, so the key is unused and any non-empty string
-# does. Confirmed the instance accepts verification: 1657 solc builds offered,
-# 0.8.26 among them, and `standard-input` supported — which is the mode that
-# reproduces our via_ir/optimizer settings exactly rather than by flattening.
-robinhood_testnet = { key = "unused", chain = 46630, url = "https://explorer.testnet.chain.robinhood.com/api" }
-robinhood = { key = "unused", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
+# Robinhood Chain is deliberately absent here. Foundry 1.2.3 resolves the
+# `chain` field of an `[etherscan]` entry against its own built-in list, and an
+# id it does not know fails the whole command — `Error: Chain 46630 not
+# supported` — before it gets anywhere near a deploy. Not a verification error
+# either: it stops `forge script` too, so one unused config entry breaks the
+# deploy it was added to support.
+#
+# Blockscout is verified with explicit flags instead, which need no entry here:
+#
+#   forge verify-contract --verifier blockscout \
+#     --verifier-url https://explorer.testnet.chain.robinhood.com/api ADDRESS PATH:NAME
+#
+# Confirmed that instance accepts it: 1657 solc builds offered, 0.8.26 among
+# them, and `standard-input` supported, which reproduces our optimizer settings
+# exactly rather than by flattening.
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

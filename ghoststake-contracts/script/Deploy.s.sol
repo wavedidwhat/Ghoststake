@@ -126,8 +126,37 @@ contract Deploy is MarketDeployer {
         // correct but leaves the first round un-lockable.
         address feed = existingFeed;
         if (feed == address(0)) {
-            DemoPriceFeed localFeed = new DemoPriceFeed(8, "ETH / USD", deployer);
-            localFeed.push(2000e8);
+            // Labelled from the environment because this feed is not always
+            // standing in for ETH (GHO-21). On Robinhood Chain there are no
+            // Chainlink feeds at all on testnet, so the headline market runs
+            // on one of these with the real mainnet RHTSLA price mirrored into
+            // it — and a feed that said "ETH / USD" while carrying Tesla's
+            // price would be the worst kind of wrong, because every screen
+            // downstream takes this string as the truth about what it prices.
+            DemoPriceFeed localFeed = new DemoPriceFeed(8, vm.envOr("FEED_LABEL", string("ETH / USD")), deployer);
+            // A first round so the adapter has something to read.
+            //
+            // `FEED_SEED_AGE` backdates it, and a mirrored feed needs that.
+            // `push` stamps `block.timestamp`, which puts the destination
+            // *ahead* of the source it is about to be fed from — and
+            // `DemoPriceFeed` only accepts a strictly newer timestamp, so the
+            // mirror then publishes nothing until the source overtakes a
+            // moment that has not happened there yet. Seeding at "now" cost
+            // exactly that on the first Robinhood deploy: the mainnet feed's
+            // newest print was seventeen minutes older than the seed, so the
+            // mirror started, verified, and correctly sat still.
+            //
+            // Backdating inverts the failure. The feed reads stale for at most
+            // one poll interval and then self-corrects, instead of stalling
+            // for however long the source takes to catch up — which, for an
+            // equity feed out of hours, is overnight.
+            uint256 seedAge = vm.envOr("FEED_SEED_AGE", uint256(0));
+            int256 seedPrice = int256(vm.envOr("FEED_SEED_PRICE", uint256(2000e8)));
+            if (seedAge == 0) {
+                localFeed.push(seedPrice);
+            } else {
+                localFeed.pushAt(seedPrice, block.timestamp - seedAge);
+            }
             feed = address(localFeed);
         }
 
