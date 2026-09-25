@@ -80,9 +80,14 @@ contract EventMarketTest is Test {
     function test_aQuestionIsAskedAnsweredAndPaid() public {
         // 1. A market on the question. The strike is the sentinel the oracle
         //    answers against — Yes lands above it, No below.
+        // Read before the prank, not inside the call: `vm.prank` applies to
+        // the next call, and an argument that is itself a call consumes it.
+        // This has bitten three times now — it surfaces as
+        // OwnableUnauthorizedAccount, which reads like a contract bug.
+        uint256 strike = oracle.STRIKE();
         vm.prank(owner);
         uint256 roundId =
-            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days));
+            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days), strike);
 
         // 2. Two people disagree. 300 on Yes, 100 on No.
         vm.prank(yesBettor);
@@ -90,9 +95,10 @@ contract EventMarketTest is Test {
         vm.prank(noBettor);
         market.takePosition(roundId, ParimutuelRound.Side.Down, 100e18);
 
-        // 3. Entry closes and the round locks. No feed is read: on a market
-        //    deployed before GHO-79 the lock takes the oracle's sentinel,
-        //    and after it the strike was set at open. Either way it is 1e18.
+        // 3. Entry closes and the round locks. No feed is read at lock since
+        //    GHO-79 — the strike was fixed when the round opened, and for a
+        //    question that strike is the sentinel the outcome is compared
+        //    against rather than a price anybody could have moved.
         vm.warp(EVENT_TIME - 1 days);
         market.lockRound(roundId);
         assertEq(market.rounds(roundId).lockPrice, oracle.STRIKE(), "the round struck somewhere else");
@@ -135,9 +141,14 @@ contract EventMarketTest is Test {
     /// back, the oracle stays silent, and the round is unwound by the same
     /// escape hatch a dead price feed would need — every stake refunded.
     function test_aQuestionNobodyWouldStandBehindRefundsEveryone() public {
+        // Read before the prank, not inside the call: `vm.prank` applies to
+        // the next call, and an argument that is itself a call consumes it.
+        // This has bitten three times now — it surfaces as
+        // OwnableUnauthorizedAccount, which reads like a contract bug.
+        uint256 strike = oracle.STRIKE();
         vm.prank(owner);
         uint256 roundId =
-            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days));
+            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days), strike);
 
         vm.prank(yesBettor);
         market.takePosition(roundId, ParimutuelRound.Side.Up, 300e18);
@@ -165,9 +176,14 @@ contract EventMarketTest is Test {
     /// outcome, and the round pays the other side. The money follows the
     /// ruling, not the claim.
     function test_aRulingAgainstTheProposerPaysTheOtherSide() public {
+        // Read before the prank, not inside the call: `vm.prank` applies to
+        // the next call, and an argument that is itself a call consumes it.
+        // This has bitten three times now — it surfaces as
+        // OwnableUnauthorizedAccount, which reads like a contract bug.
+        uint256 strike = oracle.STRIKE();
         vm.prank(owner);
         uint256 roundId =
-            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days));
+            market.openRound(uint64(block.timestamp), uint64(EVENT_TIME - 1 days), uint64(EVENT_TIME + 1 days), strike);
 
         vm.prank(yesBettor);
         market.takePosition(roundId, ParimutuelRound.Side.Up, 300e18);

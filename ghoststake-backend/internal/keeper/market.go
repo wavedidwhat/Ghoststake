@@ -49,6 +49,21 @@ type Market struct {
 	// still live and still have to be driven — see SupportsStrikeAtOpen.
 	StrikeAtOpen bool
 
+	// Event is whether this market settles a question rather than a price
+	// (GHO-80). Such a market has no feed at all, so everything downstream
+	// that reads one — the trading session, the liveness measurement, the
+	// binary search for a settlement round — is skipped rather than given a
+	// stand-in. See LoadMarket.
+	Event bool
+
+	// Question is the event oracle's own `question()`, in the words it will
+	// be judged by. Empty for a price market.
+	//
+	// Read from the oracle rather than configured, for the reason
+	// MarketRegistry gives for storing no labels: a copy can disagree with
+	// the thing it describes, and the copy is the one you would read.
+	Question string
+
 	// Liveness is the feed's measured publication cadence, read once at
 	// startup. Only Heartbeat and Known are meaningful here — LastPublished
 	// is filled in per check, because it is the part that goes stale.
@@ -75,6 +90,11 @@ type Market struct {
 // this market not open a round all weekend" should be answerable from the
 // line that announced it.
 func (m *Market) SessionLabel() string {
+	if m.Event {
+		// Not "24/7", which would suggest a market that opens rounds around
+		// the clock. This one opens none at all.
+		return "no schedule (a question)"
+	}
 	if m.Session == nil {
 		return "24/7"
 	}
@@ -86,6 +106,9 @@ func (m *Market) SessionLabel() string {
 // never gates, and a heartbeat wildly unlike the feed's documented one
 // explains a market that gates too often.
 func (m *Market) HeartbeatLabel() string {
+	if m.Event {
+		return "no feed (a question)"
+	}
 	if !m.Liveness.Known {
 		return "not measured (too few rounds)"
 	}
@@ -127,8 +150,48 @@ func LoadMarket(ctx context.Context, client *chain.Client, address string, horiz
 	if err != nil {
 		return nil, err
 	}
-	if m.oracle, err = client.Bind(abis.ChainlinkRoundOracle, oracleAddr.Hex()); err != nil {
+
+	// Which shape of oracle this is, asked of its bytecode. Before GHO-91
+	// this was assumed: every oracle was a price adapter, so an event
+	// market's oracle was bound to the Chainlink ABI, `feed()` reverted, and
+	// the error came back out of LoadMarket and took the keeper's *entire*
+	// market list with it — one question would have stopped every price
+	// market the keeper drives.
+	oracleCode, err := client.CodeAt(ctx, oracleAddr.Hex())
+	if err != nil {
 		return nil, err
+	}
+	m.Event = IsEventOracle(oracleCode)
+
+	oracleABI := abis.ChainlinkRoundOracle
+	if m.Event {
+		oracleABI = abis.EventRoundOracle
+	}
+	if m.oracle, err = client.Bind(oracleABI, oracleAddr.Hex()); err != nil {
+		return nil, err
+	}
+
+	// Asked once, for the same reason as everything else here: a contract's
+	// code cannot change, so the answer cannot either.
+	code, err := client.CodeAt(ctx, round.Address().Hex())
+	if err != nil {
+		return nil, err
+	}
+	m.StrikeAtOpen = SupportsStrikeAtOpen(code)
+
+	if m.Event {
+		// A question has no feed, no trading session and no cadence. It is
+		// opened once, by whoever deploys it, and the keeper's job is the
+		// other half: lock it when entry closes and settle it when the
+		// outcome goes final. Both work unchanged — GHO-79 removed the only
+		// feed read the lock had.
+		if m.Question, err = readQuestion(ctx, m.oracle); err != nil {
+			return nil, fmt.Errorf("keeper: %s's oracle at %s answers question() with nothing readable: %w",
+				round.Address().Hex(), oracleAddr.Hex(), err)
+		}
+		m.Description = m.Question
+		m.Session = AlwaysOpen()
+		return m, nil
 	}
 
 	feedAddr, err := callAddress(ctx, m.oracle, "feed")
@@ -162,14 +225,6 @@ func LoadMarket(ctx context.Context, client *chain.Client, address string, horiz
 	} else {
 		m.Session = AlwaysOpen()
 	}
-
-	// Asked once, for the same reason as everything else here: a contract's
-	// code cannot change, so the answer cannot either.
-	code, err := client.CodeAt(ctx, round.Address().Hex())
-	if err != nil {
-		return nil, err
-	}
-	m.StrikeAtOpen = SupportsStrikeAtOpen(code)
 
 	// Measured once. The cadence is a property of the feed and does not move;
 	// how long ago it last published is read per check, where it matters.
@@ -406,6 +461,29 @@ func readDescription(ctx context.Context, feed *chain.Contract) string {
 		return ""
 	}
 	return text
+}
+
+// readQuestion is the event oracle's own `question()`.
+//
+// An error rather than an empty string, unlike readDescription: a feed with
+// no description is cosmetic, but a question that cannot be read is an oracle
+// that is not the shape the bytecode probe said it was, and loading the
+// market anyway would mean driving a market nobody can see the question of.
+func readQuestion(ctx context.Context, oracle *chain.Contract) (string, error) {
+	values, err := oracle.CallAt(ctx, nil, "question")
+	if err != nil {
+		return "", err
+	}
+	text, ok := values[0].(string)
+	if !ok {
+		return "", fmt.Errorf("question() returned %T, want string", values[0])
+	}
+	if text == "" {
+		// The constructor refuses one, so an empty question means this is not
+		// an EventRoundOracle at all.
+		return "", fmt.Errorf("question() is empty")
+	}
+	return text, nil
 }
 
 // Spot is the price the market's own oracle would report right now, in the
