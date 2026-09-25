@@ -5,6 +5,7 @@ import { useReadContracts } from "wagmi";
 import {
   aggregatorV3InterfaceAbi,
   chainlinkRoundOracleAbi,
+  eventRoundOracleAbi,
   parimutuelRoundAbi,
 } from "@/lib/abis";
 import type { Market } from "@/lib/markets";
@@ -14,10 +15,26 @@ import { activeChain } from "@/lib/wagmi";
  *  `description()` for exactly this purpose — see its contract docs. */
 const DEMO_MARKER = "GHOSTSTAKE DEMO FEED";
 
+/** A stand-in for a hop that did not resolve. Reads against it return no
+ *  data, which is exactly the "absent" this hook already handles — and it
+ *  keeps every batch the same length as `markets`, so indices stay aligned. */
+const ZERO = "0x0000000000000000000000000000000000000000" as const;
+
 export type MarketFeed = {
-  /** The feed's own `description()`: "ETH / USD" on a Chainlink aggregator. */
+  /**
+   * The feed's own `description()` ("ETH / USD"), or the oracle's own
+   * `question()` on a market that settles a question instead (GHO-91).
+   *
+   * One field for both because it is the same slot in every sentence the app
+   * builds: what this market is about, in the words of the contract that
+   * decides it.
+   */
   description: string;
   isDemo: boolean;
+  /** True when this market is settled by a claimed outcome, not a price. */
+  isQuestion: boolean;
+  /** The oracle's address, for reading and acting on the claim. */
+  oracle?: `0x${string}`;
 };
 
 /**
@@ -55,13 +72,35 @@ export function useMarketFeeds(markets: Market[]) {
     [oracles.data],
   );
 
+  // Both shapes of oracle, asked at once. An event oracle has no `feed()` and
+  // a price adapter has no `question()`, so exactly one of these answers per
+  // market — and the one that reverts is the signal, not a failure.
+  //
+  // The bug this replaces mattered more than it looks: the feed read was
+  // batched over `oracleAddresses.filter(Boolean)` and the result map was
+  // abandoned wholesale if *any* address was missing. One event market on the
+  // registry would therefore have left every price market unlabelled, which
+  // is the same one-question-breaks-everything failure the keeper had.
   const feeds = useReadContracts({
-    contracts: oracleAddresses.filter(Boolean).map(
+    contracts: oracleAddresses.map(
       (address: `0x${string}` | undefined) =>
         ({
-          address: address!,
+          address: address ?? ZERO,
           abi: chainlinkRoundOracleAbi,
           functionName: "feed",
+          chainId: activeChain.id,
+        }) as const,
+    ),
+    query: { enabled: oracleAddresses.some(Boolean), staleTime: Infinity },
+  });
+
+  const questions = useReadContracts({
+    contracts: oracleAddresses.map(
+      (address: `0x${string}` | undefined) =>
+        ({
+          address: address ?? ZERO,
+          abi: eventRoundOracleAbi,
+          functionName: "question",
           chainId: activeChain.id,
         }) as const,
     ),
@@ -74,10 +113,10 @@ export function useMarketFeeds(markets: Market[]) {
   );
 
   const descriptions = useReadContracts({
-    contracts: feedAddresses.filter(Boolean).map(
+    contracts: feedAddresses.map(
       (address: `0x${string}` | undefined) =>
         ({
-          address: address!,
+          address: address ?? ZERO,
           abi: aggregatorV3InterfaceAbi,
           functionName: "description",
           chainId: activeChain.id,
@@ -86,28 +125,37 @@ export function useMarketFeeds(markets: Market[]) {
     query: { enabled: feedAddresses.some(Boolean), staleTime: Infinity },
   });
 
-  // Indices line up with `markets` only while every hop resolves for every
-  // market. A market whose oracle read failed drops out of the next batch, so
-  // it is left absent here rather than picking up its neighbour's feed — a
-  // mislabelled market is worse than an unlabelled one.
+  // Per market, independently. Indices line up because nothing is filtered:
+  // a market whose oracle could not be read is simply absent from the map,
+  // and its neighbours are unaffected. A mislabelled market is worse than an
+  // unlabelled one, and a market blanked by an unrelated market's shape is
+  // worse than both.
   const byMarket = useMemo(() => {
     const out = new Map<string, MarketFeed>();
-    if (!descriptions.data) return out;
-    if (oracleAddresses.some((a: unknown) => !a) || feedAddresses.some((a: unknown) => !a)) return out;
-
     markets.forEach((m, i) => {
+      const oracle = oracleAddresses[i];
+      if (!oracle) return;
+
+      const question = questions.data?.[i]?.result as string | undefined;
+      if (question) {
+        out.set(m.key, { description: question, isDemo: false, isQuestion: true, oracle });
+        return;
+      }
+
       const description = descriptions.data?.[i]?.result as string | undefined;
       if (description === undefined) return;
       out.set(m.key, {
         description,
         isDemo: description.includes(DEMO_MARKER),
+        isQuestion: false,
+        oracle,
       });
     });
     return out;
-  }, [descriptions.data, oracleAddresses, feedAddresses, markets]);
+  }, [descriptions.data, questions.data, oracleAddresses, markets]);
 
   return {
-    isLoading: oracles.isLoading || feeds.isLoading || descriptions.isLoading,
+    isLoading: oracles.isLoading || feeds.isLoading || questions.isLoading || descriptions.isLoading,
     byMarket,
   };
 }

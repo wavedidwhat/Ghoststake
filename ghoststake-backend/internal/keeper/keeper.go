@@ -189,7 +189,11 @@ func validateMarket(m *Market, cfg Config) error {
 			"keeper: poll interval %s is not shorter than %s's lock window of %s — every round would void",
 			cfg.PollInterval, m.Address.Hex(), window)
 	}
-	if cfg.OpenRounds {
+	// An event market's schedule is not the keeper's to plan: its one round
+	// is opened by whoever deploys the question, with a close time taken from
+	// when the event happens rather than from a horizon. Checking a horizon
+	// it will never use would refuse to start over a number nothing reads.
+	if cfg.OpenRounds && !m.Event {
 		if _, _, err := m.schedulePlan(cfg); err != nil {
 			return err
 		}
@@ -415,8 +419,16 @@ func (k *Keeper) refreshMarkets(ctx context.Context) {
 		// round from a previous keeper. The first driveMarket corrects this
 		// within one poll interval.
 		k.pending[m.Address] = true
-		slog.Info("keeper: market listed", "market", m.String(),
-			"horizon_s", m.Horizon, "session", m.SessionLabel())
+		if m.Event {
+			// A horizon and a session would both be lies here: nothing opens
+			// this market's rounds on a cadence, and there is no venue whose
+			// hours it keeps. What an operator wants to see is the question.
+			slog.Info("keeper: question listed", "market", m.String(),
+				"question", m.Question, "opens_rounds", false)
+		} else {
+			slog.Info("keeper: market listed", "market", m.String(),
+				"horizon_s", m.Horizon, "session", m.SessionLabel())
+		}
 		next = append(next, m)
 	}
 
@@ -594,13 +606,30 @@ func (k *Keeper) driveMarket(ctx context.Context, m *Market, now uint64) error {
 	// dropping one because an RPC call failed would strand it.
 	k.pending[m.Address] = !advance
 
-	if !k.cfg.OpenRounds || k.retiring[m.Address] {
-		return nil
-	}
-	if !NeedsNewRound(latest, m.Timing.EntryCutoff, now) {
+	if !k.shouldOpen(m, latest, now) {
 		return nil
 	}
 	return k.openRound(ctx, m, now)
+}
+
+// shouldOpen is whether this market wants a new round opened right now.
+//
+// Its own function because the answer has four independent reasons to be no,
+// and the one added last is the one that is silent when it is wrong: a
+// question is asked *once*. `NeedsNewRound` is a cadence rule, and there is
+// no cadence here — it would say yes the moment the single round settled, and
+// the keeper would open round after round on a question already answered.
+// Each would be struck at the sentinel and none could ever settle, because
+// `readAt` stays final on the same outcome. Opening an event market's round
+// belongs to whoever deploys the question.
+func (k *Keeper) shouldOpen(m *Market, latest Round, now uint64) bool {
+	if !k.cfg.OpenRounds || k.retiring[m.Address] {
+		return false
+	}
+	if m.Event {
+		return false
+	}
+	return NeedsNewRound(latest, m.Timing.EntryCutoff, now)
 }
 
 func (k *Keeper) driveRound(ctx context.Context, m *Market, id uint64, round Round, now uint64) error {
@@ -684,6 +713,24 @@ func (k *Keeper) settle(ctx context.Context, m *Market, id uint64, round Round, 
 // findSettlementRound returns the feed round `resolveRound` should name, or
 // nil when there is not one the adapter will accept.
 func (k *Keeper) findSettlementRound(ctx context.Context, m *Market, id uint64, round Round) (*big.Int, error) {
+	// A question has no feed to search. Its oracle ignores both arguments
+	// and answers only once the outcome is final, so the whole search — the
+	// head read, the binary search, the memo — collapses into the dry-run
+	// that a price market does last anyway. Round id zero is what the
+	// resolve will name, and it means nothing to this oracle.
+	if m.Event {
+		readable, err := m.SettlementReadable(ctx, big.NewInt(0), round.CloseTime)
+		if err != nil {
+			return nil, fmt.Errorf("dry-run readAt: %w", err)
+		}
+		if !readable {
+			slog.Debug("keeper: the question has no final outcome yet, waiting",
+				"market", m.String(), "round", id)
+			return nil, nil
+		}
+		return big.NewInt(0), nil
+	}
+
 	// Both halves of one read. The id bounds the search and the timestamp
 	// decides whether there is anything to search for, and asking for them
 	// separately would be two calls describing two different moments.

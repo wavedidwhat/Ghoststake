@@ -63,6 +63,21 @@ const WANTED = {
   // can say where a market's settlement price actually comes from instead of
   // trusting which env var the address arrived in (GHO-29).
   ChainlinkRoundOracle: ["feed", "maxStaleness", "readAt", "readLatest"],
+  // The other shape an oracle comes in (GHO-80): a question settled by a
+  // bonded claim rather than a price feed. Such a market has no `feed()` at
+  // all, so the app asks the oracle for its `question()` instead of walking
+  // the chain to a description — and `challenge` is the one write here,
+  // because a window nobody can act on from the app is a window in name only.
+  EventRoundOracle: [
+    "question", "criteriaURI", "criteriaDigest",
+    "state", "outcome", "proposedOutcome",
+    "proposer", "challenger", "proposerStake",
+    "evidenceURI", "evidenceDigest",
+    "arbiter", "bond", "bondAsset",
+    "eventTime", "challengeClosesAt", "rulingDueAt",
+    // writes
+    "propose", "challenge", "finalise",
+  ],
   AggregatorV3Interface: ["description", "decimals", "getRoundData", "latestRoundData"],
   // The operator-driven feed behind a demo market (GHO-29). Only reachable
   // where such a market is deployed; the console hides it otherwise.

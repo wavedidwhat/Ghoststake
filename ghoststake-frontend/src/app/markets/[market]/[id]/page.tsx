@@ -38,12 +38,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // The one line worth putting in front of somebody who has been sent a link.
   // A settled round's headline is its outcome; a live one's is what is at
   // stake and whether they can still join.
+  //
+  // A question's round is the exception in the resolved branch: its strike is
+  // the sentinel an outcome is compared against and its close price is the
+  // outcome itself, so "struck at $1.00, closed at $2.00" would be the two
+  // most confusing numbers the app could put in front of somebody following
+  // a link. What settled it is the claim.
   const description =
-    round.status === "resolved"
-      ? `${round.winner === "up" ? "Yes" : "No"} won. Struck at ${price(round.lockPrice)}, closed at ${price(round.closePrice)}.`
-      : round.status === "void"
-        ? `Voided${round.voidReason ? ` — ${round.voidReason}` : ""}. Every stake was refunded.`
-        : `${round.phase}. ${pool(round.upPool)} up against ${pool(round.downPool)} down.`;
+    round.status === "resolved" && round.question
+      ? `${round.winner === "up" ? "Yes" : "No"} won, on a claim nobody argued with inside the window.`
+      : round.status === "resolved"
+        ? `${round.winner === "up" ? "Yes" : "No"} won. Struck at ${price(round.lockPrice)}, closed at ${price(round.closePrice)}.`
+        : round.status === "void"
+          ? `Voided${round.voidReason ? ` — ${round.voidReason}` : ""}. Every stake was refunded.`
+          : `${round.phase}. ${pool(round.upPool)} up against ${pool(round.downPool)} down.`;
 
   const title = `${name} · round ${round.id} · GhostStake`;
   return { title, description, openGraph: { title, description } };

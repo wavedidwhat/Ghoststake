@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"forge.wavedidwhat.com/wave/ghoststake/internal/abis"
+	"forge.wavedidwhat.com/wave/ghoststake/internal/config"
 	"forge.wavedidwhat.com/wave/ghoststake/internal/ledger"
 )
 
@@ -40,6 +41,11 @@ type Config struct {
 	// blind to the rest: a user with a demo-market position asking for their
 	// positions was told they had none.
 	MarketAddresses []string
+
+	// EventOracles is every EventRoundOracle to index, each carrying the
+	// market and round it settles. See decodeEventOracle for why the pair is
+	// configured here rather than read off the contract.
+	EventOracles []config.EventOracle
 
 	// StartBlock is where a fresh cursor begins. Set it to the deployment
 	// block: scanning from genesis on a public RPC is slow and pointless.
@@ -106,24 +112,38 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 	// the position it funded land in the same transaction, and separate
 	// cursors would let the two halves of that be visible at different times
 	// — a stake with no debt behind it, or a debt with no stake.
-	specs := []struct {
+	type spec struct {
 		name    string
 		address string
 		decode  func(string, *fields, types.Log) ledger.Batch
-	}{
-		{abis.CollateralVault, cfg.VaultAddress, entriesOnly(decodeVault)},
-		{abis.BorrowLiquidityPool, cfg.PoolAddress, entriesOnly(decodePool)},
+		// market overrides the address this spec's round events are filed
+		// under. Empty means "derive it", which is what every contract that
+		// emits its own round events wants. An event oracle is the exception:
+		// it is a separate contract answering one round of a market it is not.
+		market string
+	}
+	specs := []spec{
+		{name: abis.CollateralVault, address: cfg.VaultAddress, decode: entriesOnly(decodeVault)},
+		{name: abis.BorrowLiquidityPool, address: cfg.PoolAddress, decode: entriesOnly(decodePool)},
 	}
 	// One spec per market, all on the same stream. Separate streams per market
 	// would need a cursor each and would let a borrow and the position it
 	// funded become visible at different times, which is the thing this loop
 	// was built as one stream to prevent.
 	for _, market := range cfg.MarketAddresses {
-		specs = append(specs, struct {
-			name    string
-			address string
-			decode  func(string, *fields, types.Log) ledger.Batch
-		}{abis.ParimutuelRound, market, decodeRound})
+		specs = append(specs, spec{name: abis.ParimutuelRound, address: market, decode: decodeRound})
+	}
+	// And one per question's oracle, on the same stream for the same reason:
+	// a claim finalising and the round resolving on it are one story, and a
+	// separate cursor would show the round paid out before anyone could see
+	// what it was paid out on.
+	for _, o := range cfg.EventOracles {
+		specs = append(specs, spec{
+			name:    abis.EventRoundOracle,
+			address: o.Oracle,
+			decode:  decodeEventOracle(o),
+			market:  common.HexToAddress(o.Market).Hex(),
+		})
 	}
 
 	seen := map[common.Address]bool{}
@@ -149,7 +169,7 @@ func New(client EthClient, repo ledger.Repository, cfg Config) (*Indexer, error)
 			address: address,
 			abi:     parsed,
 			decode:  spec.decode,
-			market:  marketOf(spec.name, address),
+			market:  marketOf(spec.name, spec.market, address),
 		})
 	}
 	addresses := make([]common.Address, 0, len(contracts))
@@ -492,7 +512,13 @@ func (ix *Indexer) marketAddresses() []string {
 // Checksummed, because that is the spelling every other address in the ledger
 // carries — the account column included — and a market written one way and
 // queried another matches nothing while looking entirely plausible.
-func marketOf(name string, address common.Address) string {
+// `override` is an event oracle's configured market: it answers one round of
+// a market whose address is not its own, so deriving it from the log would
+// file the question's lifecycle under the oracle instead of under the round.
+func marketOf(name, override string, address common.Address) string {
+	if override != "" {
+		return override
+	}
 	if name != abis.ParimutuelRound {
 		return ""
 	}

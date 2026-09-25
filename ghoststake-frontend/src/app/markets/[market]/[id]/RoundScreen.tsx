@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/Card";
+import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
 import { formatAmount } from "@/lib/format";
@@ -98,6 +99,17 @@ function Detail({
 
   return (
     <>
+      {/*
+       * A round settled by a question puts the claim first, above the pool.
+       * The receipt for a price round is "here is the feed round it settled
+       * against"; for a question it is the claim, the evidence and the fact
+       * that nobody paid to argue — and that is the part somebody following a
+       * shared link has come to check.
+       */}
+      {round.question && (
+        <ResolutionPanel question={round.question} decimals={decimals} symbol={symbol} />
+      )}
+
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>

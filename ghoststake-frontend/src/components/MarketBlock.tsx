@@ -105,6 +105,7 @@ export function MarketBlock({
       decimals={decimals}
       symbol={position.symbol}
       feed={feed?.description}
+      isQuestion={feed?.isQuestion}
       now={now}
       yourUp={r.up}
       yourDown={r.down}

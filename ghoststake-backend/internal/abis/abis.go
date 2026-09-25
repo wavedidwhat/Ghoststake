@@ -39,6 +39,12 @@ const (
 	ChainlinkRoundOracle  = "ChainlinkRoundOracle"
 	AggregatorV3Interface = "AggregatorV3Interface"
 	IPausableOracle       = "IPausableOracle"
+
+	// EventRoundOracle is the other shape an oracle comes in (GHO-80): a
+	// question settled by a bonded claim rather than a price feed. Read by
+	// the keeper, which has to drive such a market without a feed, and by
+	// the indexer, which carries its lifecycle to the app.
+	EventRoundOracle = "EventRoundOracle"
 )
 
 var (

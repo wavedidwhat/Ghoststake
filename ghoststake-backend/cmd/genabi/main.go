@@ -49,6 +49,9 @@ var contracts = []artifact{
 	{name: "ParimutuelRound", hasEvents: true},
 	{name: "MarketRegistry", hasEvents: true},
 	{name: "ChainlinkRoundOracle"},
+	// GHO-91. An event market's oracle, which has events of its own: the
+	// whole propose/challenge/rule lifecycle is only visible in its logs.
+	{name: "EventRoundOracle", hasEvents: true},
 	{name: "AggregatorV3Interface"},
 	{name: "IPausableOracle", file: "AggregatorV3Interface"},
 }

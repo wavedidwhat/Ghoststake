@@ -24,7 +24,46 @@ const (
 	RoundResolved  = "RoundResolved"
 	RoundVoided    = "RoundVoided"
 	Claimed        = "Claimed"
+
+	// The lifecycle of a question, emitted by an EventRoundOracle rather than
+	// by the market (GHO-80, carried up in GHO-91).
+	//
+	// They fold into the same Round as the market's own events, keyed by the
+	// same (market, round) pair, because they are facts about that round: it
+	// is a round whose close price is an outcome somebody claimed. Keeping
+	// them in a second projection would mean every read path that wants to
+	// show a round having to join two things that describe one.
+	Proposed   = "Proposed"
+	Challenged = "Challenged"
+	Ruled      = "Ruled"
+	Finalised  = "Finalised"
+	Abandoned  = "Abandoned"
+	MarketSet  = "MarketSet"
 )
+
+// Outcome names, as EventRoundOracle's `Outcome` enum orders them.
+const (
+	OutcomeNone = "none"
+	OutcomeYes  = "yes"
+	OutcomeNo   = "no"
+)
+
+// OutcomeFromEnum maps the oracle's uint8 to a name.
+//
+// An error rather than a default, for the reason SideFromEnum gives: a value
+// this does not know means the enum grew, and guessing would show everyone
+// the wrong answer to a question with money on it.
+func OutcomeFromEnum(v uint8) (string, error) {
+	switch v {
+	case 0:
+		return OutcomeNone, nil
+	case 1:
+		return OutcomeYes, nil
+	case 2:
+		return OutcomeNo, nil
+	}
+	return "", fmt.Errorf("unknown outcome %d", v)
+}
 
 // Sides, as the contract's `Side` enum orders them.
 const (
@@ -147,6 +186,14 @@ type Round struct {
 	// VoidReason is the contract's own reason string, set only on a void.
 	VoidReason string
 
+	// Question is the lifecycle of an externally-answered round, or nil for
+	// a price round (GHO-91).
+	//
+	// A pointer rather than flat fields so that "this round settles a
+	// question" and "this round's question has not been claimed yet" are
+	// different states. Flattened, a zero proposer would mean both.
+	Question *QuestionState
+
 	// LastBlock is the height the newest event folded into this came from,
 	// which is what tells a caller how stale the projection is.
 	LastBlock uint64
@@ -247,7 +294,122 @@ func applyRoundEvent(r *Round, e RoundEvent) {
 		// guarded: the contract cannot emit anything after it.
 		r.Status = StatusVoid
 		r.VoidReason = e.Data["reason"]
+
+	case MarketSet:
+		// The oracle being pointed at this round. Nothing to show, but it is
+		// what makes the round a question rather than a price, and it always
+		// precedes a claim — `setMarket` is refused once anything has been
+		// proposed.
+		r.question().Oracle = e.Data["oracle"]
+
+	case Proposed:
+		q := r.question()
+		q.State = QuestionProposed
+		q.Proposer = e.Account
+		q.Outcome = e.Data["outcome"]
+		q.EvidenceURI = e.Data["evidenceURI"]
+		q.EvidenceDigest = e.Data["evidenceDigest"]
+		q.ProposerStake = bigField(e.Data, "proposerStake")
+		q.ChallengeClosesAt = unixField(e.Data, "challengeClosesAt")
+		q.ProposedAt = e.BlockTime
+
+	case Challenged:
+		q := r.question()
+		q.State = QuestionChallenged
+		q.Challenger = e.Account
+		q.RulingDueAt = unixField(e.Data, "rulingDueAt")
+		q.ChallengedAt = e.BlockTime
+
+	case Ruled:
+		q := r.question()
+		q.Arbiter = e.Account
+		q.Outcome = e.Data["outcome"]
+		q.ReasonURI = e.Data["reasonURI"]
+		q.PaidTo = e.Data["paid"]
+		q.RuledAt = e.BlockTime
+
+	case Finalised:
+		// The one that decides the answer. `Ruled` carries the arbiter's
+		// verdict and `Proposed` the claim, but only this says the oracle
+		// will now answer — and a round can reach it by either path.
+		q := r.question()
+		q.State = QuestionFinal
+		q.Outcome = e.Data["outcome"]
+
+	case Abandoned:
+		// Terminal and unanswerable: nobody ruled in time, both bonds went
+		// back, and the round is now waiting for its refund.
+		q := r.question()
+		q.State = QuestionAbandoned
+		q.AbandonedAt = unixField(e.Data, "at")
 	}
+}
+
+// question returns this round's question state, creating it on first use.
+//
+// Created lazily rather than always, so `Question == nil` keeps meaning "this
+// is a price round" for the many rounds that are.
+func (r *Round) question() *QuestionState {
+	if r.Question == nil {
+		r.Question = &QuestionState{State: QuestionOpen}
+	}
+	return r.Question
+}
+
+// QuestionLifecycle is where an externally-answered round's outcome has got
+// to, folded from the oracle's events. It mirrors EventRoundOracle's `State`.
+type QuestionLifecycle string
+
+const (
+	QuestionOpen       QuestionLifecycle = "open"
+	QuestionProposed   QuestionLifecycle = "proposed"
+	QuestionChallenged QuestionLifecycle = "challenged"
+	QuestionFinal      QuestionLifecycle = "final"
+	QuestionAbandoned  QuestionLifecycle = "abandoned"
+)
+
+// QuestionState is the claim on a round's outcome and everything anyone would
+// need to check it.
+//
+// Every field here exists to answer "should I argue with this?" — who said
+// what happened, against which document, how long is left, and whether they
+// had money riding on the answer. A resolution panel that showed only the
+// outcome would be the operator call this whole mechanism replaces.
+type QuestionState struct {
+	// Oracle is the EventRoundOracle that answers this round, from MarketSet.
+	Oracle string
+
+	State   QuestionLifecycle
+	Outcome string
+
+	Proposer       string
+	ProposedAt     time.Time
+	EvidenceURI    string
+	EvidenceDigest string
+
+	// ProposerStake is what the proposer had staked in this very round at the
+	// moment they claimed its outcome, in the market's own units. Zero is a
+	// real answer — they held nothing — and so is a proposer who held a lot:
+	// it is disclosed rather than forbidden, because a ban only moves the
+	// position to another address.
+	ProposerStake *big.Int
+
+	// ChallengeClosesAt is when an unchallenged claim becomes final. The
+	// number the whole design rests on: it is what makes "nobody argued" mean
+	// something.
+	ChallengeClosesAt time.Time
+
+	Challenger   string
+	ChallengedAt time.Time
+	RulingDueAt  time.Time
+
+	Arbiter   string
+	RuledAt   time.Time
+	ReasonURI string
+	// PaidTo is whose side the ruling took, and so who received both bonds.
+	PaidTo string
+
+	AbandonedAt time.Time
 }
 
 func bigField(data map[string]string, key string) *big.Int {
@@ -323,6 +485,19 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 	// holding round 7 in two markets has two positions, and merging them would
 	// report one stake that is the sum of two unrelated bets.
 	byRef := map[RoundRef]*AccountPosition{}
+	// Which of them this account actually staked in.
+	//
+	// An account can now name a round without holding anything in it: since
+	// GHO-91 an address that proposes, challenges or rules on a question is
+	// recorded against that round, and the filter above is by account. Left
+	// alone, an arbiter who has never staked anywhere would open their
+	// portfolio and be shown every question they ruled on as a position of
+	// zero — which reads as "you are in this round" and is simply untrue.
+	//
+	// A stake is the event that makes a position, so that is what this
+	// tracks. `TotalStake() == 0` would be the same test today and would
+	// stop being one the moment a contract emits a zero-amount position.
+	staked := map[RoundRef]bool{}
 	var order []RoundRef
 	for _, e := range sorted {
 		ref := RoundRef{Market: e.Market, RoundID: e.RoundID}
@@ -350,6 +525,7 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 			if e.Amount == nil {
 				continue
 			}
+			staked[ref] = true
 			switch e.Side {
 			case SideUp:
 				p.UpStake = new(big.Int).Add(p.UpStake, e.Amount)
@@ -377,6 +553,9 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 	// it is exact.
 	out := make([]AccountPosition, 0, len(order))
 	for i := len(order) - 1; i >= 0; i-- {
+		if !staked[order[i]] {
+			continue
+		}
 		out = append(out, *byRef[order[i]])
 	}
 	sort.SliceStable(out, func(i, j int) bool {

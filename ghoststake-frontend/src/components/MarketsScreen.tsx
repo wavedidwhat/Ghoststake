@@ -172,7 +172,15 @@ function MarketRow({
 }) {
   const { market, params, live } = summary;
   const demo = market.kindHint === "demo" || feed?.isDemo === true;
-  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
+  // The instrument behind the question. A price feed names itself
+  // "GHOSTSTAKE DEMO FEED - ETH / USD", and the part after the dash is the
+  // part worth showing. A question's own words are not a feed label and must
+  // not be split on a dash it may well contain.
+  const label = !feed
+    ? "Reading feed…"
+    : feed.isQuestion
+      ? "Settled by a claim"
+      : (feed.description.split(" - ").pop() ?? "Market");
 
   // What this market is asking. Without a live round there is no strike and
   // no close, so it falls back to naming the instrument rather than inventing
@@ -182,6 +190,7 @@ function MarketRow({
         feed: feed?.description,
         strike: live.round.lockPrice,
         closeTime: live.round.closeTime,
+        isQuestion: feed?.isQuestion,
       })
     : label;
 

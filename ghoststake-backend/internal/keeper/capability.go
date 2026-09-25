@@ -35,3 +35,27 @@ var strikeAtOpenSelector = crypto.Keccak256([]byte("openRound(uint64,uint64,uint
 func SupportsStrikeAtOpen(code []byte) bool {
 	return bytes.Contains(code, strikeAtOpenSelector)
 }
+
+// eventOracleSelector is `question()`.
+//
+// The one function an EventRoundOracle has that a price adapter never will.
+// `feed()` would be the mirror-image probe — "no feed, so it must be an
+// event" — but absence is the weaker signal: a price adapter of some future
+// shape that names its feed differently would be read as a question, and the
+// keeper would then stop reading its feed and never settle it. A question
+// declares itself.
+var eventOracleSelector = crypto.Keccak256([]byte("question()"))[:4]
+
+// IsEventOracle reports whether this oracle settles a question rather than
+// reading a price feed (GHO-80).
+//
+// The consequence of getting this right matters more than for
+// SupportsStrikeAtOpen: a price market mistaken for a question would have its
+// feed ignored and would never settle, and a question mistaken for a price
+// market fails to load at all — `LoadMarket` asserts the oracle's `feed()`
+// answers `decimals()`, and an event oracle has no feed, so the error takes
+// the keeper's whole market list with it. That failure is loud, which is why
+// it is the one this probe is allowed to fall back to.
+func IsEventOracle(code []byte) bool {
+	return bytes.Contains(code, eventOracleSelector)
+}

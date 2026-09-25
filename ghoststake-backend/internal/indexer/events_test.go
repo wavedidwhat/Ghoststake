@@ -29,7 +29,7 @@ func mustABI(t *testing.T, name string) contractSpec {
 	address := common.HexToAddress("0x1")
 	return contractSpec{
 		name: name, address: address, abi: parsed, decode: decode,
-		market: marketOf(name, address),
+		market: marketOf(name, "", address),
 	}
 }
 

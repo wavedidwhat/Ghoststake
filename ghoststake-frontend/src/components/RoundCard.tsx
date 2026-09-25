@@ -42,6 +42,7 @@ export function RoundCard({
   yourDown,
   onStake,
   feed,
+  isQuestion,
   href,
   children,
 }: {
@@ -61,6 +62,9 @@ export function RoundCard({
    *  about. Without it the question falls back to "The price…" rather than
    *  guessing an asset. */
   feed?: string;
+  /** Set when this market settles a claimed outcome rather than a price
+   *  (GHO-91). `feed` is then the oracle's own question, used verbatim. */
+  isQuestion?: boolean;
   /** Where this round lives on its own (GHO-41). Omitted on the round's own page. */
   href?: string;
   children?: React.ReactNode;
@@ -80,7 +84,12 @@ export function RoundCard({
   // The question this round is asking (GHO-78). A market used to be an asset
   // and a direction — "ETH / USD", answered Up or Down — which is not a
   // question anybody outside this codebase thinks in.
-  const question = questionFor({ feed, strike: round.lockPrice, closeTime: round.closeTime });
+  const question = questionFor({
+    feed,
+    strike: round.lockPrice,
+    closeTime: round.closeTime,
+    isQuestion,
+  });
 
   return (
     <article className="rounded-card border border-border bg-surface p-4">

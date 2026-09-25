@@ -167,6 +167,21 @@ func (f *fields) str(key string) string {
 	return v
 }
 
+// digest reads a bytes32, as the 0x-prefixed hex a reader would compare
+// against the output of `sha256sum`.
+//
+// The evidence digest is the only thing that makes a criteria URI worth
+// anything — the document at a URL can be rewritten after a claim is made —
+// so it has to arrive in a form somebody can actually check by hand.
+func (f *fields) digest(key string) string {
+	v, ok := f.args[key].([32]byte)
+	if !ok {
+		f.missing = append(f.missing, key)
+		return ""
+	}
+	return common.BytesToHash(v[:]).Hex()
+}
+
 // roundID reads the indexed uint256 round id.
 //
 // Narrowed to uint64 because it is a counter incremented once per round, and
