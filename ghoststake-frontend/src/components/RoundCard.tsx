@@ -7,7 +7,7 @@ import { formatAmount } from "@/lib/format";
 import { questionFor, sideLabel } from "@/lib/question";
 import type { Spot } from "@/hooks/useSpot";
 import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "@/lib/spot";
-import { SideArrow } from "@/components/icons";
+import { SideArrow } from "@/components/ui/icons";
 import {
   Phase,
   Side,

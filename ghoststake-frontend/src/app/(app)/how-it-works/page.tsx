@@ -1,6 +1,6 @@
 "use client";
 
-import { AppShell } from "@/components/AppShell";
+import { Page } from "@/components/Page";
 import { Landing } from "@/components/Landing";
 
 /**
@@ -15,8 +15,8 @@ import { Landing } from "@/components/Landing";
  */
 export default function HowItWorksPage() {
   return (
-    <AppShell title="How it works" subtitle="Stake earns. Borrow against it. Take a view.">
+    <Page title="How it works" subtitle="Stake earns. Borrow against it. Take a view.">
       <Landing />
-    </AppShell>
+    </Page>
   );
 }

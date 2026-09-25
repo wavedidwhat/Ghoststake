@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Figure } from "./Figure";
+import { Figure } from "@/components/ui/Figure";
 import { formatAmount, formatApr, formatHealthFactor, healthBand } from "@/lib/format";
 import type { StakeStanding } from "@/lib/stake";
+import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * The product, as one object.
@@ -213,9 +215,9 @@ function Step({
       href={href}
       className="group flex flex-col gap-1 rounded-sm border border-border bg-raised/30 p-4 transition-colors hover:border-border-strong hover:bg-raised/60 focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
     >
-      <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">{label}</span>
+      <Eyebrow as="span">{label}</Eyebrow>
       {value === undefined ? (
-        <div className="h-7 w-24 animate-pulse rounded bg-raised" />
+        <Skeleton className="h-7 w-24" />
       ) : (
         <Figure
           value={formatAmount(value, decimals, 2)}

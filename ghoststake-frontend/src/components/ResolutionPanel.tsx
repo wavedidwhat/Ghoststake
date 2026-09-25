@@ -6,6 +6,7 @@ import {
   proposerInterest,
   questionHeadline,
 } from "@/lib/resolution";
+import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
  * How a question got its answer (GHO-91).
@@ -40,9 +41,9 @@ export function ResolutionPanel({
   return (
     <section className="rounded-card border border-border bg-surface p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+        <Eyebrow as="h3">
           How this gets answered
-        </h3>
+        </Eyebrow>
         {answer && question.state === "final" && (
           <span className="display rounded-control bg-brand-soft px-2 py-0.5 text-xs text-brand uppercase">
             {answer}

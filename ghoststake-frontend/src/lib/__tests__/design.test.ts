@@ -107,6 +107,54 @@ describe("design tokens", () => {
   });
 });
 
+describe("screens use the primitives in components/ui (GHO-96)", () => {
+  /**
+   * Every one of these was a class string pasted between screens, and every
+   * one had drifted by the time it was pulled out: buttons on the wrong
+   * radius, retry buttons with no focus ring, a mode toggle a screen reader
+   * could not read. The primitive is where the rule lives now, so a screen
+   * that writes the classes itself is working around it.
+   */
+  const outsideUi = components.filter(
+    (p) => p.endsWith(".tsx") && !p.includes(join("components", "ui")),
+  );
+  const offending = (pattern: RegExp) =>
+    outsideUi.filter((p) => pattern.test(code(p))).map((p) => p.replace(SRC, ""));
+
+  it("styles no action button outside Button", () => {
+    // `bg-action` on its own, not `hover:bg-action-strong`, which a market
+    // side button borrows for its hover.
+    expect(offending(/(?<![\w:-])bg-action(?![\w-])/)).toEqual([]);
+  });
+
+  it("writes no uppercase label outside Eyebrow", () => {
+    expect(offending(/text-xs font-medium tracking-wide text-ink-muted uppercase/)).toEqual([]);
+  });
+
+  it("draws no loading placeholder outside Skeleton", () => {
+    expect(offending(/animate-pulse/)).toEqual([]);
+  });
+
+  it("keeps raw <button>s to the ones that are meant to be different", () => {
+    // Each of these is a deliberate exception, not a button that was missed.
+    // Adding a file here is fine; the point is that it is a decision someone
+    // made and wrote down, rather than a copy nobody noticed.
+    const bespoke: Record<string, string> = {
+      "components/MarketBlock.tsx": "the Yes/No sides, filled in the side's colour",
+      "components/RoundCard.tsx": "the Yes/No sides, `.pressable`",
+      "components/ClaimAllPanel.tsx": "claim-all, `.pressable` in the winning colour",
+      "components/MobileNav.tsx": "tab-bar items",
+      "components/ConnectButton.tsx": "the wallet menu rows and the pre-hydration placeholder",
+      "components/AmountField.tsx": "the Max shortcut beside the label",
+      "activity/ActivityScreen.tsx": "the full-width load-more row",
+    };
+    const unexpected = offending(/<button\b/).filter(
+      (p) => !Object.keys(bespoke).some((f) => p.endsWith(f)),
+    );
+    expect(unexpected).toEqual([]);
+  });
+});
+
 describe("a market is a question (GHO-78)", () => {
   /**
    * The words that came back as a complaint: *"I can't see where the bets like

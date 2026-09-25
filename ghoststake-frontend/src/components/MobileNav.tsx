@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { TAB_LINKS, isCurrent, moreSections } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
-import { Sheet } from "@/components/Sheet";
+import { Sheet } from "@/components/ui/Sheet";
 
 /**
  * The phone navigation: four destinations and a More sheet, fixed to the
