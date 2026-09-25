@@ -127,3 +127,47 @@ func TestOutOfOrderQuestionEventsStillFoldToTheSameAnswer(t *testing.T) {
 		t.Fatalf("outcome %q, want no", got)
 	}
 }
+
+func TestRulingOnAQuestionIsNotAPosition(t *testing.T) {
+	// An arbiter, a proposer and a challenger are all recorded against the
+	// round they touched, and the positions query filters by account. Without
+	// a guard each of them would find the round in their own portfolio,
+	// rendered as a stake of zero — which reads as "you are in this round".
+	events := []ledger.RoundEvent{
+		oracleEvent(3, 0, ledger.Proposed, "0xa11ce", map[string]string{
+			"outcome": ledger.OutcomeYes, "proposerStake": "0", "challengeClosesAt": "1700010000",
+		}),
+		oracleEvent(5, 0, ledger.Ruled, "0xa4b1", map[string]string{
+			"outcome": ledger.OutcomeYes, "paid": "0xa11ce", "reasonURI": "",
+		}),
+	}
+
+	for _, account := range []string{"0xa11ce", "0xa4b1"} {
+		if got := ledger.ProjectPositions(events, account); len(got) != 0 {
+			t.Fatalf("%s was given a position they never took: %+v", account, got)
+		}
+	}
+}
+
+func TestAProposerWhoAlsoStakedKeepsTheirPosition(t *testing.T) {
+	// The other half of the same rule, and the case that matters: holding a
+	// position and proposing is allowed, so the stake must survive.
+	staked := oracleEvent(2, 0, ledger.PositionTaken, "0xa11ce", map[string]string{"funder": "0xa11ce"})
+	staked.Side = ledger.SideUp
+	staked.Amount = big.NewInt(250)
+
+	events := []ledger.RoundEvent{
+		staked,
+		oracleEvent(3, 0, ledger.Proposed, "0xa11ce", map[string]string{
+			"outcome": ledger.OutcomeYes, "proposerStake": "250", "challengeClosesAt": "1700010000",
+		}),
+	}
+
+	got := ledger.ProjectPositions(events, "0xa11ce")
+	if len(got) != 1 {
+		t.Fatalf("got %d positions, want 1", len(got))
+	}
+	if got[0].UpStake.Cmp(big.NewInt(250)) != 0 {
+		t.Fatalf("stake %v, want 250", got[0].UpStake)
+	}
+}

@@ -71,7 +71,89 @@ type roundJSON struct {
 	RakeTaken  *string `json:"rakeTaken"`
 	VoidReason string  `json:"voidReason,omitempty"`
 
+	// Question is the claim on this round's outcome, for a round settled by
+	// an external question rather than a price feed (GHO-91). Absent — not
+	// an empty object — on a price round, so a client can tell "this is a
+	// price round" from "nobody has claimed an outcome yet".
+	Question *questionJSON `json:"question,omitempty"`
+
 	LastBlock uint64 `json:"lastBlock"`
+}
+
+// questionJSON is everything somebody needs to decide whether to argue with
+// a claimed outcome.
+//
+// All of it, not just the answer. A panel showing only "Yes" would be the
+// operator call this mechanism exists to replace: what makes the outcome
+// trustworthy is that the evidence was named, the window was open, the
+// proposer's own position was on the record, and nobody paid to disagree.
+type questionJSON struct {
+	Oracle  string `json:"oracle,omitempty"`
+	State   string `json:"state"`
+	Outcome string `json:"outcome,omitempty"`
+
+	Proposer       string     `json:"proposer,omitempty"`
+	ProposedAt     *time.Time `json:"proposedAt,omitempty"`
+	EvidenceURI    string     `json:"evidenceUri,omitempty"`
+	EvidenceDigest string     `json:"evidenceDigest,omitempty"`
+	// ProposerStake is what the proposer had riding on this round when they
+	// claimed its outcome. "0" is a real answer and is rendered as one.
+	ProposerStake string `json:"proposerStake,omitempty"`
+
+	ChallengeClosesAt *time.Time `json:"challengeClosesAt,omitempty"`
+
+	Challenger   string     `json:"challenger,omitempty"`
+	ChallengedAt *time.Time `json:"challengedAt,omitempty"`
+	RulingDueAt  *time.Time `json:"rulingDueAt,omitempty"`
+
+	Arbiter   string     `json:"arbiter,omitempty"`
+	RuledAt   *time.Time `json:"ruledAt,omitempty"`
+	ReasonURI string     `json:"reasonUri,omitempty"`
+	PaidTo    string     `json:"paidTo,omitempty"`
+
+	AbandonedAt *time.Time `json:"abandonedAt,omitempty"`
+}
+
+// renderQuestion maps the projection, or nil for a price round.
+func renderQuestion(q *ledger.QuestionState) *questionJSON {
+	if q == nil {
+		return nil
+	}
+	stake := ""
+	if q.ProposerStake != nil {
+		stake = q.ProposerStake.String()
+	}
+	return &questionJSON{
+		Oracle:            q.Oracle,
+		State:             string(q.State),
+		Outcome:           q.Outcome,
+		Proposer:          q.Proposer,
+		ProposedAt:        timeOrNil(q.ProposedAt),
+		EvidenceURI:       q.EvidenceURI,
+		EvidenceDigest:    q.EvidenceDigest,
+		ProposerStake:     stake,
+		ChallengeClosesAt: timeOrNil(q.ChallengeClosesAt),
+		Challenger:        q.Challenger,
+		ChallengedAt:      timeOrNil(q.ChallengedAt),
+		RulingDueAt:       timeOrNil(q.RulingDueAt),
+		Arbiter:           q.Arbiter,
+		RuledAt:           timeOrNil(q.RuledAt),
+		ReasonURI:         q.ReasonURI,
+		PaidTo:            q.PaidTo,
+		AbandonedAt:       timeOrNil(q.AbandonedAt),
+	}
+}
+
+// timeOrNil omits a zero time rather than serialising year 1.
+//
+// `0001-01-01T00:00:00Z` parses as a valid date in every client, so a zero
+// deadline would render as a countdown that expired two thousand years ago
+// instead of as "not set".
+func timeOrNil(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 type roundsResponse struct {
@@ -377,6 +459,7 @@ func renderRound(round ledger.Round, params protocol.MarketParams, now time.Time
 		Winner:     round.Winner,
 		RakeTaken:  decimalOrNil(round.RakeTaken),
 		VoidReason: round.VoidReason,
+		Question:   renderQuestion(round.Question),
 
 		LastBlock: round.LastBlock,
 	}

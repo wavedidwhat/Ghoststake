@@ -485,6 +485,19 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 	// holding round 7 in two markets has two positions, and merging them would
 	// report one stake that is the sum of two unrelated bets.
 	byRef := map[RoundRef]*AccountPosition{}
+	// Which of them this account actually staked in.
+	//
+	// An account can now name a round without holding anything in it: since
+	// GHO-91 an address that proposes, challenges or rules on a question is
+	// recorded against that round, and the filter above is by account. Left
+	// alone, an arbiter who has never staked anywhere would open their
+	// portfolio and be shown every question they ruled on as a position of
+	// zero — which reads as "you are in this round" and is simply untrue.
+	//
+	// A stake is the event that makes a position, so that is what this
+	// tracks. `TotalStake() == 0` would be the same test today and would
+	// stop being one the moment a contract emits a zero-amount position.
+	staked := map[RoundRef]bool{}
 	var order []RoundRef
 	for _, e := range sorted {
 		ref := RoundRef{Market: e.Market, RoundID: e.RoundID}
@@ -512,6 +525,7 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 			if e.Amount == nil {
 				continue
 			}
+			staked[ref] = true
 			switch e.Side {
 			case SideUp:
 				p.UpStake = new(big.Int).Add(p.UpStake, e.Amount)
@@ -539,6 +553,9 @@ func ProjectPositions(events []RoundEvent, account string) []AccountPosition {
 	// it is exact.
 	out := make([]AccountPosition, 0, len(order))
 	for i := len(order) - 1; i >= 0; i-- {
+		if !staked[order[i]] {
+			continue
+		}
 		out = append(out, *byRef[order[i]])
 	}
 	sort.SliceStable(out, func(i, j int) bool {
