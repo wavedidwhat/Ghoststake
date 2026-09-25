@@ -84,6 +84,7 @@ export const NAV: NavSection[] = [
     items: [
       { href: "/stake", label: "Stake", note: "earns while it sits", ready: true, tab: true },
       { href: "/borrow", label: "Borrow", note: "against your stake", ready: true },
+      { href: "/stocks", label: "Stock loans", note: "against shares", ready: true },
       { href: "/activity", label: "Activity", note: "the raw ledger", ready: true },
     ],
   },

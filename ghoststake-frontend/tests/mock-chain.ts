@@ -15,6 +15,7 @@ import {
   chainlinkRoundOracleAbi,
   collateralVaultAbi,
   mockUSDCAbi,
+  stockLoanVaultAbi,
   parimutuelRoundAbi,
 } from "../src/lib/abis";
 
@@ -51,6 +52,14 @@ export const E2E = {
   asset: "0x00000000000000000000000000000000000e2e05",
   oracle: "0x00000000000000000000000000000000000e2e06",
   feed: "0x00000000000000000000000000000000000e2e07",
+  // Stock loans (GHO-97). Their own pool, so nothing the staking screens read
+  // changes; the stablecoin is the same mUSDC mock as `asset`.
+  stockVault: "0x00000000000000000000000000000000000e2e08",
+  stockPool: "0x00000000000000000000000000000000000e2e09",
+  tsla: "0x00000000000000000000000000000000000e2e0a",
+  amzn: "0x00000000000000000000000000000000000e2e0b",
+  tslaFeed: "0x00000000000000000000000000000000000e2e0c",
+  amznFeed: "0x00000000000000000000000000000000000e2e0d",
 } as const;
 
 /** 6 decimals, like the real mUSDC: the scale GHO-86 got wrong. */
@@ -79,6 +88,12 @@ const ABIS: Record<string, Abi> = {
   ] as Abi,
   [E2E.oracle]: chainlinkRoundOracleAbi as Abi,
   [E2E.feed]: aggregatorV3InterfaceAbi as Abi,
+  [E2E.stockVault]: stockLoanVaultAbi as Abi,
+  [E2E.stockPool]: borrowLiquidityPoolAbi as Abi,
+  [E2E.tsla]: erc20Abi as Abi,
+  [E2E.amzn]: erc20Abi as Abi,
+  [E2E.tslaFeed]: aggregatorV3InterfaceAbi as Abi,
+  [E2E.amznFeed]: aggregatorV3InterfaceAbi as Abi,
 };
 
 /**
@@ -145,6 +160,63 @@ function defaults(): Table {
   });
   set(E2E.oracle, { feed: E2E.feed });
   set(E2E.feed, { description: "ETH / USD" });
+
+  // Stock loans, the contract's worked example: 100 TSLA deposited at $400,
+  // nothing borrowed; 10 AMZN in the wallet at $250. Terms as deployed on
+  // Robinhood testnet: 40% LTV, 55% threshold, 8% bonus, 0.5% fee.
+  const E18 = 10n ** 18n;
+  const collateral = (token: string, feed: string) => ({
+    token,
+    feed,
+    maxLTV: (4n * WAD) / 10n,
+    liquidationThreshold: (55n * WAD) / 100n,
+    liquidationBonus: (8n * WAD) / 100n,
+    maxAge: 86_400n,
+    liquidationMaxAge: 432_000n,
+    scaledUI: true,
+    tokenDecimals: 18,
+    feedDecimals: 8,
+  });
+  const configs = [collateral(E2E.tsla, E2E.tslaFeed), collateral(E2E.amzn, E2E.amznFeed)];
+  const price: Record<string, bigint> = { [E2E.tsla]: unit(400), [E2E.amzn]: unit(250) };
+  set(E2E.stockVault, {
+    pool: E2E.stockPool,
+    stable: E2E.asset,
+    stableDecimals: DECIMALS,
+    originationFee: (5n * WAD) / 1000n,
+    collateralCount: BigInt(configs.length),
+    collateralAt: ([i]: readonly unknown[]) => configs[Number(i as bigint)],
+    collateralOf: ([, token]: readonly unknown[]) =>
+      (token as string).toLowerCase() === E2E.tsla ? 100n * E18 : 0n,
+    valueOf: ([token, amount]: readonly unknown[]) =>
+      ((amount as bigint) * price[(token as string).toLowerCase()]) / E18,
+    debtOf: 0n,
+    healthFactor: maxUint256,
+    borrow: undefined,
+    repay: undefined,
+    deposit: undefined,
+    withdraw: undefined,
+  });
+  set(E2E.stockPool, {
+    balanceOfSupply: 0n,
+    supplyRatePerSecond: 0n,
+    borrowRatePerSecond: 1_585_489_599n, // 5% a year
+    availableLiquidity: unit(1_000_000),
+    supply: undefined,
+    withdraw: undefined,
+  });
+  const stock = (symbol: string, name: string, wallet: bigint) => ({
+    symbol,
+    name,
+    decimals: 18,
+    balanceOf: wallet,
+    allowance: 0n,
+  });
+  set(E2E.tsla, stock("TSLA", "Tesla", 5n * E18));
+  set(E2E.amzn, stock("AMZN", "Amazon", 10n * E18));
+  const round = () => [1n, 40_000_000_000n, now() - 120n, now() - 120n, 1n];
+  set(E2E.tslaFeed, { latestRoundData: round });
+  set(E2E.amznFeed, { latestRoundData: round });
   return t;
 }
 
