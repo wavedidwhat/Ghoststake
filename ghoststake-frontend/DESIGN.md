@@ -159,7 +159,8 @@ necessary, use one human-drawn family (Phosphor) and add it deliberately.~~
 Myriad and Limitless. Nine destinations is past what we should hand-draw, so
 this is the moment the rule above anticipated. `@phosphor-icons/react`,
 pinned exact (2.1.10: MIT, zero dependencies). Every use goes through
-`src/components/NavIcon.tsx`, keyed by route. `regular` weight normally and
+`src/components/NavIcon.tsx`, keyed by route, and since GHO-102 the one
+neutral mark for a question market in `src/components/MarketMark.tsx`. `regular` weight normally and
 `fill` for the current page, so the current page reads without colour. Don't
 import Phosphor anywhere else without adding the use here first, and never
 mix in a second icon family.
@@ -168,7 +169,7 @@ mix in a second icon family.
 
 ~~Token and chain logos come from the issuer's official brand kit.~~ Company
 and token logos come from three open libraries, through one component,
-`src/components/AssetLogo.tsx`. That was the user's call once stock loans made
+`src/components/ui/AssetLogo.tsx`. That was the user's call once stock loans made
 the app a list of companies, and a list of companies is read by recognising
 their marks:
 
@@ -181,6 +182,11 @@ their marks:
 These are faithful community reproductions of the marks, not the issuers' own
 brand kits. The rules:
 
+- **Where they appear (GHO-102):** leading every market row and round card
+  (`MarketMark`: the company or coin behind the price, RHTSLA → TSLA; a
+  question market gets a neutral question-mark glyph, never a brand its words
+  mention), and beside every amount whose unit has a real mark (`Figure`,
+  `AmountField`). No mark, no picture: a unit with no logo stays a word.
 - **Never redraw a logo**, never recolour one to suit the theme, never use an
   AI-generated one. A mark goes on a white disc in every theme, because some
   brand colours (Palantir's is near-black) vanish on our ground.

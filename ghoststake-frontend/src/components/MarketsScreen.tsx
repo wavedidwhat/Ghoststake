@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { CATEGORIES, categoryOf, type Category } from "@/lib/marketCategory";
 import { CategoryTabs } from "@/components/CategoryTabs";
+import { MarketMark } from "@/components/MarketMark";
 
 /**
  * Readable without a wallet, deliberately.
@@ -250,7 +251,11 @@ function MarketRow({
           it does not say what anyone is being asked. The feed's own label
           stays underneath, because which feed settles this is a fact somebody
           checking the market still wants. */}
-      <h3 className="display text-base leading-snug text-ink">{question}</h3>
+      <div className="flex items-start gap-3">
+        {/* The coin or company, so the list scans by mark (GHO-102). */}
+        <MarketMark feed={feed} />
+        <h3 className="display min-w-0 text-base leading-snug text-ink">{question}</h3>
+      </div>
 
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">

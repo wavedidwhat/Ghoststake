@@ -5,6 +5,7 @@ import Link from "next/link";
 import { explorerAddressUrl } from "@/lib/activity";
 import { formatAmount } from "@/lib/format";
 import { questionFor, sideLabel } from "@/lib/question";
+import { MarketMark } from "@/components/MarketMark";
 import type { Spot } from "@/hooks/useSpot";
 import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "@/lib/spot";
 import { SideArrow } from "@/components/ui/icons";
@@ -105,7 +106,13 @@ export function RoundCard({
 
   return (
     <article className="rounded-card border border-border bg-surface p-4">
-      <h3 className="display text-base leading-snug text-ink">{question}</h3>
+      {/* The coin or company first, the way every market list leads (GHO-102). */}
+      <div className="flex items-start gap-3">
+        <MarketMark
+          feed={feed === undefined ? undefined : { description: feed, isQuestion: Boolean(isQuestion) }}
+        />
+        <h3 className="display min-w-0 text-base leading-snug text-ink">{question}</h3>
+      </div>
 
       <header className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">

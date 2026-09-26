@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { baseAsset, categoryOf, parseCategory } from "../marketCategory";
+import { CRYPTO_BASES, baseAsset, categoryOf, logoSymbolFor, parseCategory } from "../marketCategory";
+import { hasLogo } from "@/components/ui/AssetLogo";
 
 // The strings are the real ones: the Chainlink descriptions, the label
 // `scripts/deploy-network.sh` gives the mirrored feed, and the marker
@@ -56,5 +57,32 @@ describe("parseCategory", () => {
     expect(parseCategory(undefined)).toBeUndefined();
     expect(parseCategory("Stocks")).toBeUndefined();
     expect(parseCategory("nonsense")).toBeUndefined();
+  });
+});
+
+describe("logoSymbolFor (GHO-102)", () => {
+  it("shows the company, not the Robinhood feed name", () => {
+    expect(logoSymbolFor({ description: MIRRORED, isQuestion: false })).toBe("TSLA");
+    expect(logoSymbolFor({ description: "RHAMZN / USD", isQuestion: false })).toBe("AMZN");
+  });
+
+  it("shows the coin for a crypto price", () => {
+    expect(logoSymbolFor({ description: "ETH / USD", isQuestion: false })).toBe("ETH");
+  });
+
+  it("gives a question no brand, whatever it mentions", () => {
+    expect(logoSymbolFor({ description: "Will TSLA / USD close higher?", isQuestion: true })).toBeUndefined();
+  });
+
+  it("has a real mark for every base it files under Crypto", () => {
+    // Two lists in two files: the category rule and the logo table. A coin
+    // added to one and not the other would show under Crypto as a ticker
+    // in a grey circle, next to real marks.
+    const missing = CRYPTO_BASES.filter((b) => !hasLogo(b));
+    expect(missing).toEqual([]);
+  });
+
+  it("has a real mark for every stock the stock-loan vault lists", () => {
+    for (const ticker of ["TSLA", "AMZN", "AMD", "PLTR", "NFLX"]) expect(hasLogo(ticker)).toBe(true);
   });
 });

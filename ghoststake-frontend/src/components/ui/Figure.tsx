@@ -1,4 +1,5 @@
 import { splitFigure } from "@/lib/format";
+import { AssetLogo, hasLogo } from "./AssetLogo";
 
 /**
  * A figure with its decimal tail dimmed, so the value stays glanceable
@@ -45,7 +46,15 @@ export function Figure({
         {lead}
         {tail && <span className="opacity-45">{tail}</span>}
       </span>
-      {unit && <span className="text-base font-normal text-ink-faint">{unit}</span>}
+      {unit && (
+        // The token's mark beside its name (GHO-102), when there is a real
+        // one. Only then: a grey ticker circle next to "gsCOL" or "%" would
+        // be decoration pretending to be a logo.
+        <span className="inline-flex items-center gap-1 self-center text-base font-normal text-ink-faint">
+          {hasLogo(unit) && <AssetLogo symbol={unit} size="xs" />}
+          {unit}
+        </span>
+      )}
     </span>
   );
 }

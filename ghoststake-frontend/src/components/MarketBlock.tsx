@@ -25,6 +25,7 @@ import { activeChain } from "@/lib/wagmi";
 import { Button, TextButton } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Badge } from "@/components/ui/Badge";
+import { MarketMark } from "@/components/MarketMark";
 
 /**
  * One market and its rounds, with the forms to enter and to claim.
@@ -220,6 +221,7 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
       }`}
     >
       <div className="flex flex-wrap items-center gap-3">
+        <MarketMark feed={feed} size="lg" />
         <h2 className="display text-lg text-ink">{label}</h2>
         {demo ? (
           <Badge>
