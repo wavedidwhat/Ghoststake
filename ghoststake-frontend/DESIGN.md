@@ -139,6 +139,14 @@ room. Market screens follow one shape:
    convincing.
 5. **One decision per sheet**, with the consequence (a safety factor moving,
    for instance) shown before the wallet opens.
+6. **The market list is filtered by category tabs** (GHO-101): All ·
+   Crypto · Stocks · Questions, as on Polymarket, Kalshi, Limitless and
+   Myriad. The category is **derived** from the market, in
+   `lib/marketCategory.ts`, never tagged by hand: a question market is a
+   question, an `RH` + ticker base is a stock, a listed crypto base is
+   crypto, and anything else is Other rather than a guess. Only tabs with a
+   market are drawn, and no row at all for a single kind. The tab lives in
+   the URL (`?c=stocks`), as a link, not in component state.
 
 ## Icons
 
