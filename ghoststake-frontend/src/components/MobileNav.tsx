@@ -7,6 +7,7 @@ import { useState } from "react";
 import { TAB_LINKS, isCurrent, moreSections } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
 import { Sheet } from "@/components/ui/Sheet";
+import { NavIcon } from "./NavIcon";
 
 /**
  * The phone navigation: four destinations and a More sheet, fixed to the
@@ -59,12 +60,11 @@ export function MobileNav() {
                   }`}
                 >
                   {/* The current tab is marked by its own filled panel and a
-                      rule above the label, not by colour alone, so it still
-                      reads in greyscale. */}
-                  <span
-                    aria-hidden="true"
-                    className={`h-0.5 w-5 rounded-full ${current ? "bg-brand" : "bg-transparent"}`}
-                  />
+                      filled icon, not by colour alone, so it still reads in
+                      greyscale. The icon replaced a thin rule above the label
+                      (GHO-100): the same job, and the icon also names the
+                      place. */}
+                  <NavIcon href={item.href} current={current} className="size-5" />
                   <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">
                     {item.short ?? item.label}
                   </span>
@@ -82,10 +82,7 @@ export function MobileNav() {
                 moreIsCurrent ? "bg-ground text-ink" : "text-ink-muted"
               }`}
             >
-              <span
-                aria-hidden="true"
-                className={`h-0.5 w-5 rounded-full ${moreIsCurrent ? "bg-brand" : "bg-transparent"}`}
-              />
+              <NavIcon href="more" current={moreIsCurrent} className="size-5" />
               <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">More</span>
             </button>
           </li>
@@ -110,20 +107,20 @@ export function MobileNav() {
                       // out of here, and setting state from an effect makes
                       // the sheet flash closed on every unrelated navigation.
                       onClick={() => setMoreOpen(false)}
-                      className={`flex min-h-11 items-center justify-between border-b border-border px-1 py-3 text-sm last:border-b-0 ${
+                      className={`flex min-h-11 items-center gap-3 border-b border-border px-1 py-3 text-sm last:border-b-0 ${
                         isCurrent(pathname, item.href) ? "text-ink" : "text-ink-muted"
                       }`}
                     >
+                      <NavIcon href={item.href} current={isCurrent(pathname, item.href)} className="size-5 shrink-0" />
                       <span className="display text-base uppercase">{item.label}</span>
-                      {item.note && <span className="text-xs text-ink-faint">{item.note}</span>}
                     </Link>
                   ) : (
                     <span
                       key={item.href}
-                      className="flex min-h-11 items-center justify-between border-b border-border px-1 py-3 text-sm text-ink-faint last:border-b-0"
+                      className="flex min-h-11 items-center gap-3 border-b border-border px-1 py-3 text-sm text-ink-faint last:border-b-0"
                     >
+                      <NavIcon href={item.href} current={false} className="size-5 shrink-0" />
                       <span className="display text-base uppercase">{item.label}</span>
-                      {item.note && <span className="text-xs">{item.note}</span>}
                     </span>
                   ),
                 )}

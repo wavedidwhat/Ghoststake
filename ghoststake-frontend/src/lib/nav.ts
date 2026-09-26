@@ -31,8 +31,17 @@
 export type NavLink = {
   href: string;
   label: string;
-  /** The sidebar's second column: what you do there, in two or three words. */
-  note?: string;
+  /**
+   * Held at the bottom of the sidebar rather than in the list: the way in for
+   * someone new, not a place anyone works (GHO-100).
+   *
+   * There used to be a `note` here too, a second column of two or three
+   * words beside every item ("what you have riding"). None of Polymarket,
+   * Kalshi, Limitless or Myriad puts a description beside a nav item. On a
+   * laptop the notes collided with longer labels and wrapped, and they made
+   * the nav tall enough to scroll.
+   */
+  pinned?: boolean;
   /**
    * False for a route that isn't built yet: renders as dead text rather than
    * a live link to a 404. Nothing is unbuilt right now (GHO-49 took the last
@@ -68,12 +77,11 @@ export const NAV: NavSection[] = [
   {
     section: "Bet",
     items: [
-      { href: "/", label: "Markets", note: "live rounds", ready: true, tab: true },
+      { href: "/", label: "Markets", ready: true, tab: true },
       {
         href: "/portfolio",
         label: "Portfolio",
         short: "Bets",
-        note: "what you have riding",
         ready: true,
         tab: true,
       },
@@ -82,24 +90,23 @@ export const NAV: NavSection[] = [
   {
     section: "Your money",
     items: [
-      { href: "/stake", label: "Stake", note: "earns while it sits", ready: true, tab: true },
-      { href: "/borrow", label: "Borrow", note: "against your stake", ready: true },
-      { href: "/stocks", label: "Stock loans", note: "against shares", ready: true },
-      { href: "/activity", label: "Activity", note: "the raw ledger", ready: true },
+      { href: "/stake", label: "Stake", ready: true, tab: true },
+      { href: "/borrow", label: "Borrow", ready: true },
+      { href: "/stocks", label: "Stock loans", ready: true },
+      { href: "/activity", label: "Activity", ready: true },
     ],
   },
   {
     section: "Fund it",
-    items: [{ href: "/lend", label: "Lend", note: "earn the spread", ready: true, tab: true }],
+    items: [{ href: "/lend", label: "Lend", ready: true, tab: true }],
   },
   {
     section: "Run it",
     items: [
-      { href: "/liquidate", label: "Liquidate", note: "close bad positions", ready: true },
+      { href: "/liquidate", label: "Liquidate", ready: true },
       {
         href: "/operator",
         label: "Operator",
-        note: "run rounds",
         ready: true,
         operatorOnly: true,
       },
@@ -107,7 +114,7 @@ export const NAV: NavSection[] = [
   },
   {
     section: "Learn",
-    items: [{ href: "/how-it-works", label: "How it works", note: "the pipeline", ready: true }],
+    items: [{ href: "/how-it-works", label: "How it works", ready: true, pinned: true }],
   },
 ];
 
@@ -117,7 +124,7 @@ export const NAV_LINKS: NavLink[] = NAV.flatMap((section) => section.items);
 export const TAB_LINKS: NavLink[] = NAV_LINKS.filter((link) => link.tab);
 
 /**
- * Everything the tab bar doesn't show, grouped as the sidebar groups it.
+ * Everything the tab bar doesn't show, under its section heading.
  *
  * `isOperator` decides whether the operator console is listed. It is false
  * for every visitor, including while the owner check is still loading: a
@@ -131,12 +138,20 @@ export function moreSections(isOperator: boolean): NavSection[] {
   })).filter((section) => section.items.length > 0);
 }
 
-/** The sidebar's sections, with the same visibility rule applied. */
-export function sidebarSections(isOperator: boolean): NavSection[] {
-  return NAV.map((section) => ({
-    ...section,
-    items: section.items.filter((link) => visible(link, isOperator)),
-  })).filter((section) => section.items.length > 0);
+/**
+ * The sidebar: one flat list, plus the pinned links at the bottom (GHO-100).
+ *
+ * Flat because the section headings ("Your money", "Run it") were a second
+ * layer of text on a nav of nine items, and a nav of nine items is read by
+ * its icons and labels alone. The phone's More sheet keeps them, because a
+ * sheet is read top to bottom, like a menu.
+ */
+export function sidebarLinks(isOperator: boolean): { main: NavLink[]; pinned: NavLink[] } {
+  const links = NAV_LINKS.filter((link) => visible(link, isOperator));
+  return {
+    main: links.filter((link) => !link.pinned),
+    pinned: links.filter((link) => link.pinned),
+  };
 }
 
 function visible(link: NavLink, isOperator: boolean): boolean {

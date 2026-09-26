@@ -142,10 +142,19 @@ room. Market screens follow one shape:
 
 ## Icons
 
-Our own glyphs, in `src/components/icons.tsx`, for our own concepts (the Up
-and Down arrows). Still no general icon set: an icon set in the signing path
-is a supply-chain decision (GHO-68), not a styling one. If one becomes
-necessary, use one human-drawn family (Phosphor) and add it deliberately.
+Our own glyphs, in `src/components/ui/icons.tsx`, for our own concepts (the
+Up and Down arrows). ~~Still no general icon set: an icon set in the signing
+path is a supply-chain decision (GHO-68), not a styling one. If one becomes
+necessary, use one human-drawn family (Phosphor) and add it deliberately.~~
+
+**Phosphor, for navigation (GHO-100).** The navs became icon + label, as on
+Myriad and Limitless. Nine destinations is past what we should hand-draw, so
+this is the moment the rule above anticipated. `@phosphor-icons/react`,
+pinned exact (2.1.10: MIT, zero dependencies). Every use goes through
+`src/components/NavIcon.tsx`, keyed by route. `regular` weight normally and
+`fill` for the current page, so the current page reads without colour. Don't
+import Phosphor anywhere else without adding the use here first, and never
+mix in a second icon family.
 
 ### Logos (GHO-97)
 
@@ -184,6 +193,12 @@ screen renders `<Page title subtitle>` for its header and body, and never
 the frame itself. The sidebar is pinned to the window and the document
 scrolls past it. Don't make `<main>` the scroller: that loses the phone's
 collapsing address bar, pull-to-refresh and back/forward scroll restoration.
+
+The sidebar is **icon + label and nothing else** (GHO-100): no notes beside
+items, no section headings, no tagline. It has to fit a 1366×650 window
+without scrolling, and a browser test holds it to that. A tenth destination
+is a reason to move something behind the phone's More sheet and the
+sidebar's bottom group, not a reason to let the sidebar scroll.
 
 `src/components/ui/` holds the primitives (GHO-96). They take props and
 render; none of them reads wagmi, a hook with data, or the network. Feature

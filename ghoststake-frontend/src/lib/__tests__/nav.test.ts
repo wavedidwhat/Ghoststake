@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_LINKS, TAB_LINKS, isCurrent, moreSections, sidebarSections } from "../nav";
+import { NAV_LINKS, TAB_LINKS, isCurrent, moreSections, sidebarLinks } from "../nav";
 
 describe("the tab bar", () => {
   it("has four destinations, because five plus More is the ceiling at 390px", () => {
@@ -49,19 +49,40 @@ describe("what More holds", () => {
   it("hides it from the sidebar on the same rule", () => {
     // Two navs disagreeing about what an admin can see is exactly the bug
     // that putting the list in one file was meant to prevent.
-    const sidebar = (isOperator: boolean) =>
-      sidebarSections(isOperator)
-        .flatMap((s) => s.items)
-        .map((l) => l.href);
+    const sidebar = (isOperator: boolean) => {
+      const { main, pinned } = sidebarLinks(isOperator);
+      return [...main, ...pinned].map((l) => l.href);
+    };
 
     expect(sidebar(false)).not.toContain("/operator");
     expect(sidebar(true)).toContain("/operator");
   });
 
   it("never leaves an empty section heading behind", () => {
-    for (const section of [...moreSections(false), ...sidebarSections(false)]) {
+    for (const section of moreSections(false)) {
       expect(section.items.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("the sidebar (GHO-100)", () => {
+  it("lists every destination exactly once, pinned or not", () => {
+    const { main, pinned } = sidebarLinks(true);
+    const hrefs = [...main, ...pinned].map((l) => l.href);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    expect(hrefs.sort()).toEqual(NAV_LINKS.map((l) => l.href).sort());
+  });
+
+  it("pins the way in for someone new, and leads with markets", () => {
+    const { main, pinned } = sidebarLinks(false);
+    expect(pinned.map((l) => l.href)).toEqual(["/how-it-works"]);
+    expect(main[0].href).toBe("/");
+  });
+
+  it("carries no second line of text beside a destination", () => {
+    // The notes ("what you have riding") are what made the sidebar scroll
+    // and wrapped "Portfolio" into its own description.
+    for (const link of NAV_LINKS) expect(link).not.toHaveProperty("note");
   });
 });
 

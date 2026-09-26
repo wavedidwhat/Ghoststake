@@ -79,10 +79,10 @@ test.describe("phone", () => {
     const tabs = page.getByRole("navigation", { name: "Primary" });
     await expect(tabs).toBeVisible();
 
-    // The sidebar's wordmark is the one in the aside; the phone header has
-    // its own. Both are "GhostStake", so this counts the sidebar by its
-    // subtitle instead.
-    await expect(page.getByText("Stake earns. Borrow against it.")).toBeHidden();
+    // The sidebar, found by its nav's name. This used to find it by its
+    // tagline, which GHO-100 removed; left as it was, "the tagline is hidden"
+    // would have passed forever on every viewport and checked nothing.
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
 
     // Every target at least 44px tall, which is the smallest thing a thumb
     // hits reliably.
@@ -210,8 +210,33 @@ test.describe("desktop", () => {
 
   test("keeps the sidebar and hides the tab bar", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Stake earns. Borrow against it.")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+  });
+
+  test("the sidebar fits a laptop window without scrolling (GHO-100)", async ({ page }) => {
+    // 1366×768 is still the most common laptop screen; with the browser's
+    // own bars that leaves about 650px. The nav used to need a scrollbar
+    // here, because every item carried a note and every group a heading.
+    await page.setViewportSize({ width: 1366, height: 650 });
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav).toBeVisible();
+
+    const { scroll, client, rows } = await nav.evaluate((el) => ({
+      scroll: el.scrollHeight,
+      client: el.clientHeight,
+      rows: el.querySelectorAll("a").length,
+    }));
+    expect(rows).toBeGreaterThan(5);
+    expect(scroll).toBeLessThanOrEqual(client);
+
+    // One line per item: a label that wraps is the bug in the screenshot
+    // that started this ("Portfolio" running into its note).
+    const heights = await nav.locator("a").evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().height),
+    );
+    expect(new Set(heights.map(Math.round)).size).toBe(1);
   });
 
   test("the sidebar stays put while the page scrolls", async ({ page }) => {
