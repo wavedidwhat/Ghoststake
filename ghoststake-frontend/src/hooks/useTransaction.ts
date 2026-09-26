@@ -11,7 +11,10 @@ export type TxState =
   | { status: "pending"; hash: `0x${string}` }
   | { status: "confirmed"; hash: `0x${string}` }
   | { status: "cancelled" }
-  | { status: "failed"; message: string };
+  // `hash` when it was sent before it failed (GHO-103): a mined revert, or a
+  // receipt that could not be read. That is when someone most wants to look
+  // it up, and the explorer is where the reason is.
+  | { status: "failed"; message: string; hash?: `0x${string}` };
 
 /**
  * One write, tracked from the wallet prompt through to a mined receipt.
@@ -66,8 +69,10 @@ export function useTransaction() {
       live.current = mine;
       setAttempt((n) => n + 1);
       setState({ status: "signing" });
+      let sent: `0x${string}` | undefined;
       try {
         const hash = await writeContractAsync(request);
+        sent = hash;
         if (live.current !== mine) return false;
         setState({ status: "pending", hash });
 
@@ -76,7 +81,7 @@ export function useTransaction() {
         if (receipt.status === "reverted") {
           // A mined revert is not the same as a failed send: the user paid
           // for it, so say so plainly rather than "something went wrong".
-          setState({ status: "failed", message: "The transaction reverted on chain." });
+          setState({ status: "failed", message: "The transaction reverted on chain.", hash });
           return false;
         }
 
@@ -90,7 +95,7 @@ export function useTransaction() {
           setState({ status: "cancelled" });
           return false;
         }
-        setState({ status: "failed", message: firstLine(message) });
+        setState({ status: "failed", message: firstLine(message), hash: sent });
         return false;
       }
     },

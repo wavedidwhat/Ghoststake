@@ -3,11 +3,11 @@
 import { useId } from "react";
 import { amountProblem } from "@/lib/amount";
 import { formatAmount } from "@/lib/format";
-import { explorerTxUrl } from "@/lib/activity";
 import type { useTransaction } from "@/hooks/useTransaction";
 import { useStalled } from "@/hooks/useStalled";
 import { TextButton } from "@/components/ui/Button";
 import { AssetLogo, hasLogo } from "@/components/ui/AssetLogo";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
@@ -168,10 +168,23 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
         ? "text-negative"
         : "text-ink-muted";
 
-  // Only while it is in flight. A confirmed or failed transaction has a hash
-  // worth linking too, but by then the row that reports it is the place for
-  // that, not a status line that is about to disappear.
-  const explorer = pending ? explorerTxUrl(state.hash) : undefined;
+  // Every state that has a hash links it (GHO-103). This used to be pending
+  // only, on the grounds that the history row reports a finished one. But
+  // the history is another page, fed by an indexer that can lag, and the
+  // moment someone wants to check a transaction is right here, as it lands
+  // or as it fails.
+  const hash =
+    state.status === "pending" || state.status === "confirmed"
+      ? state.hash
+      : state.status === "failed"
+        ? state.hash
+        : undefined;
+  const linkText =
+    state.status === "pending"
+      ? "Track it on the explorer"
+      : state.status === "confirmed"
+        ? "View it on the explorer"
+        : "See it on the explorer";
 
   return (
     <div className="flex flex-col items-start gap-0.5">
@@ -179,15 +192,10 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
         {text}
       </p>
 
-      {explorer && (
-        <a
-          href={explorer}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-ink-faint underline-offset-2 transition-colors hover:text-ink hover:underline"
-        >
-          Track it on the explorer
-        </a>
+      {hash && (
+        <ExplorerLink tx={hash} className="text-xs text-ink-faint">
+          {linkText}
+        </ExplorerLink>
       )}
 
       {stalled && (

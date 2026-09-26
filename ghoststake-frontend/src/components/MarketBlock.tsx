@@ -26,6 +26,7 @@ import { Button, TextButton } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Badge } from "@/components/ui/Badge";
 import { MarketMark } from "@/components/MarketMark";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 
 /**
  * One market and its rounds, with the forms to enter and to claim.
@@ -256,6 +257,25 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
         ) : (
           <>Reading this market&rsquo;s price feed from the chain.</>
         )}
+      </p>
+
+      {/* The two contracts that decide this market, so each claim above can
+          be checked against the chain rather than taken from us (GHO-103). */}
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-faint">
+        <span>
+          Market <ExplorerLink address={market.address} />
+        </span>
+        {feed?.isQuestion
+          ? feed.oracle && (
+              <span>
+                Oracle <ExplorerLink address={feed.oracle} />
+              </span>
+            )
+          : feed?.feed && (
+              <span>
+                Price feed <ExplorerLink address={feed.feed} />
+              </span>
+            )}
       </p>
     </div>
   );
