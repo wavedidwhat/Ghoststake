@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { isCurrent, sidebarSections } from "@/lib/nav";
+import { isCurrent, sidebarLinks, type NavLink } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
+import { NavIcon } from "./NavIcon";
+import { Badge } from "./ui/Badge";
 
 /**
  * Primary navigation from `md` up. Below that it is hidden and `MobileNav`
@@ -21,72 +23,78 @@ import { useIsOperator } from "@/hooks/useIsOperator";
  * window height while the document scrolls. The document still scrolls,
  * rather than an inner `<main>`, because that is what keeps a phone's
  * address bar collapsing, pull-to-refresh, and Next's scroll restoration on
- * back and forward. If the nav outgrows a short window, it scrolls itself.
+ * back and forward.
+ *
+ * Icon and label only, nothing else (GHO-100). It used to carry a tagline,
+ * five section headings and a note beside every item, which made it tall
+ * enough to need its own scrollbar on a laptop and wrapped "Portfolio" into
+ * its note. Myriad, the one major prediction market that keeps a sidebar,
+ * keeps it to exactly this. It still scrolls if a window is too short for
+ * nine rows, but at laptop heights it fits, and a browser test holds it to
+ * that.
  */
 export function Sidebar() {
   const pathname = usePathname();
-  const sections = sidebarSections(useIsOperator());
+  const { main, pinned } = sidebarLinks(useIsOperator());
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
-      <div className="shrink-0 border-b border-border px-5 py-4">
-        {/*
-         * A wordmark set in Nippo, deliberately a placeholder until Enoch's
-         * mark lands (GHO-58). What it replaced — a letter "G" in a rounded
-         * square — is one of the most recognisable AI-UI tells there is, and
-         * it read as a logo, so nobody would have thought to replace it.
-         */}
-        <div className="flex items-center gap-2.5">
-          <span className="display text-lg tracking-wide text-brand uppercase">GhostStake</span>
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-          Stake earns. Borrow against it. Take a view — without unwinding.
-        </p>
+      {/*
+       * A wordmark set in Nippo, deliberately a placeholder until Enoch's
+       * mark lands (GHO-58). What it replaced — a letter "G" in a rounded
+       * square — is one of the most recognisable AI-UI tells there is, and
+       * it read as a logo, so nobody would have thought to replace it.
+       */}
+      <div className="flex h-16 shrink-0 items-center px-5">
+        <Link
+          href="/"
+          className="display text-lg tracking-wide text-brand uppercase focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+        >
+          GhostStake
+        </Link>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-3">
-        {sections.map((section) => (
-          <div key={section.section} className="flex flex-col gap-0.5">
-            {section.items.length > 0 && (
-              <p className="mt-3 px-3 pb-1 text-[10px] font-medium tracking-wider text-ink-faint uppercase">
-                {section.section}
-              </p>
-            )}
-
-            {section.items.map((item) =>
-              item.ready ? (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={isCurrent(pathname, item.href) ? "page" : undefined}
-                  className={`flex items-baseline justify-between rounded-sm px-3 py-2 text-sm transition-colors ${
-                    isCurrent(pathname, item.href)
-                      ? "bg-raised font-medium text-ink"
-                      : "text-ink-muted hover:bg-raised/60 hover:text-ink"
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {item.note && <span className="text-[11px] text-ink-faint">{item.note}</span>}
-                </Link>
-              ) : (
-                <span
-                  key={item.href}
-                  className="flex cursor-not-allowed items-baseline justify-between rounded-sm px-3 py-2 text-sm text-ink-faint"
-                >
-                  <span>{item.label}</span>
-                  {item.note && <span className="text-[11px]">{item.note}</span>}
-                </span>
-              ),
-            )}
-          </div>
+      <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2">
+        {main.map((item) => (
+          <NavItem key={item.href} item={item} pathname={pathname} />
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-border px-5 py-4">
-        <p className="text-xs leading-relaxed text-ink-faint">
-          Testnet. Your stake keeps earning while it backs a position.
+      <div className="flex shrink-0 flex-col gap-0.5 border-t border-border px-3 py-3">
+        {pinned.map((item) => (
+          <NavItem key={item.href} item={item} pathname={pathname} />
+        ))}
+        <p className="px-3 pt-2">
+          <Badge size="sm">Testnet</Badge>
         </p>
       </div>
     </aside>
+  );
+}
+
+function NavItem({ item, pathname }: { item: NavLink; pathname: string }) {
+  const current = isCurrent(pathname, item.href);
+  const row = "flex items-center gap-3 rounded-control px-3 py-2 text-sm";
+
+  if (!item.ready) {
+    return (
+      <span className={`${row} cursor-not-allowed text-ink-faint`}>
+        <NavIcon href={item.href} current={false} className="size-5 shrink-0" />
+        <span className="truncate">{item.label}</span>
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={current ? "page" : undefined}
+      className={`${row} transition-colors focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none ${
+        current ? "bg-raised font-medium text-ink" : "text-ink-muted hover:bg-raised/60 hover:text-ink"
+      }`}
+    >
+      <NavIcon href={item.href} current={current} className="size-5 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </Link>
   );
 }
