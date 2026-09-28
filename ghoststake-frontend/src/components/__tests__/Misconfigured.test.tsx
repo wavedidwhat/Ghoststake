@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderWithMessages } from "@/test/intl";
 import { Misconfigured } from "../Misconfigured";
 
 /**
@@ -9,7 +9,7 @@ import { Misconfigured } from "../Misconfigured";
  */
 describe("Misconfigured", () => {
   it("names each variable and the value it was built with", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithMessages(
       <Misconfigured
         problems={[
           { variable: "NEXT_PUBLIC_VAULT_ADDRESS", value: "0xabc", reason: "is not a 20-byte hex address" },

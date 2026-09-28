@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { ConnectButton } from "./ConnectButton";
 import { AlertBell } from "./AlertBell";
@@ -73,9 +74,10 @@ export function Page({
 
 /** Shown wherever a screen needs a wallet before it can say anything. */
 export function NeedsWallet({ what }: { what: string }) {
+  const t = useTranslations("page");
   return (
     <div className="rounded-card border border-border bg-surface p-6 text-center sm:p-8">
-      <h2 className="text-base font-medium text-ink">Connect a wallet</h2>
+      <h2 className="text-base font-medium text-ink">{t("needsWallet")}</h2>
       <p className="mt-2 text-sm text-ink-muted">{what}</p>
     </div>
   );
@@ -83,9 +85,10 @@ export function NeedsWallet({ what }: { what: string }) {
 
 /** Shown when the addresses for a screen's contracts are not configured. */
 export function NotConfigured({ what }: { what: string }) {
+  const t = useTranslations("page");
   return (
     <div className="rounded-card border border-border bg-surface p-6 text-center sm:p-8">
-      <h2 className="text-base font-medium text-ink">Not deployed here</h2>
+      <h2 className="text-base font-medium text-ink">{t("notConfigured")}</h2>
       <p className="mt-2 text-sm text-ink-muted">{what}</p>
     </div>
   );

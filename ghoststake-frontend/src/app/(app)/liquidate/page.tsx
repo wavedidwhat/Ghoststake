@@ -12,7 +12,7 @@ import { collateralVaultAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
 import { actionFor, netToLiquidator, type Action, type AtRiskPosition } from "@/lib/atRisk";
 import { env } from "@/lib/env";
-import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
+import { formatAmount, formatHealthFactor, formatInteger, healthBand } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
@@ -116,10 +116,10 @@ function Header({
           </p>
         </div>
         <p className="text-right text-xs text-ink-faint">
-          {block ? `Figures at block ${block.toLocaleString()}.` : "Block unknown."}
+          {block ? `Figures at block ${formatInteger(block)}.` : "Block unknown."}
           <br />
           {indexedBlock
-            ? `Borrowers indexed to ${indexedBlock.toLocaleString()}.`
+            ? `Borrowers indexed to ${formatInteger(indexedBlock)}.`
             : "Indexer position unknown."}
         </p>
       </div>

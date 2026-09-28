@@ -1,0 +1,98 @@
+{
+  "app": {
+    "title": "Browser tab title and wallet-connect app name on pages that set none of their own. The product name.",
+    "description": "Search result and link-preview description for the whole site. One sentence."
+  },
+  "actions": {
+    "goToMarkets": "Button on the 404 and crash pages that leaves for the market list.",
+    "tryAgain": "Button that repeats a failed read or re-renders a crashed page.",
+    "reload": "Button on the crash page shown when the app itself failed to start; does a full page reload.",
+    "close": "Screen-reader label for the × that closes a sheet or dialog."
+  },
+  "errors": {
+    "reference": "Small print under an error, giving the ID that matches it to the server log. {digest} is an opaque hex string; <code> sets it in monospace."
+  },
+  "notFound": {
+    "metaTitle": "Browser tab title on the 404 page.",
+    "eyebrow": "Small label above the 404 heading.",
+    "title": "Heading of the 404 page.",
+    "body": "Explains the 404: the link is wrong, possibly truncated when shared."
+  },
+  "routeError": {
+    "eyebrow": "Small label above the heading when one screen fails to render.",
+    "title": "Heading when one screen fails to render; the rest of the app still works.",
+    "body": "Reassures that a rendering error cannot touch funds."
+  },
+  "globalError": {
+    "metaTitle": "Browser tab title when the whole app failed to start.",
+    "eyebrow": "Small label above the heading when the whole app failed to start.",
+    "title": "Heading when the whole app failed to start.",
+    "body": "Reassures that a rendering error cannot touch funds."
+  },
+  "page": {
+    "needsWallet": "Heading of the placeholder a screen shows when it needs a connected wallet. The body under it is screen-specific.",
+    "notConfigured": "Heading of the placeholder a screen shows when this network has no contracts for it."
+  },
+  "nav": {
+    "mainLabel": "Screen-reader name of the desktop sidebar navigation.",
+    "primaryLabel": "Screen-reader name of the phone tab bar.",
+    "testnet": "Badge at the bottom of the desktop sidebar: this deployment is on a test network.",
+    "more": "Fifth tab in the phone tab bar; opens a sheet with every other destination. Max 8 characters.",
+    "moreTitle": "Heading of the phone's More sheet.",
+    "sections": {
+      "bet": "Group heading in the phone's More sheet: markets and your positions.",
+      "yourMoney": "Group heading in the phone's More sheet: staking, borrowing and history.",
+      "fundIt": "Group heading in the phone's More sheet: lending to the pool.",
+      "runIt": "Group heading in the phone's More sheet: liquidating and operating markets.",
+      "learn": "Group heading in the phone's More sheet: the explainer."
+    },
+    "links": {
+      "markets": "Nav item: the market list, the home page.",
+      "portfolio": "Nav item: your stake, debt, health and positions in one place.",
+      "stake": "Nav item: deposit into or withdraw from the vault.",
+      "borrow": "Nav item: borrow against your stake, or repay.",
+      "stocks": "Nav item: loans against tokenized stock.",
+      "activity": "Nav item: your transaction history.",
+      "lend": "Nav item: supply the lending pool.",
+      "liquidate": "Nav item: liquidate unhealthy loans.",
+      "operator": "Nav item, shown only to a market's owner: open rounds and publish prices.",
+      "howItWorks": "Nav item pinned at the bottom of the sidebar: the explainer for newcomers."
+    },
+    "tabs": {
+      "markets": "Phone tab bar label for the market list. Max 8 characters; set in capitals.",
+      "portfolio": "Phone tab bar label for the portfolio. Max 8 characters; set in capitals. Shorter than the sidebar's word on purpose.",
+      "stake": "Phone tab bar label for staking. Max 8 characters; set in capitals.",
+      "lend": "Phone tab bar label for lending. Max 8 characters; set in capitals."
+    }
+  },
+  "wallet": {
+    "connect": "Header button that connects a wallet.",
+    "connecting": "Disabled header button while a wallet connection is in progress.",
+    "cancelled": "Quiet hint under the connect button after the person dismissed the wallet prompt.",
+    "failed": "Quiet hint under the connect button after a connection failed for another reason.",
+    "noResponse": "Quiet hint under the connect button when the wallet went silent mid-connection.",
+    "inThisBrowser": "Group heading in the wallet menu: wallets installed in this browser.",
+    "otherWallets": "Group heading in the wallet menu: WalletConnect, when browser wallets are also listed.",
+    "mobileWallet": "Group heading in the wallet menu: WalletConnect, when it is the only way to connect (usually on a phone).",
+    "disconnect": "Tooltip on the connected-address button; clicking it disconnects."
+  },
+  "network": {
+    "wrong": "Warning banner when the wallet is on another network and its name is unknown. <lead> is set bold. {expected} is a network name.",
+    "wrongWithWallet": "Warning banner when the wallet is on another network. <lead> is set bold. {expected} and {actual} are network names.",
+    "switching": "Banner button while the wallet is switching networks.",
+    "switchTo": "Banner button that asks the wallet to switch. {chain} is a network name.",
+    "declined": "Hint under the switch button after the person declined the switch in their wallet.",
+    "addChainFirst": "Hint under the switch button when the wallet does not know this network. {chain} is a network name.",
+    "couldNotSwitch": "Hint under the switch button when the switch failed for another reason.",
+    "noAnswer": "Hint under the switch button when the wallet went silent."
+  },
+  "explorer": {
+    "newTab": "Screen-reader text after every block-explorer link: it leaves the app."
+  },
+  "misconfigured": {
+    "eyebrow": "Small label above the heading on the screen a broken deployment shows instead of the app. Read by whoever deployed it.",
+    "title": "Heading of the broken-deployment screen.",
+    "body": "Explains the broken-deployment screen. {count} is how many build settings are wrong; a list of them follows.",
+    "rebuild": "Footnote on the broken-deployment screen: the settings are fixed at build time."
+  }
+}

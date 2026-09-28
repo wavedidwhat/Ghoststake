@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderWithMessages } from "@/test/intl";
 import { Phase, Status, type Round } from "@/lib/rounds";
 import { RoundCard } from "../RoundCard";
 
@@ -47,7 +47,7 @@ const base = {
 function render(props: Record<string, unknown>) {
   // @ts-expect-error — the card takes more props than these tests care about,
   // and listing them all would obscure which one each case is actually about.
-  return renderToStaticMarkup(<RoundCard {...base} {...props} />);
+  return renderWithMessages(<RoundCard {...base} {...props} />);
 }
 
 describe("the settlement line", () => {

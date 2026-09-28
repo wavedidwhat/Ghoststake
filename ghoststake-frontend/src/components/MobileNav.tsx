@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { TAB_LINKS, isCurrent, moreSections } from "@/lib/nav";
@@ -23,6 +24,7 @@ import { NavIcon } from "./NavIcon";
  * call; this only has to make them reachable.
  */
 export function MobileNav() {
+  const t = useTranslations("nav");
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   // The operator console is listed only for the wallet that owns a market
@@ -44,7 +46,7 @@ export function MobileNav() {
        * where a tap either does nothing or goes home.
        */}
       <nav
-        aria-label="Primary"
+        aria-label={t("primaryLabel")}
         className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-40 rounded-card border border-border bg-raised md:hidden"
       >
         <ul className="grid grid-cols-5">
@@ -66,7 +68,7 @@ export function MobileNav() {
                       place. */}
                   <NavIcon href={item.href} current={current} className="size-5" />
                   <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">
-                    {item.short ?? item.label}
+                    {t(`tabs.${item.id}`)}
                   </span>
                 </Link>
               </li>
@@ -83,18 +85,18 @@ export function MobileNav() {
               }`}
             >
               <NavIcon href="more" current={moreIsCurrent} className="size-5" />
-              <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">More</span>
+              <span className="display w-full truncate text-center text-[0.65rem] tracking-normal uppercase">{t("more")}</span>
             </button>
           </li>
         </ul>
       </nav>
 
-      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Everything else">
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t("moreTitle")}>
         <div className="flex flex-col gap-5">
           {sections.map((section) => (
             <div key={section.section}>
               <p className="px-1 pb-2 text-[10px] font-medium tracking-wider text-ink-faint uppercase">
-                {section.section}
+                {t(`sections.${section.section}`)}
               </p>
               <div className="flex flex-col">
                 {section.items.map((item) =>
@@ -112,7 +114,7 @@ export function MobileNav() {
                       }`}
                     >
                       <NavIcon href={item.href} current={isCurrent(pathname, item.href)} className="size-5 shrink-0" />
-                      <span className="display text-base uppercase">{item.label}</span>
+                      <span className="display text-base uppercase">{t(`links.${item.id}`)}</span>
                     </Link>
                   ) : (
                     <span
@@ -120,7 +122,7 @@ export function MobileNav() {
                       className="flex min-h-11 items-center gap-3 border-b border-border px-1 py-3 text-sm text-ink-faint last:border-b-0"
                     >
                       <NavIcon href={item.href} current={false} className="size-5 shrink-0" />
-                      <span className="display text-base uppercase">{item.label}</span>
+                      <span className="display text-base uppercase">{t(`links.${item.id}`)}</span>
                     </span>
                   ),
                 )}

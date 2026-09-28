@@ -1,5 +1,6 @@
 import { getRequestConfig } from "next-intl/server";
 import messages from "../../messages/en.json";
+import { locale } from "./locale";
 
 /**
  * Where UI copy comes from (GHO-116).
@@ -14,6 +15,4 @@ import messages from "../../messages/en.json";
  * file there is nothing to choose between, and a static import is what lets
  * `global.d.ts` type every key against it.
  */
-export const locale = "en";
-
 export default getRequestConfig(async () => ({ locale, messages }));

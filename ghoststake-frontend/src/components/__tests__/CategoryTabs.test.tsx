@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderWithMessages } from "@/test/intl";
 import type { Category } from "@/lib/marketCategory";
 import { CategoryTabs } from "../CategoryTabs";
 
@@ -11,7 +11,7 @@ import { CategoryTabs } from "../CategoryTabs";
  */
 
 const render = (current: Category | undefined, counts: [Category, number][]) =>
-  renderToStaticMarkup(
+  renderWithMessages(
     <CategoryTabs
       current={current}
       counts={new Map(counts)}

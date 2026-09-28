@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import messages from "../../../messages/en.json";
 import { NAV_LINKS, TAB_LINKS, isCurrent, moreSections, sidebarLinks } from "../nav";
 
 describe("the tab bar", () => {
@@ -17,9 +18,17 @@ describe("the tab bar", () => {
   it("gives every tab a label short enough to set", () => {
     // "POSITIO…" shipped once. The rule is a name chosen on purpose rather
     // than a truncation, so nothing in the bar is longer than "Markets".
+    // Read from the catalog (GHO-117), which is where a translation would
+    // make it longer.
     for (const link of TAB_LINKS) {
-      expect((link.short ?? link.label).length).toBeLessThanOrEqual(8);
+      expect(messages.nav.tabs[link.id].length).toBeLessThanOrEqual(8);
     }
+  });
+
+  it("has words for exactly the tabs there are", () => {
+    // `TAB_LINKS` is typed as carrying a `TabId`, which the compiler takes on
+    // trust; this is what holds it.
+    expect(Object.keys(messages.nav.tabs).sort()).toEqual(TAB_LINKS.map((l) => l.id).sort());
   });
 });
 

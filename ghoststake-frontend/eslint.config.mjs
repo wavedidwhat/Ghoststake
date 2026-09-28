@@ -23,7 +23,7 @@ const noInlineCopy = (level) => ({
     {
       noStrings: true,
       ignoreProps: true,
-      allowedStrings: [" ", "·", "—", "–", "…", "/", "%", "(", ")", ":", ",", ".", "→", "←", "↗", "GhostStake"],
+      allowedStrings: [" ", "·", "—", "–", "…", "/", "%", "(", ")", ":", ",", ".", "→", "←", "↗", "×", "GhostStake"],
     },
   ],
   "no-restricted-syntax": [
@@ -45,7 +45,21 @@ const noInlineCopy = (level) => ({
  * here in the PR that migrates it, and once every file is listed the
  * split goes and the rule is an error everywhere.
  */
-const MIGRATED = ["src/app/not-found.tsx", "src/app/error.tsx", "src/app/global-error.tsx"];
+const MIGRATED = [
+  "src/app/not-found.tsx",
+  "src/app/error.tsx",
+  "src/app/global-error.tsx",
+  "src/components/ConnectButton.tsx",
+  "src/components/Misconfigured.tsx",
+  "src/components/MobileNav.tsx",
+  "src/components/NetworkGuard.tsx",
+  "src/components/Page.tsx",
+  "src/components/Sidebar.tsx",
+  "src/components/ui/ExplorerLink.tsx",
+  "src/components/ui/LoadFailed.tsx",
+  "src/components/ui/Notice.tsx",
+  "src/components/ui/Sheet.tsx",
+];
 
 const eslintConfig = defineConfig([
   ...nextVitals,

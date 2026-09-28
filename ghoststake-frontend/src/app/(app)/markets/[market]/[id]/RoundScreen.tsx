@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
 import { winnerLabel } from "@/lib/question";
 import type { PositionRound } from "@/lib/positions";
 import { fetchRounds, type RoundsResponse } from "@/lib/roundsApi";
@@ -65,7 +65,7 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
               Round ids restart at 1 in every market, so a round 7 exists in each of them and this
               is not the one you meant — or the indexer has not reached it yet
               {query.data
-                ? ` (it has read to block ${query.data.indexedBlock.toLocaleString()})`
+                ? ` (it has read to block ${formatInteger(query.data.indexedBlock)})`
                 : ""}
               .
             </p>
@@ -123,7 +123,7 @@ function Detail({
           <p className="text-right text-xs text-ink-faint">
             <span className="font-mono">{shortHash(market, 6, 4)}</span>
             <br />
-            {indexedBlock ? `Indexed to block ${indexedBlock.toLocaleString()}.` : ""}
+            {indexedBlock ? `Indexed to block ${formatInteger(indexedBlock)}.` : ""}
           </p>
         </div>
       </Card>
@@ -144,9 +144,9 @@ function Detail({
         <Card>
           <Eyebrow>The clock</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
-            <Line label="Opened" value={new Date(round.openTime).toLocaleString()} />
-            <Line label="Locked" value={new Date(round.lockTime).toLocaleString()} />
-            <Line label="Closed" value={new Date(round.closeTime).toLocaleString()} />
+            <Line label="Opened" value={formatDateTime(round.openTime)} />
+            <Line label="Locked" value={formatDateTime(round.lockTime)} />
+            <Line label="Closed" value={formatDateTime(round.closeTime)} />
           </dl>
         </Card>
 
@@ -186,7 +186,7 @@ function Detail({
           <dl className="mt-3 space-y-2 text-sm">
             <Line label="Status" value={round.status} />
             <Line label="Phase" value={round.phase} />
-            <Line label="Last touched" value={`block ${round.lastBlock.toLocaleString()}`} />
+            <Line label="Last touched" value={`block ${formatInteger(round.lastBlock)}`} />
           </dl>
         </Card>
       </div>

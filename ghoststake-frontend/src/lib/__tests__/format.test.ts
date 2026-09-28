@@ -4,7 +4,13 @@ import {
   WAD,
   formatAmount,
   formatApr,
+  formatClock,
+  formatDateTime,
   formatDuration,
+  formatInteger,
+  formatSignedPercent,
+  formatTime,
+  formatUtcTime,
   formatOptional,
   formatHealthFactor,
   formatPercent,
@@ -188,7 +194,49 @@ describe("formatDuration", () => {
   it("renders zero rather than an empty string", () => {
     expect(formatDuration(0n)).toBe("0s");
   });
-})
+});
+
+/**
+ * One locale for every figure (GHO-117). Block numbers and dates used the
+ * browser's locale while amounts used a hardcoded comma, so one screen could
+ * show both conventions at once.
+ */
+describe("counts, dates and times", () => {
+  it("groups a count the way it groups an amount", () => {
+    const amount = formatAmount(1234567n * WAD, 18, 0);
+    expect(formatInteger(1234567n)).toBe(amount);
+    expect(formatInteger(1234567)).toBe(amount);
+  });
+
+  it("keeps every digit of a block number past Number's precision", () => {
+    expect(formatInteger(123456789012345678901n)).toBe("123,456,789,012,345,678,901");
+  });
+
+  it("spells the month out, so day and month cannot be swapped", () => {
+    // Local noon, so the date is the same in any zone the suite runs in.
+    const at = new Date(2026, 8, 10, 12, 0, 5);
+    expect(formatDateTime(at)).toBe("Sep 10, 2026, 12:00:05 PM");
+    expect(formatDateTime(at.getTime())).toBe(formatDateTime(at.toISOString()));
+  });
+
+  it("formats times of day to the second and to the minute", () => {
+    const at = new Date(2026, 8, 10, 14, 48, 33);
+    expect(formatTime(at)).toBe("2:48:33 PM");
+    expect(formatClock(at)).toBe("2:48 PM");
+  });
+
+  it("gives a checkable time in UTC on a 24-hour clock, whatever the reader's zone", () => {
+    expect(formatUtcTime(Date.UTC(2026, 8, 28, 13, 48, 33))).toBe("13:48:33");
+    expect(formatUtcTime(Date.UTC(2026, 8, 28, 0, 5, 0))).toBe("00:05:00");
+  });
+
+  it("signs a percentage always, including zero", () => {
+    expect(formatSignedPercent(0.42)).toBe("+0.42%");
+    expect(formatSignedPercent(-1.5)).toBe("−1.50%");
+    expect(formatSignedPercent(0)).toBe("±0.00%");
+    expect(formatSignedPercent(1234.5)).toBe("+1,234.50%");
+  });
+});
 
 describe("formatOptional", () => {
   it("formats a value that has loaded", () => {

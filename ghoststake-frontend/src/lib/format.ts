@@ -1,4 +1,19 @@
+import { locale } from "@/i18n/locale";
+
 export const WAD = 10n ** 18n;
+
+/**
+ * The separators every figure uses, taken from the app's locale (GHO-117).
+ *
+ * Taken as symbols and applied by hand in `formatFixed`, rather than by
+ * handing a decimal string to `Intl.NumberFormat`: that is exact only in
+ * engines with Intl.NumberFormat v3, and an older one converts the string to
+ * a Number first. That loses digits past ~17 significant figures silently,
+ * which is the failure `formatFixed` exists to prevent.
+ */
+const SEPARATORS = new Intl.NumberFormat(locale).formatToParts(12345.6);
+const GROUP = SEPARATORS.find((p) => p.type === "group")?.value ?? "";
+const DECIMAL = SEPARATORS.find((p) => p.type === "decimal")?.value ?? ".";
 
 /**
  * `CollateralVault.healthFactor` returns `type(uint256).max` when there is no
@@ -32,16 +47,16 @@ function formatFixed(value: bigint, decimals: number, fractionDigits: number): s
   const precision = 10n ** BigInt(fractionDigits);
   const scaled = (magnitude * precision + unit / 2n) / unit;
 
-  const whole = (scaled / precision).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const whole = (scaled / precision).toString().replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
   const fraction =
-    fractionDigits > 0 ? `.${(scaled % precision).toString().padStart(fractionDigits, "0")}` : "";
+    fractionDigits > 0 ? `${DECIMAL}${(scaled % precision).toString().padStart(fractionDigits, "0")}` : "";
 
   return `${negative ? "-" : ""}${whole}${fraction}`;
 }
 
 /** Splits at the decimal point so the tail can be rendered dimmer. */
 export function splitFigure(value: string): { lead: string; tail: string } {
-  const dot = value.indexOf(".");
+  const dot = value.indexOf(DECIMAL);
   if (dot === -1) return { lead: value, tail: "" };
   return { lead: value.slice(0, dot), tail: value.slice(dot) };
 }
@@ -109,22 +124,97 @@ export function formatApr(ratePerSecond: bigint, fractionDigits = 2): string {
  * Never abbreviates past the hour: a resolve deadline of 90 minutes reads
  * better as "1h 30m" than as "1.5h", which invites the reader to wonder what
  * was rounded.
+ *
+ * The unit letters come from `Intl` in the app's locale rather than from the
+ * catalog (GHO-117): "h", "m" and "s" are the locale's own narrow units, and
+ * spelling them in `en.json` would be copying data `Intl` already has.
  */
 export function formatDuration(seconds: bigint): string {
-  if (seconds === 0n) return "0s";
+  if (seconds === 0n) return unit("second", 0n);
 
   const hours = seconds / 3600n;
   const minutes = (seconds % 3600n) / 60n;
   const rest = seconds % 60n;
 
   const parts: string[] = [];
-  if (hours > 0n) parts.push(`${hours}h`);
-  if (minutes > 0n) parts.push(`${minutes}m`);
+  if (hours > 0n) parts.push(unit("hour", hours));
+  if (minutes > 0n) parts.push(unit("minute", minutes));
   // Seconds are dropped once there is an hour on the front: "1h 0m 3s" is
   // precision nobody asked for on a deadline measured in hours.
-  if (rest > 0n && hours === 0n) parts.push(`${rest}s`);
+  if (rest > 0n && hours === 0n) parts.push(unit("second", rest));
 
   return parts.join(" ");
+}
+
+function unit(name: "hour" | "minute" | "second", value: bigint): string {
+  return new Intl.NumberFormat(locale, { style: "unit", unit: name, unitDisplay: "narrow" }).format(value);
+}
+
+/**
+ * A count — a block number, a number of rounds — grouped the same way as
+ * every amount (GHO-117). `toLocaleString()` used the browser's locale, so a
+ * German browser showed block 1.234.567 beside an amount of 1,234.
+ */
+export function formatInteger(value: bigint | number): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+}
+
+/** Anything a Date can be built from: epoch milliseconds, or an ISO string. */
+type Instant = Date | number | string;
+
+/**
+ * A moment in the reader's own time zone, with the month spelled out:
+ * "Sep 28, 2026, 2:48:33 PM".
+ *
+ * Spelled out, not numeric (GHO-117). With one app locale, "9/10/2026" is
+ * month-first for everyone, and most of the world reads it as 9 October.
+ *
+ * The time zone is deliberately the viewer's, as it was: everything that
+ * calls this renders from a client-side read, after hydration, so there is
+ * no server render in some other zone for it to disagree with.
+ */
+export function formatDateTime(at: Instant): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(at));
+}
+
+/** A time of day to the second, in the reader's zone: "2:48:33 PM". */
+export function formatTime(at: Instant): string {
+  return new Intl.DateTimeFormat(locale, { timeStyle: "medium" }).format(new Date(at));
+}
+
+/** A time of day to the minute, in the reader's zone: "2:48 PM". */
+export function formatClock(at: Instant): string {
+  return new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(at));
+}
+
+/**
+ * A time of day in UTC on a 24-hour clock, "13:48:33", for a figure somebody
+ * is meant to check against a feed's own timestamps, which are UTC.
+ */
+export function formatUtcTime(at: Instant): string {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZone: "UTC",
+  }).format(new Date(at));
+}
+
+/**
+ * A signed percentage from a plain number: 0.42 → "+0.42%". For figures that
+ * are already small numbers (a move in basis points / 100), not WAD ratios.
+ *
+ * Signed always, including zero: "0.00%" without a sign reads as "no data"
+ * next to a figure that does carry one.
+ */
+export function formatSignedPercent(value: number, fractionDigits = 2): string {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "±";
+  const digits = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Math.abs(value));
+  return `${sign}${digits}%`;
 }
 
 /**

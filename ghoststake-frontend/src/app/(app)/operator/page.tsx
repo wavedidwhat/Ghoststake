@@ -20,7 +20,7 @@ import {
   parimutuelRoundAbi,
 } from "@/lib/abis";
 import { parseAmount } from "@/lib/amount";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatTime } from "@/lib/format";
 import { strikeFor } from "@/lib/strike";
 import { anyMarketConfigured, type Market } from "@/lib/markets";
 import {
@@ -861,7 +861,7 @@ function Preview({ label, at, now }: { label: string; at: bigint; now: bigint | 
     <div>
       <dt className="text-ink-faint">{label}</dt>
       <dd className="tabular text-ink">
-        {new Date(Number(at) * 1000).toLocaleTimeString()}
+        {formatTime(Number(at) * 1000)}
         {now !== undefined && (
           <span className="ml-2 text-ink-faint">in {formatCountdown(at - now)}</span>
         )}
