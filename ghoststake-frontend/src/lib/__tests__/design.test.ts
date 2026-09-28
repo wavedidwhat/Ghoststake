@@ -153,6 +153,7 @@ describe("screens use the primitives in components/ui (GHO-96)", () => {
       "components/MobileNav.tsx": "tab-bar items",
       "components/ConnectButton.tsx": "the wallet menu rows and the pre-hydration placeholder",
       "components/AmountField.tsx": "the Max shortcut beside the label",
+      "components/AlertBell.tsx": "the icon-only bell in the header, with its count (GHO-104)",
       "activity/ActivityScreen.tsx": "the full-width load-more row",
       "stocks/page.tsx": "the stock picker rows, which carry a logo and two figures",
     };

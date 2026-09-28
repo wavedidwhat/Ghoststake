@@ -3,7 +3,11 @@
 import { useCallback, useRef, useState } from "react";
 import { useWriteContract } from "wagmi";
 import { useConfig } from "wagmi";
-import { waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient } from "wagmi/actions";
+import { txToast } from "@/components/txToasts";
+
+/** Per-send toast ids, unique across every form in the app. */
+let toastSeq = 0;
 
 export type TxState =
   | { status: "idle" }
@@ -69,14 +73,31 @@ export function useTransaction() {
       live.current = mine;
       setAttempt((n) => n + 1);
       setState({ status: "signing" });
+      // The toast reports the transaction, the state reports the form (GHO-104).
+      // So the toast calls come before each `live` check: a send the form has
+      // stopped waiting for, or that outlived the page that sent it, still
+      // lands on chain, and the toast is how anyone hears that it did.
+      const toastId = `tx-${++toastSeq}`;
       let sent: `0x${string}` | undefined;
       try {
         const hash = await writeContractAsync(request);
         sent = hash;
+        txToast.sent(toastId, hash);
         if (live.current !== mine) return false;
         setState({ status: "pending", hash });
 
-        const receipt = await waitForTransactionReceipt(config, { hash });
+        // viem's wait, not wagmi's (GHO-104). wagmi's `waitForTransactionReceipt`
+        // throws on a reverted receipt after re-fetching the transaction to
+        // read a reason, so the `reverted` branch below never ran: someone
+        // whose transaction was mined and reverted saw a raw revert string,
+        // "unknown reason", or, when that re-fetch failed, "could not be
+        // found", which reads as if it never happened. viem's returns the
+        // receipt, status and all, and the explorer link carries the reason.
+        const client = getPublicClient(config);
+        if (!client) throw new Error("No connection to the chain to confirm the transaction.");
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") txToast.failed(toastId, "The transaction reverted on chain.", hash);
+        else txToast.confirmed(toastId, hash);
         if (live.current !== mine) return false;
         if (receipt.status === "reverted") {
           // A mined revert is not the same as a failed send: the user paid
@@ -89,9 +110,12 @@ export function useTransaction() {
         options?.onConfirmed?.();
         return true;
       } catch (cause) {
-        if (live.current !== mine) return false;
         const message = cause instanceof Error ? cause.message : String(cause);
-        if (/user rejected|denied|rejected the request/i.test(message)) {
+        const rejected = /user rejected|denied|rejected the request/i.test(message);
+        if (rejected) txToast.dismiss(toastId);
+        else txToast.failed(toastId, firstLine(message), sent);
+        if (live.current !== mine) return false;
+        if (rejected) {
           setState({ status: "cancelled" });
           return false;
         }

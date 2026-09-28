@@ -6,6 +6,7 @@ import { Page } from "@/components/Page";
 import { ClaimAllPanel } from "@/components/ClaimAllPanel";
 import { buttonClass } from "@/components/ui/Button";
 import { LoadFailed } from "@/components/ui/LoadFailed";
+import { useClaimables } from "@/hooks/useClaimables";
 import { Card, Stat } from "@/components/ui/Card";
 import { Figure } from "@/components/ui/Figure";
 import { HealthFactorCard } from "@/components/HealthFactor";
@@ -55,25 +56,6 @@ export default function PortfolioPage() {
       )}
     </Page>
   );
-}
-
-/**
- * Everything this wallet can collect, across every market (GHO-69).
- *
- * Read from the chain rather than from the indexer: these figures fund a
- * transaction about to be signed, and `claimableOf` five blocks stale can
- * offer a claim that has already been collected. `useRounds` is already
- * batching them for the market pages, so this costs no extra call.
- */
-function useClaimables() {
-  const { markets } = useMarkets();
-  const rounds = useRounds(markets);
-
-  const claims = rounds.rounds
-    .filter((r) => (r.claimable ?? 0n) > 0n && r.isClaimed !== true)
-    .map((r) => ({ market: r.market.address, roundId: r.id, amount: r.claimable! }));
-
-  return { claims, refetch: rounds.refetch };
 }
 
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
