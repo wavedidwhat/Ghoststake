@@ -29,6 +29,8 @@ import {
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
+import { CATEGORIES, categoryOf, type Category } from "@/lib/marketCategory";
+import { CategoryTabs } from "@/components/CategoryTabs";
 
 /**
  * Readable without a wallet, deliberately.
@@ -46,13 +48,13 @@ import { Badge } from "@/components/ui/Badge";
  * `useVaultPosition` — a per-address hook asked a question that is not about
  * an address. See GHO-44.
  */
-export function MarketsScreen() {
+export function MarketsScreen({ category }: { category?: Category }) {
   return (
     <Page title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
       {!anyMarketConfigured() ? (
         <NotConfigured what="No market is configured for this network." />
       ) : (
-        <RoundsScreen />
+        <RoundsScreen category={category} />
       )}
     </Page>
   );
@@ -66,7 +68,7 @@ export function MarketsScreen() {
  * app when they hold no position. One market is a page you visit when you
  * already know what you want.
  */
-function RoundsScreen() {
+function RoundsScreen({ category }: { category?: Category }) {
   const now = useNow();
   const { markets, listed, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);
@@ -115,9 +117,22 @@ function RoundsScreen() {
   );
   const visible = markets.filter((m) => m.enabled || holdings.has(m.key));
 
-  const summaries = visible
+  const all = visible
     .map((market) => summarise(market, rounds, params.byMarket.get(market.key)))
     .sort(byActivity);
+
+  // A market whose feed has not resolved has no category yet. It shows under
+  // All and nowhere else, rather than under a guessed tab (GHO-101).
+  const categoryFor = (s: Summary): Category | undefined => {
+    const feed = feeds.byMarket.get(s.market.key);
+    return feed ? categoryOf(feed) : undefined;
+  };
+  const counts = new Map<Category, number>();
+  for (const s of all) {
+    const c = categoryFor(s);
+    if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  const summaries = category ? all.filter((s) => categoryFor(s) === category) : all;
 
   return (
     <div className="flex flex-col gap-8">
@@ -136,6 +151,19 @@ function RoundsScreen() {
             </span>
           )}
         </div>
+
+        <CategoryTabs current={category} counts={counts} total={all.length} />
+
+        {summaries.length === 0 && category && (
+          <Card>
+            <p className="text-sm text-ink-muted">
+              Nothing under {CATEGORIES.find((c) => c.value === category)?.label} right now.{" "}
+              <Link href="/" className="text-ink underline-offset-2 hover:underline">
+                See all markets
+              </Link>
+            </p>
+          </Card>
+        )}
 
         <div className="flex flex-col gap-2">
           {summaries.map((summary) => (

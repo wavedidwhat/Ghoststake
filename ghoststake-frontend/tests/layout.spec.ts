@@ -205,6 +205,38 @@ test.describe("routes", () => {
   });
 });
 
+test.describe("category tabs (GHO-101)", () => {
+  // The e2e chain serves one market, an ETH/USD price market. That is
+  // exactly the case where the tab row must not be drawn: one kind of market
+  // leaves nothing to choose between. The several-kinds case is a component
+  // test (CategoryTabs.test.tsx).
+  test("are not drawn when every market is the same kind", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /ETH/ }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("navigation", { name: "Categories" })).toHaveCount(0);
+  });
+
+  test("a link to an empty tab says so, and offers the way back", async ({ page }) => {
+    await page.goto("/?c=stocks");
+    await expect(page.getByText(/Nothing under Stocks right now/)).toBeVisible({ timeout: 20_000 });
+
+    const tabs = page.getByRole("navigation", { name: "Categories" });
+    await expect(tabs.getByRole("link", { name: /^Stocks/ })).toHaveAttribute("aria-current", "page");
+    // The ETH market is not shown under Stocks...
+    await expect(page.locator('a[href^="/markets/"]')).toHaveCount(0);
+
+    // ...and one tap on All brings it back.
+    await tabs.getByRole("link", { name: /^All/ }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('a[href^="/markets/"]').first()).toBeVisible();
+  });
+
+  test("an unknown category is All, not an empty page", async ({ page }) => {
+    await page.goto("/?c=nonsense");
+    await expect(page.locator('a[href^="/markets/"]').first()).toBeVisible({ timeout: 20_000 });
+  });
+});
+
 test.describe("desktop", () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 768, "desktop layout only");
 
