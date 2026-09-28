@@ -35,7 +35,7 @@ describe("labels", () => {
     const vault = activityLabel(event({ type: "vault_withdraw", eventName: "Withdrawn" }));
     const pool = activityLabel(event({ type: "pool_withdraw", eventName: "Withdrawn" }));
     expect(vault).not.toBe(pool);
-    expect(vault).toBe("Unstaked");
+    expect(vault).toBe("Withdrew deposit");
     expect(pool).toBe("Withdrew from pool");
   });
 

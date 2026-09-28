@@ -20,7 +20,7 @@ describe("alertsFor (GHO-104)", () => {
     const caution = alertsFor({ ...base, healthFactor: hf(1.38) });
     expect(caution).toHaveLength(1);
     expect(caution[0]).toMatchObject({ id: "health:caution", tone: "warning" });
-    expect(translate(caution[0].title)).toBe("Safety 1.38");
+    expect(translate(caution[0].title)).toBe("Loan health 1.38");
 
     const danger = alertsFor({ ...base, healthFactor: hf(1.12) });
     expect(danger[0]).toMatchObject({ id: "health:danger", tone: "negative", href: "/borrow" });
