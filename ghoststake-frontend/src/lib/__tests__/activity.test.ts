@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import {
   activityDirection,
-  activityLabel,
+  activityLabel as labelOf,
   shortHash,
   wasLeveraged,
   type ActivityEvent,
@@ -22,6 +23,8 @@ function event(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
     ...overrides,
   };
 }
+
+const activityLabel = (e: ActivityEvent) => translate(labelOf(e));
 
 describe("labels", () => {
   // The vault and the pool both emit `Withdrawn` and they mean completely

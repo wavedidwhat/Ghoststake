@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import {
   Action,
   actionFor,
   findCloseRound,
   isOwnerOnly,
   scheduleFrom,
-  scheduleProblem,
+  scheduleProblem as problemOf,
   warningsFor,
 } from "../operator";
 import { Phase, Status, type Round } from "../rounds";
@@ -119,6 +120,10 @@ describe("scheduling a round", () => {
   });
 
   it("rejects what the contract would reject, and says which rule", () => {
+    const scheduleProblem = (...args: Parameters<typeof problemOf>) => {
+      const found = problemOf(...args);
+      return found && translate(found);
+    };
     const ok = scheduleFrom(1000n, 60n, 300n, 600n);
     expect(scheduleProblem(ok, 15n, 1000n)).toBeNull();
 

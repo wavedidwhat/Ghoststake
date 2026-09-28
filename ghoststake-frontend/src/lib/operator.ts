@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import { Phase, Status, type PhaseValue, type Round } from "./rounds";
 
 /**
@@ -70,9 +71,11 @@ export function actionFor(round: Round, phase: PhaseValue, timing: Timing, now: 
 }
 
 export type Warning = {
-  /** Stable key, so a list of these can be rendered and tested by identity. */
+  /**
+   * Stable key, so a list of these can be rendered and tested by identity.
+   * Also where its words are: `operator.warnings.<code>` (GHO-120).
+   */
   code: "thin-side" | "lock-window-closing" | "lock-window-missed" | "resolve-deadline-closing";
-  text: string;
 };
 
 /**
@@ -97,33 +100,21 @@ export function warningsFor(
     // Checked before the oracle in `lockRound`, so this is what actually
     // happens to a one-sided round: it voids and everyone is refunded.
     if (round.upPool < minSidePool || round.downPool < minSidePool) {
-      out.push({
-        code: "thin-side",
-        text: "A side is under the minimum, so locking this round will void it and refund everyone.",
-      });
+      out.push({ code: "thin-side" });
     }
 
     const windowEnds = round.lockTime + timing.lockWindow;
     if (now > windowEnds) {
-      out.push({
-        code: "lock-window-missed",
-        text: "The lock window has passed. This round can no longer be locked — only voided.",
-      });
+      out.push({ code: "lock-window-missed" });
     } else if (now >= round.lockTime && windowEnds - now <= timing.lockWindow / 3n) {
-      out.push({
-        code: "lock-window-closing",
-        text: "The lock window is about to close. Miss it and the round voids, whatever is staked.",
-      });
+      out.push({ code: "lock-window-closing" });
     }
   }
 
   if (round.status === Status.Locked) {
     const deadline = round.closeTime + timing.resolveDeadline;
     if (now >= round.closeTime && now <= deadline && deadline - now <= timing.resolveDeadline / 3n) {
-      out.push({
-        code: "resolve-deadline-closing",
-        text: "The resolve deadline is approaching. Past it the round can be voided instead of settled.",
-      });
+      out.push({ code: "resolve-deadline-closing" });
     }
   }
 
@@ -164,15 +155,15 @@ export function scheduleProblem(
   schedule: { openTime: bigint; lockTime: bigint; closeTime: bigint },
   entryCutoff: bigint,
   now: bigint,
-): string | null {
+): Message | null {
   if (schedule.openTime < now) {
-    return "The open time is already in the past. Increase the lead.";
+    return message("operator.schedule.past");
   }
   if (schedule.lockTime <= schedule.openTime + entryCutoff) {
-    return `The entry window must be longer than the ${entryCutoff}s entry cutoff, or the round opens with entry already closed.`;
+    return message("operator.schedule.entryTooShort", { cutoff: entryCutoff.toString() });
   }
   if (schedule.closeTime <= schedule.lockTime) {
-    return "The observation window must be longer than zero.";
+    return message("operator.schedule.noObservation");
   }
   return null;
 }

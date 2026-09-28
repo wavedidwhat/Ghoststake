@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import { ConnectButton } from "@/components/ConnectButton";
 import { useLendingTerms } from "@/hooks/useTerms";
 import { formatApr, formatOptional, formatPercent } from "@/lib/format";
@@ -26,18 +28,14 @@ import { buttonClass } from "@/components/ui/Button";
  * possible place for that particular bug.
  */
 export function Landing() {
+  const t = useTranslations("landing");
   const terms = useLendingTerms();
 
   return (
     <div className="mx-auto mt-10 flex max-w-3xl flex-col gap-8">
       <section className="text-center">
-        <h2 className="text-2xl font-semibold text-ink">
-          Take a view without unwinding your savings.
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
-          Most ways of backing an opinion make you sell something first. Here your stake stays
-          deposited and keeps earning, and the position is funded by borrowing against it.
-        </p>
+        <h2 className="text-2xl font-semibold text-ink">{t("headline")}</h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">{t("lede")}</p>
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <ConnectButton />
@@ -45,13 +43,10 @@ export function Landing() {
             href="/"
             className={buttonClass({ variant: "outline" })}
           >
-            Browse markets first →
+            {t("browseFirst")}
           </Link>
         </div>
-        <p className="mt-3 text-xs text-ink-faint">
-          Nothing here needs a wallet to read. Connecting is read-only — no transaction is
-          proposed.
-        </p>
+        <p className="mt-3 text-xs text-ink-faint">{t("readOnly")}</p>
       </section>
 
       {/* The pipeline, in the order it runs. Same order as the sidebar and the
@@ -59,70 +54,50 @@ export function Landing() {
           the product rather than a layout choice. */}
       <section className="grid gap-3 sm:grid-cols-3">
         <Step
-          n="1"
-          title="Stake"
+          n={1}
+          title={t("stake.title")}
           figure={formatOptional(terms.yieldRatePerSecond, formatApr)}
-          figureLabel="simple APR"
+          figureLabel={t("stake.figureLabel")}
         >
-          Deposit into the vault. It earns from the moment it lands, and it does not stop
-          earning for anything that follows.
+          {t("stake.body")}
         </Step>
         <Step
-          n="2"
-          title="Borrow against it"
+          n={2}
+          title={t("borrow.title")}
           figure={formatOptional(terms.maxLTV, (v) => formatPercent(v, 0))}
-          figureLabel="max LTV"
+          figureLabel={t("borrow.figureLabel")}
         >
-          Draw against the stake rather than withdrawing it. What you borrow is a lien on the
-          position, so the collateral never leaves and never stops working.
+          {t("borrow.body")}
         </Step>
         <Step
-          n="3"
-          title="Take a view"
-          figure="parimutuel"
-          figureLabel="no order book"
+          n={3}
+          title={t("view.title")}
+          figure={t("view.figure")}
+          figureLabel={t("view.figureLabel")}
         >
-          Stake a side of a market. Odds come from how the pool splits, so the protocol never
-          takes the other side of your position.
+          {t("view.body")}
         </Step>
       </section>
 
       {/* Not optional, and not in smaller type than the rest. */}
       <section className="rounded-card border border-border bg-surface p-6">
-        <h3 className="text-sm font-medium text-ink">What happens when it goes against you</h3>
+        <h3 className="text-sm font-medium text-ink">{t("risks.heading")}</h3>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-muted">
+          <li>{t.rich("risks.debtStands", { lead: (chunks: ReactNode) => <span className="text-ink">{chunks}</span> })}</li>
+          <li>{t.rich("risks.interest", { lead: (chunks: ReactNode) => <span className="text-ink">{chunks}</span> })}</li>
           <li>
-            <span className="text-ink">A losing round does not clear the debt.</span> The
-            position was funded by a lien, and the lien stands whether the view was right or
-            wrong. It is settled from your stake.
+            {terms.liquidationBonus !== undefined
+              ? t.rich("risks.liquidationBonus", {
+                  bonus: formatPercent(terms.liquidationBonus, 0),
+                  lead: (chunks: ReactNode) => <span className="text-ink">{chunks}</span>,
+                })
+              : t.rich("risks.liquidation", { lead: (chunks: ReactNode) => <span className="text-ink">{chunks}</span> })}
           </li>
-          <li>
-            <span className="text-ink">Interest accrues every second.</span> A position left
-            open moves your health factor down on its own, with no price needing to move.
-          </li>
-          <li>
-            <span className="text-ink">
-              Below a health factor of 1.00 anyone may liquidate you
-              {terms.liquidationBonus !== undefined && (
-                <> and take {formatPercent(terms.liquidationBonus, 0)} of the collateral they
-                seize</>
-              )}
-              .
-            </span>{" "}
-            That is what keeps the pool solvent, and it is paid out of your position.
-          </li>
-          <li>
-            <span className="text-ink">A round can be voided.</span> If one side never fills,
-            or the price feed cannot be read at settlement, the round refunds everybody in full
-            rather than picking a winner.
-          </li>
+          <li>{t.rich("risks.voided", { lead: (chunks: ReactNode) => <span className="text-ink">{chunks}</span> })}</li>
         </ul>
       </section>
 
-      <p className="text-center text-xs text-ink-faint">
-        Testnet. The asset is a mock token you can mint for free, and every rule above is
-        enforced on chain — the exact figures are on the overview once you connect.
-      </p>
+      <p className="text-center text-xs text-ink-faint">{t("testnet")}</p>
     </div>
   );
 }
@@ -134,11 +109,11 @@ function Step({
   figureLabel,
   children,
 }: {
-  n: string;
+  n: number;
   title: string;
   figure: string | undefined;
   figureLabel: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-card border border-border bg-surface p-5">

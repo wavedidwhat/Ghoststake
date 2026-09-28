@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { BACKGROUND_COLOR, THEME_COLOR } from "@/lib/theme";
+import messages from "../../messages/en.json";
 
 /**
  * Enough of a web app manifest that "Add to Home Screen" gives a real icon
@@ -15,7 +16,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "GhostStake",
     short_name: "GhostStake",
-    description: "Stake, borrow against it, and take a position — without unwinding.",
+    description: messages.app.description,
     start_url: "/",
     display: "standalone",
     background_color: BACKGROUND_COLOR,

@@ -75,7 +75,8 @@
     "inThisBrowser": "In this browser",
     "otherWallets": "Other wallets",
     "mobileWallet": "Connect a mobile wallet",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "appDescription": "Stake, borrow against it, and take a position."
   },
   "network": {
     "wrong": "<lead>Wrong network.</lead> GhostStake is deployed on {expected}.",
@@ -426,7 +427,16 @@
     "view": "View it on the explorer",
     "see": "See it on the explorer",
     "stopWaitingWallet": "Your wallet hasn’t answered — stop waiting",
-    "stopWaitingChain": "Still not confirmed — stop waiting"
+    "stopWaitingChain": "Still not confirmed — stop waiting",
+    "toast": {
+      "sent": "Sent. Waiting for confirmation…",
+      "confirmed": "Confirmed"
+    },
+    "failed": {
+      "reverted": "The transaction reverted on chain.",
+      "noConnection": "No connection to the chain to confirm the transaction.",
+      "notSent": "The transaction could not be sent."
+    }
   },
   "health": {
     "label": "Health factor",
@@ -729,5 +739,261 @@
     "approveAndLend": "Approve and lend",
     "overFree": "More than is free to withdraw right now.",
     "youHaveLent": "You have lent"
+  },
+  "faucet": {
+    "heading": "Need test tokens?",
+    "body": "{symbol} is a stand-in asset on this testnet. Anyone can mint it, and it is worth nothing.",
+    "get": "Get {amount} {symbol}",
+    "minting": "Minting…",
+    "unchecked": "Could not check whether test {symbol} can be minted here. The network did not answer.",
+    "checkAgain": "Check again"
+  },
+  "contracts": {
+    "heading": "Check it yourself",
+    "intro": "Every contract this app uses on {chain}, and what it does. Each links to the chain’s explorer, where the code and every transaction are public.",
+    "vault": {
+      "name": "Collateral vault",
+      "role": "Holds your stake, pays its yield, and records what is borrowed against it."
+    },
+    "pool": {
+      "name": "Lending pool",
+      "role": "Lenders' money. Borrowing draws from it, and interest goes back to it."
+    },
+    "registry": {
+      "name": "Market registry",
+      "role": "The list of markets. Adding or delisting one is a transaction here."
+    },
+    "router": {
+      "name": "Router",
+      "role": "Borrows against your stake and takes a side in one transaction."
+    },
+    "market": {
+      "name": "Market",
+      "role": "Holds the pools for each round and pays out when it settles."
+    },
+    "demoMarket": {
+      "name": "Demo market",
+      "role": "A market on an operator-set price, for trying things out."
+    },
+    "stockVault": {
+      "name": "Stock-loan vault",
+      "role": "Holds tokenized shares you borrow against, and the loans on them."
+    },
+    "listed": "Listed in the registry{enabled, select, yes {} other {, now delisted}}. Holds the pools for each round and pays out when it settles."
+  },
+  "howItWorks": {
+    "title": "How it works",
+    "subtitle": "Stake earns. Borrow against it. Take a view."
+  },
+  "landing": {
+    "headline": "Take a view without unwinding your savings.",
+    "lede": "Most ways of backing an opinion make you sell something first. Here your stake stays deposited and keeps earning, and the position is funded by borrowing against it.",
+    "browseFirst": "Browse markets first →",
+    "readOnly": "Nothing here needs a wallet to read. Connecting is read-only — no transaction is proposed.",
+    "stake": {
+      "title": "Stake",
+      "figureLabel": "simple APR",
+      "body": "Deposit into the vault. It earns from the moment it lands, and it does not stop earning for anything that follows."
+    },
+    "borrow": {
+      "title": "Borrow against it",
+      "figureLabel": "max LTV",
+      "body": "Draw against the stake rather than withdrawing it. What you borrow is a lien on the position, so the collateral never leaves and never stops working."
+    },
+    "view": {
+      "title": "Take a view",
+      "figure": "parimutuel",
+      "figureLabel": "no order book",
+      "body": "Stake a side of a market. Odds come from how the pool splits, so the protocol never takes the other side of your position."
+    },
+    "risks": {
+      "heading": "What happens when it goes against you",
+      "debtStands": "<lead>A losing round does not clear the debt.</lead> The position was funded by a lien, and the lien stands whether the view was right or wrong. It is settled from your stake.",
+      "interest": "<lead>Interest accrues every second.</lead> A position left open moves your health factor down on its own, with no price needing to move.",
+      "liquidation": "<lead>Below a health factor of 1.00 anyone may liquidate you.</lead> That is what keeps the pool solvent, and it is paid out of your position.",
+      "liquidationBonus": "<lead>Below a health factor of 1.00 anyone may liquidate you and take {bonus} of the collateral they seize.</lead> That is what keeps the pool solvent, and it is paid out of your position.",
+      "voided": "<lead>A round can be voided.</lead> If one side never fills, or the price feed cannot be read at settlement, the round refunds everybody in full rather than picking a winner."
+    },
+    "testnet": "Testnet. The asset is a mock token you can mint for free, and every rule above is enforced on chain — the exact figures are on the overview once you connect."
+  },
+  "og": {
+    "alt": "GhostStake — stake, borrow against it, and take a position",
+    "headline": "Your stake keeps earning",
+    "headlineAccent": "while it backs your call",
+    "stepStake": "Stake earns",
+    "stepBorrow": "Borrow against it",
+    "stepSide": "Take a side — without unwinding"
+  },
+  "activity": {
+    "title": "Activity",
+    "subtitle": "Everything this address has done here, newest first",
+    "needsWallet": "Connect a wallet to see its history, or open this page with ?address=0x…",
+    "unreadable": "Could not read the history",
+    "reading": "Reading the ledger…",
+    "loading": "Loading…",
+    "loadOlder": "Load older",
+    "address": "Address",
+    "someoneElse": "Not your connected wallet — this is a public read.",
+    "indexedTo": "Indexed to block {block}. Anything newer is not here yet.",
+    "indexerUnknown": "Indexer position unknown.",
+    "leveraged": "leveraged",
+    "block": "Block {block}",
+    "detail": "Detail",
+    "transaction": "Transaction",
+    "when": "When",
+    "what": "What",
+    "amount": "Amount",
+    "shares": "shares",
+    "round": "Round {id}",
+    "empty": "Nothing indexed for this address yet.",
+    "emptyIndexed": "The indexer has read to block {block}. A transaction sent in the last few blocks will not be here yet.",
+    "emptyUnindexed": "The indexer has not reported a position, so it may not have run against this deployment.",
+    "types": {
+      "deposit": "Staked",
+      "vault_withdraw": "Unstaked",
+      "supply": "Supplied to pool",
+      "pool_withdraw": "Withdrew from pool",
+      "borrow": "Borrowed",
+      "repay": "Repaid",
+      "yield": "Yield settled",
+      "lien_settled": "Lien settled on exit",
+      "liquidation": "Liquidated",
+      "share_transfer_in": "Shares received",
+      "share_transfer_out": "Shares sent",
+      "position": "Took a position",
+      "claim": "Claimed",
+      "unknown": "{name}"
+    }
+  },
+  "positions": {
+    "title": "Positions",
+    "subtitle": "Every view you have taken, and how it went",
+    "needsWallet": "Connect a wallet to see its positions, or open this page with ?address=0x…",
+    "unreadable": "Could not read your positions",
+    "reading": "Reading your positions…",
+    "stillRunning": "Still running",
+    "settled": "Settled",
+    "indexedTo": "Indexed to block {block}. A position opened in the last few blocks is not here yet.",
+    "claimsUnreadable": "Could not check your claims against the chain.",
+    "claimsUnreadableDetail": "The settled record below is still accurate — it does not depend on this read. Claiming does, so no claim is offered until the chain answers.",
+    "unclaimed": "Unclaimed winnings",
+    "pullBased": "A payout is pull-based: it stays in the contract until someone collects it. Debt is settled first; the rest reaches the wallet.",
+    "round": "Round {id}",
+    "claiming": "Claiming…",
+    "claim": "Claim",
+    "won": "Won",
+    "wonOf": "{won} of {decided}",
+    "voidedCount": "{voided} voided",
+    "winRate": "{rate}%",
+    "winRateVoided": "{rate}%, {voided} voided",
+    "staked": "Staked",
+    "net": "Net",
+    "marketFallback": "Market",
+    "marketRound": "{market} · round {id}",
+    "side": "Side",
+    "both": "yes {up} · no {down}",
+    "bothTitle": "Answered both ways on this round",
+    "fundedBy": "Funded by",
+    "borrowing": "borrowing",
+    "when": "When",
+    "market": "Market",
+    "outcome": "Outcome",
+    "opened": "Round opened {at}",
+    "roundLower": "round {id}",
+    "leveraged": "leveraged",
+    "empty": "No positions indexed for this address yet.",
+    "emptyIndexed": "The indexer has read to block {block}. A position opened in the last few blocks will not be here yet.",
+    "outcomes": {
+      "void": "Voided — stake refunded",
+      "won": "Won",
+      "lost": "Lost",
+      "running": "Running"
+    }
+  },
+  "operator": {
+    "title": "Operator",
+    "subtitle": "Drive rounds — open, lock, settle, unwind",
+    "needsWallet": "Every action here is a transaction, so a wallet is needed to send one.",
+    "unreachable": "The chain is unreachable right now. Nothing has changed — this screen just cannot see it.",
+    "marketFallback": "Market",
+    "youOwn": "You are the owner of this market.",
+    "ownerIs": "Owner is <code>{owner}</code> — you can still lock, resolve and unwind.",
+    "noRound": "No round is in play on this market. Open one above.",
+    "warnings": {
+      "thin-side": "A side is under the minimum, so locking this round will void it and refund everyone.",
+      "lock-window-missed": "The lock window has passed. This round can no longer be locked — only voided.",
+      "lock-window-closing": "The lock window is about to close. Miss it and the round voids, whatever is staked.",
+      "resolve-deadline-closing": "The resolve deadline is approaching. Past it the round can be voided instead of settled."
+    },
+    "schedule": {
+      "past": "The open time is already in the past. Increase the lead.",
+      "entryTooShort": "The entry window must be longer than the {cutoff}s entry cutoff, or the round opens with entry already closed.",
+      "noObservation": "The observation window must be longer than zero."
+    },
+    "open": {
+      "heading": "Open a round",
+      "lead": "Lead",
+      "leadHint": "Time before the round opens. Has to outlive signing and mining.",
+      "entry": "Entry window",
+      "entryHint": "Open to locked. Entry actually stops {cutoff}s before the lock.",
+      "observation": "Observation",
+      "observationHint": "Locked to close. The outcome is the price at the end of this.",
+      "secondsUnit": "s",
+      "strike": "Strike",
+      "strikeHint": "The level the round asks about. Stated from the moment it opens.",
+      "strikeHintSpot": "The level the round asks about, stated from the moment it opens. Spot rounds to {spot}.",
+      "noSpot": "The feed has no usable price to strike against yet.",
+      "notAPrice": "That is not a price.",
+      "legacy": "This market was deployed before rounds carried a strike, so its rounds ask only whether the price will be higher at the close, and the level is read when the round locks.",
+      "opens": "Opens",
+      "locks": "Locks",
+      "closes": "Closes",
+      "in": "in {countdown}",
+      "heartbeat": "A round cannot settle until its feed publishes after the close. On a real feed that is a heartbeat measured in tens of minutes, whatever this window says.",
+      "ownerOnly": "Opening a round is owner-only. Connected as a different address, this will revert.",
+      "opening": "Opening…",
+      "submit": "Open round"
+    },
+    "round": {
+      "title": "Round {id}",
+      "pools": "{up} up · {down} down {symbol}",
+      "deadline": {
+        "lockWindow": "lock window closes in <figure>{countdown}</figure>",
+        "refundable": "refundable in <figure>{countdown}</figure>",
+        "closes": "closes in <figure>{countdown}</figure>",
+        "locks": "locks in <figure>{countdown}</figure>"
+      },
+      "nothingYet": "Nothing to do yet — waiting on the clock.",
+      "actions": {
+        "lock": "Lock",
+        "unwind": "Unwind — never locked",
+        "refund": "Refund — past the deadline"
+      },
+      "ownerYou": "Owner-only, and that is you.",
+      "ownerOther": "Owner-only. Connected as a different address, this will revert.",
+      "permissionless": "Permissionless — anyone connected may call this."
+    },
+    "resolve": {
+      "searching": "Searching the feed…",
+      "find": "Find the closing feed round",
+      "explain": "Resolving names the feed round at the close. Permissionless — anyone may send it.",
+      "notPublished": "The feed has not published since this round closed. Nothing can settle it yet — that is the pinning rule doing its job, not a fault.",
+      "unreadable": "The feed could not be read. Try again.",
+      "refused": "Feed round {round} is the last one before the close, but the adapter will not read it — stale, or the sequencer was down, or the feed is paused. Resolving now would revert.",
+      "found": "Feed round <figure>{round}</figure> settles this at <figure>{price}</figure>. The adapter accepted it on a dry run, so the transaction will land.",
+      "behindLock": "That round predates the strike read, which the contract refuses. Something is wrong with the feed rather than with this round.",
+      "resolving": "Resolving…",
+      "resolve": "Resolve"
+    },
+    "demo": {
+      "heading": "Publish a price",
+      "explain": "This market’s price is whatever you publish here. Settling a round takes <lead>two pushes</lead>: one before the close, which becomes the settlement price, and one after it, which proves the first was the last.",
+      "price": "Price",
+      "publishing": "Publishing…",
+      "publish": "Publish",
+      "latest": "latest feed round <figure>{round}</figure>",
+      "badPrice": "A price, with at most 8 decimal places — the feed’s scale.",
+      "notOwner": "Only <code>{owner}</code> can publish on this feed. Without that key the demo market cannot be settled at all."
+    }
   }
 }

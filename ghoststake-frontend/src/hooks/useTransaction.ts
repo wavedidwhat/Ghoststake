@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 import { useWriteContract } from "wagmi";
 import { useConfig } from "wagmi";
@@ -18,7 +19,18 @@ export type TxState =
   // `hash` when it was sent before it failed (GHO-103): a mined revert, or a
   // receipt that could not be read. That is when someone most wants to look
   // it up, and the explorer is where the reason is.
-  | { status: "failed"; message: string; hash?: `0x${string}` };
+  //
+  // Why, as either the app's own case (`code`, translated where it is shown)
+  // or the wallet's first line of error text (`detail`, passed through as it
+  // is: it is the wallet's words, not ours). Neither means "could not be sent"
+  // (GHO-120).
+  | { status: "failed"; code?: FailureCode; detail?: string; hash?: `0x${string}` };
+
+/** The failures the app itself names, as keys under `tx.failed`. */
+export type FailureCode = "reverted" | "noConnection" | "notSent";
+
+/** Thrown when there is no client to wait on the receipt with. */
+class NoConnection extends Error {}
 
 /**
  * One write, tracked from the wallet prompt through to a mined receipt.
@@ -33,6 +45,7 @@ export type TxState =
  * normal thing to do and should not be dressed up as an error.
  */
 export function useTransaction() {
+  const t = useTranslations("tx");
   const config = useConfig();
   const { writeContractAsync } = useWriteContract();
   const [state, setState] = useState<TxState>({ status: "idle" });
@@ -82,7 +95,7 @@ export function useTransaction() {
       try {
         const hash = await writeContractAsync(request);
         sent = hash;
-        txToast.sent(toastId, hash);
+        txToast.sent(toastId, hash, { title: t("toast.sent"), link: t("track") });
         if (live.current !== mine) return false;
         setState({ status: "pending", hash });
 
@@ -94,15 +107,18 @@ export function useTransaction() {
         // found", which reads as if it never happened. viem's returns the
         // receipt, status and all, and the explorer link carries the reason.
         const client = getPublicClient(config);
-        if (!client) throw new Error("No connection to the chain to confirm the transaction.");
+        if (!client) throw new NoConnection();
         const receipt = await client.waitForTransactionReceipt({ hash });
-        if (receipt.status === "reverted") txToast.failed(toastId, "The transaction reverted on chain.", hash);
-        else txToast.confirmed(toastId, hash);
+        if (receipt.status === "reverted") {
+          txToast.failed(toastId, t("failed.reverted"), { hash, link: t("see") });
+        } else {
+          txToast.confirmed(toastId, hash, { title: t("toast.confirmed"), link: t("view") });
+        }
         if (live.current !== mine) return false;
         if (receipt.status === "reverted") {
           // A mined revert is not the same as a failed send: the user paid
           // for it, so say so plainly rather than "something went wrong".
-          setState({ status: "failed", message: "The transaction reverted on chain.", hash });
+          setState({ status: "failed", code: "reverted", hash });
           return false;
         }
 
@@ -112,18 +128,25 @@ export function useTransaction() {
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         const rejected = /user rejected|denied|rejected the request/i.test(message);
+        const failure: { code?: FailureCode; detail?: string } =
+          cause instanceof NoConnection
+            ? { code: "noConnection" }
+            : firstLine(message) === undefined
+              ? { code: "notSent" }
+              : { detail: firstLine(message) };
+        const shown = failure.code ? t(`failed.${failure.code}`) : failure.detail!;
         if (rejected) txToast.dismiss(toastId);
-        else txToast.failed(toastId, firstLine(message), sent);
+        else txToast.failed(toastId, shown, { hash: sent, link: t("see") });
         if (live.current !== mine) return false;
         if (rejected) {
           setState({ status: "cancelled" });
           return false;
         }
-        setState({ status: "failed", message: firstLine(message), hash: sent });
+        setState({ status: "failed", ...failure, hash: sent });
         return false;
       }
     },
-    [config, writeContractAsync],
+    [config, t, writeContractAsync],
   );
 
   return { state, attempt, send, reset, stopWaiting };
@@ -131,9 +154,10 @@ export function useTransaction() {
 
 /**
  * Wallet errors arrive as several paragraphs of RPC detail. The first line
- * carries the reason; the rest is noise in a form field.
+ * carries the reason; the rest is noise in a form field. Undefined when there
+ * is no line to show, and the caller says so in the app's words.
  */
-function firstLine(message: string): string {
+function firstLine(message: string): string | undefined {
   const line = message.split("\n")[0]?.trim();
-  return line && line.length > 0 ? line : "The transaction could not be sent.";
+  return line && line.length > 0 ? line : undefined;
 }

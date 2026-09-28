@@ -26,6 +26,8 @@ import descriptions from "../../../messages/descriptions.json";
  *   `src/` that names a key in that namespace counts. Loose, on purpose — the
  *   literal is how a helper like `switchHint` spells the key it returns.
  * - `messages.a.b` on a direct import of `en.json`, for code outside React.
+ * - `message("a.b")` or `` message(`a.${x}`) `` from `@/i18n/message`, which
+ *   is how `lib/` names a sentence it doesn't render itself.
  */
 
 type Tree = { [key: string]: string | Tree };
@@ -116,6 +118,14 @@ for (const file of sources) {
 
   // Pass 2: what each translator is asked for.
   const collect = (node: ts.Node) => {
+    // `message("full.key")` / `` message(`full.${x}`) `` in lib/ (GHO-118):
+    // the key is always a full path, whatever translates it later.
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "message") {
+      const [arg] = node.arguments;
+      const key = literalText(arg);
+      if (key !== undefined) used.add(key);
+      else if (arg && ts.isTemplateExpression(arg)) prefixes.add(arg.head.text);
+    }
     if (ts.isCallExpression(node)) {
       let callee = node.expression;
       if (ts.isPropertyAccessExpression(callee) && ["rich", "markup", "raw", "has"].includes(callee.name.text)) {

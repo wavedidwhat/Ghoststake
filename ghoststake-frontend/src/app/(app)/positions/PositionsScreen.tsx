@@ -64,6 +64,7 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
     requested && connected && requested.toLowerCase() !== connected.toLowerCase(),
   );
 
+  const t = useTranslations("positions");
   const positions = usePositions(address ?? undefined);
   const decimals = useActivityDecimals();
   const { markets } = useMarkets();
@@ -86,9 +87,9 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
   };
 
   return (
-    <Page title="Positions" subtitle="Every view you have taken, and how it went">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!address ? (
-        <NeedsWallet what="Connect a wallet to see its positions, or open this page with ?address=0x…" />
+        <NeedsWallet what={t("needsWallet")} />
       ) : (
         <div className="space-y-4">
           <Header
@@ -99,13 +100,13 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
 
           {positions.isError ? (
             <LoadFailed
-              title="Could not read your positions"
+              title={t("unreadable")}
               detail={String(positions.error)}
               onRetry={refresh}
             />
           ) : positions.isLoading ? (
             <Card>
-              <p className="text-sm text-ink-muted">Reading your positions…</p>
+              <p className="text-sm text-ink-muted">{t("reading")}</p>
             </Card>
           ) : history.length === 0 && open.length === 0 ? (
             <Empty indexedBlock={positions.indexedBlock} />
@@ -127,7 +128,7 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
               />
 
               {open.length > 0 && (
-                <Section title="Still running" count={open.length}>
+                <Section title={t("stillRunning")} count={open.length}>
                   <PositionsTable
                     positions={open}
                     feeds={feeds.byMarket}
@@ -138,7 +139,7 @@ export function PositionsScreen({ requested }: { requested: string | undefined }
               )}
 
               {history.length > 0 && (
-                <Section title="Settled" count={history.length}>
+                <Section title={t("settled")} count={history.length}>
                   <PositionsTable
                     positions={history}
                     feeds={feeds.byMarket}
@@ -172,26 +173,24 @@ function Header({
   viewingSomeoneElse: boolean;
   indexedBlock?: number;
 }) {
+  const t = useTranslations("positions");
+  const activity = useTranslations("activity");
   return (
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <Eyebrow>Address</Eyebrow>
+          <Eyebrow>{activity("address")}</Eyebrow>
           <p className="mt-1 text-sm text-ink">
             <ExplorerLink address={address}>
               <span className="font-mono break-all">{address}</span>
             </ExplorerLink>
           </p>
           {viewingSomeoneElse && (
-            <p className="mt-1 text-xs text-ink-faint">
-              Not your connected wallet — this is a public read.
-            </p>
+            <p className="mt-1 text-xs text-ink-faint">{activity("someoneElse")}</p>
           )}
         </div>
         <p className="text-xs text-ink-faint">
-          {indexedBlock
-            ? `Indexed to block ${formatInteger(indexedBlock)}. A position opened in the last few blocks is not here yet.`
-            : "Indexer position unknown."}
+          {indexedBlock ? t("indexedTo", { block: formatInteger(indexedBlock) }) : activity("indexerUnknown")}
         </p>
       </div>
     </Card>
@@ -229,16 +228,14 @@ function Unclaimed({
   // A missing key means the chain has not answered yet, which is not zero —
   // rendering it as zero would hide a real claim behind a loading state that
   // never announced itself.
+  const t = useTranslations("positions");
   const rows = positions.filter((p) => (claims.confirmed.get(roundKey(p)) ?? 0n) > 0n);
 
   if (claims.isError) {
     return (
       <Card>
-        <p className="text-sm text-ink">Could not check your claims against the chain.</p>
-        <p className="mt-2 text-xs text-ink-faint">
-          The settled record below is still accurate — it does not depend on this read. Claiming
-          does, so no claim is offered until the chain answers.
-        </p>
+        <p className="text-sm text-ink">{t("claimsUnreadable")}</p>
+        <p className="mt-2 text-xs text-ink-faint">{t("claimsUnreadableDetail")}</p>
       </Card>
     );
   }
@@ -256,17 +253,12 @@ function Unclaimed({
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <Eyebrow>
-            Unclaimed winnings
-          </Eyebrow>
+          <Eyebrow>{t("unclaimed")}</Eyebrow>
           <p className="tabular mt-1 text-lg font-medium text-positive">
             {decimals === undefined ? "…" : formatAmount(total, decimals, 2)} {symbol}
           </p>
         </div>
-        <p className="max-w-sm text-xs text-ink-faint">
-          A payout is pull-based: it stays in the contract until someone collects it. Debt is
-          settled first; the rest reaches the wallet.
-        </p>
+        <p className="max-w-sm text-xs text-ink-faint">{t("pullBased")}</p>
       </div>
 
       <ul className="mt-4 divide-y divide-border/60">
@@ -301,13 +293,14 @@ function ClaimRow({
   symbol: string;
   onDone: () => void;
 }) {
+  const t = useTranslations("positions");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 py-2.5">
       <span className="text-sm text-ink">
-        Round {position.round.id}
+        {t("round", { id: position.round.id })}
         <span className="ml-2 font-mono text-xs text-ink-faint">
           {shortHash(position.round.market, 6, 4)}
         </span>
@@ -329,7 +322,7 @@ function ClaimRow({
             if (ok) onDone();
           }}
         >
-          {busy ? "Claiming…" : "Claim"}
+          {busy ? t("claiming") : t("claim")}
         </Button>
       </span>
     </li>
@@ -356,6 +349,7 @@ function Record({
   decimals?: number;
   symbol: string;
 }) {
+  const t = useTranslations("positions");
   if (history.length === 0) return null;
 
   let staked = 0n;
@@ -379,21 +373,23 @@ function Record({
   return (
     <Card>
       <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label="Settled" value={String(history.length)} />
+        <Stat label={t("settled")} value={formatInteger(history.length)} />
         <Stat
-          label="Won"
-          value={decided === 0 ? "—" : `${won} of ${decided}`}
+          label={t("won")}
+          value={decided === 0 ? "—" : t("wonOf", { won, decided })}
           hint={
             decided === 0
               ? voided > 0
-                ? `${voided} voided`
+                ? t("voidedCount", { voided })
                 : undefined
-              : `${Math.round((won / decided) * 100)}%${voided > 0 ? `, ${voided} voided` : ""}`
+              : voided > 0
+                ? t("winRateVoided", { rate: Math.round((won / decided) * 100), voided })
+                : t("winRate", { rate: Math.round((won / decided) * 100) })
           }
         />
-        <Stat label="Staked" value={`${fmt(staked)} ${symbol}`} />
+        <Stat label={t("staked")} value={`${fmt(staked)} ${symbol}`} />
         <Stat
-          label="Net"
+          label={t("net")}
           value={`${net > 0n ? "+" : net < 0n ? "−" : ""}${fmt(net < 0n ? -net : net)} ${symbol}`}
           tone={net > 0n ? "positive" : net < 0n ? "negative" : "neutral"}
         />
@@ -456,6 +452,7 @@ function PositionsTable({
   decimals?: number;
   symbol: string;
 }) {
+  const t = useTranslations("positions");
   const taken = useTranslations("round.taken");
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
 
@@ -479,26 +476,26 @@ function PositionsTable({
                     href={`/markets/${position.round.market}/${position.round.id}`}
                     className="text-sm text-ink underline-offset-2 hover:underline"
                   >
-                    {feed ?? "Market"}
+                    {feed ?? t("marketFallback")}
                   </Link>
                   <span className="mt-0.5 block font-mono text-xs text-ink-faint">
-                    {shortHash(position.round.market, 6, 4)} · round {position.round.id}
+                    {t("marketRound", { market: shortHash(position.round.market, 6, 4), id: position.round.id })}
                   </span>
                 </>
               }
               aside={<OutcomeTag outcome={outcomeOf(position)} voidReason={position.round.voidReason} />}
             >
-              <RowField label="Side">
+              <RowField label={t("side")}>
                 {side === "both"
-                  ? `yes ${fmt(BigInt(position.upStake))} · no ${fmt(BigInt(position.downStake))}`
+                  ? t("both", { up: fmt(BigInt(position.upStake)), down: fmt(BigInt(position.downStake)) })
                   : taken(takenKey(side))}
               </RowField>
-              <RowField label="Staked">
+              <RowField label={t("staked")}>
                 <span className="tabular font-mono text-ink">
                   {fmt(BigInt(position.totalStake))} {symbol}
                 </span>
               </RowField>
-              <RowField label="Net">
+              <RowField label={t("net")}>
                 {net === null ? (
                   <span className="text-ink-faint">—</span>
                 ) : (
@@ -512,12 +509,12 @@ function PositionsTable({
                   </span>
                 )}
               </RowField>
-              <RowField label="Settled">
+              <RowField label={t("settled")}>
                 <time dateTime={position.round.closeTime}>
                   {formatDateTime(position.round.closeTime)}
                 </time>
               </RowField>
-              {position.leveraged && <RowField label="Funded by">borrowing</RowField>}
+              {position.leveraged && <RowField label={t("fundedBy")}>{t("borrowing")}</RowField>}
             </RowCard>
           );
         })}
@@ -527,12 +524,12 @@ function PositionsTable({
       <table className="w-full min-w-[48rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
-            <th className="px-4 py-3 font-medium">When</th>
-            <th className="px-4 py-3 font-medium">Market</th>
-            <th className="px-4 py-3 font-medium">Side</th>
-            <th className="px-4 py-3 text-right font-medium">Staked</th>
-            <th className="px-4 py-3 font-medium">Outcome</th>
-            <th className="px-4 py-3 text-right font-medium">Net</th>
+            <th className="px-4 py-3 font-medium">{t("when")}</th>
+            <th className="px-4 py-3 font-medium">{t("market")}</th>
+            <th className="px-4 py-3 font-medium">{t("side")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("staked")}</th>
+            <th className="px-4 py-3 font-medium">{t("outcome")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("net")}</th>
           </tr>
         </thead>
         <tbody>
@@ -563,6 +560,7 @@ function Row({
   decimals?: number;
   symbol: string;
 }) {
+  const t = useTranslations("positions");
   const taken = useTranslations("round.taken");
   const outcome = outcomeOf(position);
   const net = netOf(position);
@@ -574,7 +572,7 @@ function Row({
       <td className="px-4 py-3 whitespace-nowrap text-ink-muted">
         <time
           dateTime={position.round.closeTime}
-          title={`Round opened ${formatDateTime(position.round.openTime)}`}
+          title={t("opened", { at: formatDateTime(position.round.openTime) })}
         >
           {formatDateTime(position.round.closeTime)}
         </time>
@@ -601,23 +599,23 @@ function Row({
           href={`/markets/${position.round.market}/${position.round.id}`}
           className="text-ink underline-offset-2 hover:underline"
         >
-          {feed ?? "Market"}
+          {feed ?? t("marketFallback")}
         </Link>
         <span className="ml-2 font-mono text-xs text-ink-faint">
           {shortHash(position.round.market, 6, 4)}
         </span>
-        <span className="ml-2 text-xs text-ink-faint">round {position.round.id}</span>
+        <span className="ml-2 text-xs text-ink-faint">{t("roundLower", { id: position.round.id })}</span>
         {position.leveraged && (
           <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
-            leveraged
+            {t("leveraged")}
           </span>
         )}
       </td>
 
       <td className="px-4 py-3 text-ink-muted">
         {side === "both" ? (
-          <span title="Answered both ways on this round">
-            yes {fmt(BigInt(position.upStake))} · no {fmt(BigInt(position.downStake))}
+          <span title={t("bothTitle")}>
+            {t("both", { up: fmt(BigInt(position.upStake)), down: fmt(BigInt(position.downStake)) })}
           </span>
         ) : (
           taken(takenKey(side))
@@ -651,26 +649,27 @@ function Row({
 }
 
 function OutcomeTag({ outcome, voidReason }: { outcome: Outcome; voidReason?: string }) {
+  const t = useTranslations("positions.outcomes");
   if (outcome === "void") {
     return (
       <span className="text-ink-muted" title={voidReason || undefined}>
-        Voided — stake refunded
+        {t("void")}
       </span>
     );
   }
-  if (outcome === "won") return <span className="text-positive">Won</span>;
-  if (outcome === "lost") return <span className="text-ink-muted">Lost</span>;
-  return <span className="text-ink-faint">Running</span>;
+  if (outcome === "won") return <span className="text-positive">{t("won")}</span>;
+  if (outcome === "lost") return <span className="text-ink-muted">{t("lost")}</span>;
+  return <span className="text-ink-faint">{t("running")}</span>;
 }
 
 function Empty({ indexedBlock }: { indexedBlock?: number }) {
+  const t = useTranslations("positions");
+  const activity = useTranslations("activity");
   return (
     <Card>
-      <p className="text-sm text-ink-muted">No positions indexed for this address yet.</p>
+      <p className="text-sm text-ink-muted">{t("empty")}</p>
       <p className="mt-2 text-xs text-ink-faint">
-        {indexedBlock
-          ? `The indexer has read to block ${formatInteger(indexedBlock)}. A position opened in the last few blocks will not be here yet.`
-          : "The indexer has not reported a position, so it may not have run against this deployment."}
+        {indexedBlock ? t("emptyIndexed", { block: formatInteger(indexedBlock) }) : activity("emptyUnindexed")}
       </p>
     </Card>
   );

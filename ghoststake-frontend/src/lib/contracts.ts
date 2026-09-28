@@ -9,43 +9,39 @@ import { env } from "./env";
  * contract the app doesn't actually use, or miss one it does. Markets listed
  * in the on-chain registry are read live by the page and added to these.
  */
-export type DeployedContract = { name: string; role: string; address: `0x${string}` };
+export type ContractId = "vault" | "pool" | "registry" | "router" | "market" | "demoMarket" | "stockVault";
+
+/** Its name and what it does are `contracts.<id>.name` / `.role` in the catalog (GHO-120). */
+export type DeployedContract = { id: ContractId; address: `0x${string}` };
 
 export function deployedContracts(): DeployedContract[] {
   const list: (DeployedContract | undefined)[] = [
     env.vaultAddress && {
-      name: "Collateral vault",
-      role: "Holds your stake, pays its yield, and records what is borrowed against it.",
+      id: "vault",
       address: env.vaultAddress,
     },
     env.poolAddress && {
-      name: "Lending pool",
-      role: "Lenders' money. Borrowing draws from it, and interest goes back to it.",
+      id: "pool",
       address: env.poolAddress,
     },
     env.registryAddress && {
-      name: "Market registry",
-      role: "The list of markets. Adding or delisting one is a transaction here.",
+      id: "registry",
       address: env.registryAddress,
     },
     env.routerAddress && {
-      name: "Router",
-      role: "Borrows against your stake and takes a side in one transaction.",
+      id: "router",
       address: env.routerAddress,
     },
     env.marketAddress && {
-      name: "Market",
-      role: "Holds the pools for each round and pays out when it settles.",
+      id: "market",
       address: env.marketAddress,
     },
     env.demoMarketAddress && {
-      name: "Demo market",
-      role: "A market on an operator-set price, for trying things out.",
+      id: "demoMarket",
       address: env.demoMarketAddress,
     },
     env.stockVaultAddress && {
-      name: "Stock-loan vault",
-      role: "Holds tokenized shares you borrow against, and the loans on them.",
+      id: "stockVault",
       address: env.stockVaultAddress,
     },
   ];
