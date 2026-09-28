@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
+import type { Message } from "@/i18n/message";
 import { alertsFor, unseen, type Alert } from "@/lib/alerts";
 import { useClaimables } from "@/hooks/useClaimables";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
@@ -20,6 +22,7 @@ import { useWallet } from "@/hooks/useWallet";
  * announces current alerts once more, which is the right way to be wrong.
  */
 export function useAlerts() {
+  const t = useTranslations();
   const { address } = useWallet();
   const position = useVaultPosition();
   const { claims } = useClaimables();
@@ -43,7 +46,7 @@ export function useAlerts() {
     if (fresh.length === 0) return;
 
     for (const alert of fresh) {
-      announce(alert);
+      announce(alert, (m) => t(m.key, m.values));
       seen.add(alert.id);
     }
     writeSeen(key, seen);
@@ -54,14 +57,14 @@ export function useAlerts() {
   return alerts;
 }
 
-function announce(alert: Alert) {
+function announce(alert: Alert, text: (m: Message) => string) {
   const show = alert.tone === "negative" ? toast.error : alert.tone === "warning" ? toast.warning : toast.success;
-  show(alert.title, {
+  show(text(alert.title), {
     id: alert.id,
-    description: alert.body,
+    description: text(alert.body),
     // Danger stays until dismissed: it is the one that costs money if missed.
     duration: alert.tone === "negative" ? Infinity : 10_000,
-    action: { label: alert.action, onClick: () => window.location.assign(alert.href) },
+    action: { label: text(alert.action), onClick: () => window.location.assign(alert.href) },
   });
 
   // In the background, and only if this browser was told it may: an open
@@ -72,7 +75,7 @@ function announce(alert: Alert) {
     typeof Notification !== "undefined" &&
     Notification.permission === "granted"
   ) {
-    const n = new Notification(alert.title, { body: alert.body, tag: alert.id });
+    const n = new Notification(text(alert.title), { body: text(alert.body), tag: alert.id });
     n.onclick = () => {
       window.focus();
       window.location.assign(alert.href);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import messages from "../../../messages/en.json";
 import { WAD, formatPercent } from "../format";
 import {
   lendWarnings,
@@ -153,7 +154,8 @@ describe("lendWarnings", () => {
     expect(new Set(codes).size).toBe(codes.length);
     for (const w of all) {
       expect(w.code).not.toBe("");
-      expect(w.text.length).toBeGreaterThan(0);
+      // Its words are in the catalog under its code (GHO-119).
+      expect(messages.lend.warnings[w.code].length).toBeGreaterThan(0);
     }
   });
 });

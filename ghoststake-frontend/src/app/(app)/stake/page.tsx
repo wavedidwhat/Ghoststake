@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
@@ -22,15 +23,16 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function VaultPage() {
+  const t = useTranslations("stake");
   const wallet = useWallet();
   const position = useVaultPosition();
 
   return (
-    <Page title="Stake" subtitle="Earns while it sits, and backs everything you borrow">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!wallet.isConnected ? (
-        <NeedsWallet what="Your stake, what it earns, and what you can borrow against it all live at your address." />
+        <NeedsWallet what={t("needsWallet")} />
       ) : !contractsConfigured ? (
-        <NotConfigured what="No stake vault is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : (
         <VaultScreen position={position} address={wallet.address} />
       )}
@@ -45,6 +47,7 @@ function VaultScreen({
   position: ReturnType<typeof useVaultPosition>;
   address: `0x${string}`;
 }) {
+  const t = useTranslations("stake");
   const { decimals, symbol } = position;
 
   const walletBalance = useReadContract({
@@ -64,7 +67,7 @@ function VaultScreen({
         <HealthFactorCard value={position.healthFactor} liquidatable={position.isLiquidatable} />
       </div>
 
-      <Stat label="In your wallet" hint="available to deposit">
+      <Stat label={t("inWallet")} hint={t("inWalletHint")}>
         <Figure
           // "…", not 0.00, while the read is pending or has failed: a zero
           // balance is a claim about the wallet, and a failed read is not
@@ -129,6 +132,8 @@ function DepositWithdraw({
   lien: bigint | undefined;
   onDone: () => void;
 }) {
+  const t = useTranslations("stake");
+  const actions = useTranslations("actions");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -199,10 +204,10 @@ function DepositWithdraw({
   return (
     <Card>
       <SegmentedControl
-        label="Deposit or withdraw"
+        label={t("modeLabel")}
         options={[
-          { value: "deposit", label: "Deposit" },
-          { value: "withdraw", label: "Withdraw" },
+          { value: "deposit", label: t("deposit") },
+          { value: "withdraw", label: t("withdraw") },
         ]}
         value={mode}
         onChange={(m) => {
@@ -215,13 +220,13 @@ function DepositWithdraw({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
           <AmountField
-            label={mode === "deposit" ? "Amount to deposit" : "Amount to withdraw"}
+            label={mode === "deposit" ? t("amountToDeposit") : t("amountToWithdraw")}
             value={amount}
             onChange={setAmount}
             max={max}
             decimals={decimals}
             symbol={symbol}
-            maxLabel={mode === "deposit" ? "Wallet" : "Deposited"}
+            maxLabel={mode === "deposit" ? t("walletMax") : t("depositedMax")}
             disabled={busy}
           />
 
@@ -230,37 +235,28 @@ function DepositWithdraw({
             disabled={disabled}
           >
             {busy
-              ? "Working…"
+              ? actions("working")
               : needsApproval
-                ? `Approve and ${mode}`
+                ? t("approveAnd", { mode })
                 : mode === "deposit"
-                  ? "Deposit"
-                  : "Withdraw"}
+                  ? t("deposit")
+                  : t("withdraw")}
           </Button>
 
           {overMax && (
-            <p className="text-xs text-negative">
-              That is more than {mode === "deposit" ? "your wallet holds" : "you have deposited"}.
-            </p>
+            <p className="text-xs text-negative">{t("overMax", { mode })}</p>
           )}
           {partialExitBlocked && (
-            <p className="text-xs text-warning">
-              You have debt open against this position, so it can only be withdrawn in full. The
-              lien is settled from the proceeds and the rest comes back to you.
-            </p>
+            <p className="text-xs text-warning">{t("partialExitBlocked")}</p>
           )}
           <TxStatus tx={tx} />
         </div>
 
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
-          <Line label="Staked" value={deposited} decimals={decimals} symbol={symbol} />
-          <Line label="Shares" value={shares} decimals={18} symbol="gsCOL" />
-          <Line label="Borrowed against it" value={lien} decimals={decimals} symbol={symbol} />
-          <p className="mt-1 text-xs text-ink-muted">
-            Your stake never leaves to back a loan — borrowing places a lien against it and the
-            funds come from the lending pool. It keeps earning the whole time, which is the
-            point: you take a view without unwinding your savings.
-          </p>
+          <Line label={t("staked")} value={deposited} decimals={decimals} symbol={symbol} />
+          <Line label={t("shares")} value={shares} decimals={18} symbol="gsCOL" />
+          <Line label={t("borrowed")} value={lien} decimals={decimals} symbol={symbol} />
+          <p className="mt-1 text-xs text-ink-muted">{t("neverLeaves")}</p>
         </div>
       </div>
     </Card>

@@ -1,37 +1,15 @@
+import { useTranslations } from "next-intl";
 import { Figure } from "@/components/ui/Figure";
-import { formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
+import { WAD, formatAmount, formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 
-/**
- * Shown when the contract reports the position liquidatable, which is the
- * authoritative answer — the bands below are only a reading of the ratio.
+/*
+ * The words for each band live under `health.<band>` in the catalog, plus
+ * `health.liquidatable` for when the contract reports the position
+ * liquidatable — the authoritative answer, where the bands are only a reading
+ * of the ratio.
  */
-const LIQUIDATABLE = {
-  label: "Liquidatable",
-  detail:
-    "This position is below the liquidation threshold now. Anyone may repay part of the debt and claim collateral at a bonus until it is healthy again.",
-};
-
-const COPY: Record<HealthBand, { label: string; detail: string }> = {
-  none: {
-    label: "No debt",
-    detail: "Nothing is borrowed against this collateral, so it cannot be liquidated.",
-  },
-  safe: {
-    label: "Healthy",
-    detail: "Comfortably above the liquidation threshold.",
-  },
-  caution: {
-    label: "Watch",
-    detail: "Interest accrues every second. Repay or add collateral to build room.",
-  },
-  danger: {
-    label: "At risk",
-    detail:
-      "Close to the liquidation threshold. Below 1.00 anyone may liquidate part of this position for a bonus.",
-  },
-};
 
 const STYLES: Record<HealthBand, { border: string; chip: string }> = {
   none: { border: "border-border", chip: "bg-raised text-ink-muted" },
@@ -54,12 +32,11 @@ export function HealthFactorCard({
   value: bigint | undefined;
   liquidatable?: boolean;
 }) {
+  const t = useTranslations("health");
   if (value === undefined) {
     return (
       <div className="rounded-card border border-border bg-surface p-6">
-        <Eyebrow as="span">
-          Health factor
-        </Eyebrow>
+        <Eyebrow as="span">{t("label")}</Eyebrow>
         <Skeleton className="mt-3 h-9 w-28" />
       </div>
     );
@@ -71,16 +48,14 @@ export function HealthFactorCard({
   const band = liquidatable ? "danger" : healthBand(value);
   const formatted = formatHealthFactor(value);
   const style = STYLES[band];
-  const copy = liquidatable ? LIQUIDATABLE : COPY[band];
+  const copy = liquidatable ? "liquidatable" : band;
 
   return (
     <div className={`rounded-card border bg-surface p-6 ${style.border}`}>
       <div className="flex items-center justify-between gap-3">
-        <Eyebrow as="span">
-          Health factor
-        </Eyebrow>
+        <Eyebrow as="span">{t("label")}</Eyebrow>
         <span className={`rounded-sm px-2.5 py-1 text-xs font-medium ${style.chip}`}>
-          {copy.label}
+          {t(`${copy}.label`)}
         </span>
       </div>
 
@@ -99,7 +74,7 @@ export function HealthFactorCard({
 
       {formatted !== null && <HealthScale value={value} band={band} />}
 
-      <p className="mt-4 text-sm leading-relaxed text-ink-muted">{copy.detail}</p>
+      <p className="mt-4 text-sm leading-relaxed text-ink-muted">{t(`${copy}.detail`)}</p>
     </div>
   );
 }
@@ -109,6 +84,7 @@ export function HealthFactorCard({
  * readable. A bar that only fills states a value without placing it.
  */
 function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
+  const t = useTranslations("health");
   const asNumber = Number(value) / 1e18;
   // Clamped at 3.0. Beyond it the exact figure stops mattering, and letting
   // the scale grow would compress the region near 1.0 that does.
@@ -130,11 +106,11 @@ function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
           sits at 33% — on a risk scale, a marker pointing at the wrong value
           is worse than no marker. */}
       <div className="relative mt-2 h-4 text-[11px] text-ink-faint">
-        <span className="absolute left-0">0</span>
+        <span className="absolute left-0">{0}</span>
         <span className="absolute left-1/3 -translate-x-1/2 whitespace-nowrap">
-          1.00 liquidation
+          {t("scaleLine")}
         </span>
-        <span className="absolute right-0">3.00+</span>
+        <span className="absolute right-0">{formatAmount(3n * WAD, 18, 2)}+</span>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Figure } from "@/components/ui/Figure";
 import { formatAmount, formatApr, formatHealthFactor, healthBand } from "@/lib/format";
 import type { StakeStanding } from "@/lib/stake";
@@ -46,6 +47,7 @@ export function PipelineSummary({
   decimals: number;
   symbol: string;
 }) {
+  const t = useTranslations("pipeline");
   const hasDebt = (borrowed ?? 0n) > 0n;
   const band = healthFactor === undefined ? "safe" : healthBand(healthFactor);
   const tone =
@@ -58,11 +60,13 @@ export function PipelineSummary({
   return (
     <section className="rounded-card border border-border bg-surface p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-ink">Your pipeline</h2>
+        <h2 className="text-sm font-medium text-ink">{t("heading")}</h2>
         {yieldRate !== undefined && (
           <span className="text-xs text-ink-faint">
-            stake earns{" "}
-            <span className="tabular text-positive">{formatApr(yieldRate)}</span> while it works
+            {t.rich("earns", {
+              rate: formatApr(yieldRate),
+              figure: (chunks) => <span className="tabular text-positive">{chunks}</span>,
+            })}
           </span>
         )}
       </div>
@@ -71,7 +75,7 @@ export function PipelineSummary({
           nothing is sold, nothing is unwound. */}
       <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
         <Step
-          label="Staked"
+          label={t("staked")}
           value={staked}
           decimals={decimals}
           symbol={symbol}
@@ -80,7 +84,7 @@ export function PipelineSummary({
           // two wrong things at once: that the yield was money, and that it
           // was money on top of the figure above — when the figure above is
           // the whole of what can be withdrawn. See GHO-55.
-          caption={stakeCaption(standing, accrued, decimals)}
+          caption={captionText(t, stakeCaption(standing, accrued, decimals))}
           captionTone={standing && !standing.backed ? "warning" : undefined}
           href="/stake"
         />
@@ -88,11 +92,11 @@ export function PipelineSummary({
         <Arrow />
 
         <Step
-          label="Borrowed against it"
+          label={t("borrowed")}
           value={borrowed}
           decimals={decimals}
           symbol={symbol}
-          caption={hasDebt ? "a lien, not a withdrawal" : "nothing drawn yet"}
+          caption={hasDebt ? t("borrowedCaption") : t("borrowedNone")}
           href="/borrow"
           muted={!hasDebt}
         />
@@ -100,15 +104,11 @@ export function PipelineSummary({
         <Arrow />
 
         <Step
-          label="Working in markets"
+          label={t("working")}
           value={atRiskInMarkets}
           decimals={decimals}
           symbol={symbol}
-          caption={
-            openPositions === 0
-              ? "no open positions"
-              : `${openPositions} open position${openPositions === 1 ? "" : "s"}`
-          }
+          caption={t("openPositions", { count: openPositions })}
           href="/markets"
           muted={atRiskInMarkets === 0n}
         />
@@ -121,16 +121,13 @@ export function PipelineSummary({
           2.88 a day. */}
       {standing && !standing.backed && (
         <p className="mt-5 rounded-sm border border-warning/30 bg-warning-soft/40 px-4 py-3 text-xs leading-relaxed text-ink-muted">
-          Your ledger credits{" "}
-          <span className="tabular text-ink">
-            {formatAmount(standing.unbacked, decimals, 4)} {symbol}
-          </span>{" "}
-          of yield{yieldRate !== undefined && <> at {formatApr(yieldRate)}</>}. Nothing funds it
-          yet, so it is not withdrawable and does not count as collateral — the{" "}
-          <span className="tabular text-ink">
-            {formatAmount(standing.redeemable, decimals, 2)} {symbol}
-          </span>{" "}
-          above is what the vault can actually redeem today.
+          {t.rich(yieldRate === undefined ? "unbacked" : "unbackedAt", {
+            credited: formatAmount(standing.unbacked, decimals, 4),
+            redeemable: formatAmount(standing.redeemable, decimals, 2),
+            rate: yieldRate === undefined ? "" : formatApr(yieldRate),
+            symbol,
+            figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+          })}
         </p>
       )}
 
@@ -139,22 +136,16 @@ export function PipelineSummary({
       {hasDebt && (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-raised/40 px-4 py-3">
           <p className="text-xs text-ink-muted">
-            {atRiskInMarkets > 0n ? (
-              <>
-                If these positions lose, the{" "}
-                <span className="tabular text-ink">
-                  {formatAmount(borrowed!, decimals, 2)} {symbol}
-                </span>{" "}
-                still stands and is settled from your stake.
-              </>
-            ) : (
-              <>
-                Interest accrues every second. Repay or add to your stake to build room.
-              </>
-            )}
+            {atRiskInMarkets > 0n
+              ? t.rich("ifTheyLose", {
+                  amount: formatAmount(borrowed!, decimals, 2),
+                  symbol,
+                  figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+                })
+              : t("interestAccrues")}
           </p>
           <span className="flex items-baseline gap-2 whitespace-nowrap">
-            <span className="text-xs text-ink-faint">health factor</span>
+            <span className="text-xs text-ink-faint">{t("healthFactor")}</span>
             <span className={`tabular text-base font-medium ${tone}`}>
               {healthFactor === undefined ? "—" : (formatHealthFactor(healthFactor) ?? "—")}
             </span>
@@ -177,18 +168,24 @@ function stakeCaption(
   standing: StakeStanding | undefined,
   accrued: bigint | undefined,
   decimals: number,
-): string {
-  if (standing === undefined) return "earning, and still yours";
+): Caption {
+  if (standing === undefined) return { key: "captionEarning" };
   if (!standing.backed) {
-    return `+${formatAmount(standing.unbacked, decimals, 4)} credited, not redeemable`;
+    return { key: "captionCredited", amount: formatAmount(standing.unbacked, decimals, 4) };
   }
   // Only reached once the ledger is covered, which is the one situation where
   // "earned" is the right word — the shares can redeem all of it. That is not
   // true of any deployment so far, and this branch is written for the vault
   // being funded rather than pretending it already is.
   return accrued !== undefined && accrued > 0n
-    ? `+${formatAmount(accrued, decimals, 4)} earned`
-    : "earning, and still yours";
+    ? { key: "captionEarned", amount: formatAmount(accrued, decimals, 4) }
+    : { key: "captionEarning" };
+}
+
+type Caption = { key: "captionEarning" } | { key: "captionCredited" | "captionEarned"; amount: string };
+
+function captionText(t: (key: Caption["key"], values?: { amount: string }) => string, caption: Caption): string {
+  return caption.key === "captionEarning" ? t(caption.key) : t(caption.key, { amount: caption.amount });
 }
 
 function Step({

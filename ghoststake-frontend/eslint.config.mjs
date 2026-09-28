@@ -23,7 +23,7 @@ const noInlineCopy = (level) => ({
     {
       noStrings: true,
       ignoreProps: true,
-      allowedStrings: [" ", "·", "—", "–", "…", "/", "%", "(", ")", ":", ",", ".", "→", "←", "↗", "×", "GhostStake"],
+      allowedStrings: [" ", "·", "—", "–", "…", "/", "%", "(", ")", ":", ",", ".", "+", "→", "←", "↗", "×", "GhostStake"],
     },
   ],
   "no-restricted-syntax": [
@@ -71,6 +71,17 @@ const MIGRATED = [
   "src/components/ResolutionPanel.tsx",
   "src/components/RoundCard.tsx",
   "src/components/Terms.tsx",
+  "src/app/(app)/borrow/page.tsx",
+  "src/app/(app)/lend/page.tsx",
+  "src/app/(app)/liquidate/page.tsx",
+  "src/app/(app)/portfolio/page.tsx",
+  "src/app/(app)/stake/page.tsx",
+  "src/app/(app)/stocks/page.tsx",
+  "src/components/AlertBell.tsx",
+  "src/components/AmountField.tsx",
+  "src/components/HealthFactor.tsx",
+  "src/components/MoneyStrip.tsx",
+  "src/components/PipelineSummary.tsx",
 ];
 
 const eslintConfig = defineConfig([

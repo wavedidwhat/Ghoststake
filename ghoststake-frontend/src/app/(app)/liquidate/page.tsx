@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useWallet } from "@/hooks/useWallet";
 import { Page, NotConfigured } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
@@ -33,14 +34,15 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
  * closes them, and which is openly labelled as paying nothing.
  */
 export default function LiquidatePage() {
+  const t = useTranslations("liquidate");
   const wallet = useWallet();
   const atRisk = useAtRisk();
   const decimals = useActivityDecimals();
 
   return (
-    <Page title="Liquidate" subtitle="Positions past the line, and what closing them pays">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!env.vaultAddress ? (
-        <NotConfigured what="No vault is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : (
         <div className="space-y-4">
           <Header
@@ -52,21 +54,18 @@ export default function LiquidatePage() {
 
           {atRisk.isError ? (
             <LoadFailed
-              title="Could not read the borrower list"
+              title={t("unreadable")}
               detail={String(atRisk.error)}
               onRetry={() => void atRisk.refetch()}
             />
           ) : atRisk.isLoading ? (
             <Card>
-              <p className="text-sm text-ink-muted">Reading borrowers…</p>
+              <p className="text-sm text-ink-muted">{t("reading")}</p>
             </Card>
           ) : atRisk.positions.length === 0 ? (
             <Card>
-              <p className="text-sm text-ink-muted">Nobody is carrying debt right now.</p>
-              <p className="mt-2 text-xs text-ink-faint">
-                Every borrower the indexer has seen is listed here, healthy or not — an empty list
-                means there are none, not that none are at risk.
-              </p>
+              <p className="text-sm text-ink-muted">{t("empty")}</p>
+              <p className="mt-2 text-xs text-ink-faint">{t("emptyDetail")}</p>
             </Card>
           ) : (
             <Table
@@ -103,31 +102,24 @@ function Header({
   scanned: number;
   truncated: boolean;
 }) {
+  const t = useTranslations("liquidate");
   return (
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <Eyebrow>
-            {scanned} borrower{scanned === 1 ? "" : "s"} scanned
-          </Eyebrow>
-          <p className="mt-1 max-w-lg text-xs text-ink-faint">
-            Names come from the indexer, which has every borrow and repayment. Figures are read from
-            the chain at the head, so a health factor here is current.
-          </p>
+          <Eyebrow>{t("scanned", { count: scanned })}</Eyebrow>
+          <p className="mt-1 max-w-lg text-xs text-ink-faint">{t("sources")}</p>
         </div>
         <p className="text-right text-xs text-ink-faint">
-          {block ? `Figures at block ${formatInteger(block)}.` : "Block unknown."}
+          {block ? t("figuresAt", { block: formatInteger(block) }) : t("blockUnknown")}
           <br />
-          {indexedBlock
-            ? `Borrowers indexed to ${formatInteger(indexedBlock)}.`
-            : "Indexer position unknown."}
+          {indexedBlock ? t("indexedTo", { block: formatInteger(indexedBlock) }) : t("indexerUnknown")}
         </p>
       </div>
 
       {truncated && (
         <p className="mt-3 rounded-sm border border-border bg-raised/50 px-3 py-2 text-xs text-ink-muted">
-          The scan cap was reached, so there may be more borrowers than these. The ones shown are
-          those with the largest debt — a truncated list is missing the trivia, not the risk.
+          {t("truncated")}
         </p>
       )}
     </Card>
@@ -147,6 +139,7 @@ function Table({
   symbol: string;
   onDone: () => void;
 }) {
+  const t = useTranslations("liquidate");
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
 
   return (
@@ -182,26 +175,26 @@ function Table({
                   }`}
                 >
                   {formatHealthFactor(BigInt(position.healthFactor)) ?? "—"}
-                  <span className="ml-1 text-xs text-ink-faint">health</span>
+                  <span className="ml-1 text-xs text-ink-faint">{t("healthSuffix")}</span>
                 </span>
               }
             >
-              <RowField label="Collateral">
+              <RowField label={t("collateral")}>
                 <span className="tabular">{fmt(BigInt(position.collateral))}</span>
               </RowField>
-              <RowField label="Debt">
+              <RowField label={t("debt")}>
                 <span className="tabular">{fmt(BigInt(position.debt))}</span>
               </RowField>
 
               {action === "liquidate" && (
                 <>
-                  <RowField label="You repay">
+                  <RowField label={t("youRepay")}>
                     <span className="tabular text-ink">{fmt(BigInt(position.maxRepay))}</span>
                   </RowField>
-                  <RowField label="You receive">
+                  <RowField label={t("youReceive")}>
                     <span className="tabular text-ink">{fmt(BigInt(position.seized))}</span>
                   </RowField>
-                  <RowField label="Net">
+                  <RowField label={t("net")}>
                     <span className={`tabular ${net > 0n ? "text-positive" : "text-negative"}`}>
                       {net > 0n ? "+" : "−"}
                       {fmt(net < 0n ? -net : net)} {symbol}
@@ -229,14 +222,14 @@ function Table({
       <table className="w-full min-w-[58rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
-            <th className="px-4 py-3 font-medium">Borrower</th>
-            <th className="px-4 py-3 text-right font-medium">Health</th>
-            <th className="px-4 py-3 text-right font-medium">Collateral</th>
-            <th className="px-4 py-3 text-right font-medium">Debt</th>
-            <th className="px-4 py-3 text-right font-medium">You repay</th>
-            <th className="px-4 py-3 text-right font-medium">You receive</th>
-            <th className="px-4 py-3 text-right font-medium">Net</th>
-            <th className="px-4 py-3 font-medium">Action</th>
+            <th className="px-4 py-3 font-medium">{t("borrower")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("health")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("collateral")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("debt")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("youRepay")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("youReceive")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("net")}</th>
+            <th className="px-4 py-3 font-medium">{t("action")}</th>
           </tr>
         </thead>
         <tbody>
@@ -360,6 +353,7 @@ function ActionCell({
   symbol: string;
   onDone: () => void;
 }) {
+  const t = useTranslations("liquidate");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
 
@@ -369,8 +363,8 @@ function ActionCell({
         {position.liquidatable
           ? // Underwater, but nobody comes out ahead. Named rather than left
             // as a missing button, because the absence is the information.
-            "Underwater, but a liquidation loses money here"
-          : "Healthy"}
+            t("underwaterLoses")
+          : t("healthy")}
       </span>
     );
   }
@@ -384,7 +378,7 @@ function ActionCell({
             the one position on the page that most needs somebody's attention
             was the least distinguishable on it. */}
         {!connected ? (
-          <span className="text-xs text-ink">Connect a wallet to write off</span>
+          <span className="text-xs text-ink">{t("connectToWriteOff")}</span>
         ) : (
           <Button
             variant="outline"
@@ -400,13 +394,10 @@ function ActionCell({
               if (ok) onDone();
             }}
           >
-            {busy ? "Writing off…" : "Write off"}
+            {busy ? t("writingOff") : t("writeOff")}
           </Button>
         )}
-        <span className="text-[11px] text-ink-faint">
-          Owes more than it holds, so no liquidation closes it. Pays you nothing; it ends the
-          position and charges the loss to reserves, then to suppliers.
-        </span>
+        <span className="text-[11px] text-ink-faint">{t("writeOffNote")}</span>
       </div>
     );
   }
@@ -414,9 +405,9 @@ function ActionCell({
   if (!connected) {
     return (
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-ink">Connect a wallet to liquidate</span>
+        <span className="text-xs text-ink">{t("connectToLiquidate")}</span>
         <span className="text-[11px] text-ink-faint">
-          {position.fullLiquidation ? "Clears the whole lien" : "Capped at the close factor"}
+          {position.fullLiquidation ? t("clearsWhole") : t("capped")}
         </span>
       </div>
     );
@@ -443,12 +434,14 @@ function ActionCell({
           if (ok) onDone();
         }}
       >
-        {busy ? "Liquidating…" : "Liquidate"}
+        {busy ? t("liquidating") : t("liquidate")}
       </Button>
       <span className="text-[11px] text-ink-faint">
-        {position.fullLiquidation ? "Clears the whole lien" : "Capped at the close factor"} · you
-        need {decimals === undefined ? "…" : formatAmount(BigInt(position.maxRepay), decimals, 2)}{" "}
-        {symbol} approved to the vault
+        {t("youNeed", {
+          scope: position.fullLiquidation ? t("clearsWhole") : t("capped"),
+          amount: decimals === undefined ? "…" : formatAmount(BigInt(position.maxRepay), decimals, 2),
+          symbol,
+        })}
       </span>
     </div>
   );

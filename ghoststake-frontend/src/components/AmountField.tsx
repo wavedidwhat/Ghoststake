@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { amountProblem } from "@/lib/amount";
 import { formatAmount } from "@/lib/format";
@@ -25,7 +26,7 @@ export function AmountField({
   max,
   decimals,
   symbol,
-  maxLabel = "Max",
+  maxLabel,
   hint,
   disabled,
 }: {
@@ -39,6 +40,8 @@ export function AmountField({
   hint?: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("amount");
+  const root = useTranslations();
   const id = useId();
   const problem = amountProblem(value, decimals);
 
@@ -55,7 +58,7 @@ export function AmountField({
             onClick={() => onChange(toDecimalString(max, decimals))}
             className="cursor-pointer text-xs text-ink-faint transition-colors hover:text-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none disabled:cursor-not-allowed"
           >
-            {maxLabel} <span className="tabular">{formatAmount(max, decimals, 2)}</span>
+            {maxLabel ?? t("max")} <span className="tabular">{formatAmount(max, decimals, 2)}</span>
           </button>
         )}
       </div>
@@ -85,7 +88,7 @@ export function AmountField({
           that knows both the input and the scale, so it says it. */}
       {problem && (
         <p id={`${id}-problem`} role="alert" className="text-xs text-warning">
-          {problem}
+          {root(problem.key, problem.values)}
         </p>
       )}
       {hint && <p className="text-xs text-ink-muted">{hint}</p>}
@@ -139,6 +142,7 @@ const PENDING_STALL_MS = 45_000;
  * is not going to answer, and the copy is careful not to promise more.
  */
 export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
+  const t = useTranslations("tx");
   const { state, attempt, stopWaiting } = tx;
 
   const signing = state.status === "signing";
@@ -152,13 +156,13 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
 
   const text =
     state.status === "signing"
-      ? "Check your wallet\u2026"
+      ? t("checkWallet")
       : state.status === "pending"
-        ? "Waiting for confirmation\u2026"
+        ? t("waiting")
         : state.status === "confirmed"
-          ? "Confirmed."
+          ? t("confirmed")
           : state.status === "cancelled"
-            ? "Cancelled."
+            ? t("cancelled")
             : state.message;
 
   const tone =
@@ -181,10 +185,10 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
         : undefined;
   const linkText =
     state.status === "pending"
-      ? "Track it on the explorer"
+      ? t("track")
       : state.status === "confirmed"
-        ? "View it on the explorer"
-        : "See it on the explorer";
+        ? t("view")
+        : t("see");
 
   return (
     <div className="flex flex-col items-start gap-0.5">
@@ -200,9 +204,7 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
 
       {stalled && (
         <TextButton onClick={stopWaiting}>
-          {signingStalled
-            ? "Your wallet hasn\u2019t answered \u2014 stop waiting"
-            : "Still not confirmed \u2014 stop waiting"}
+          {signingStalled ? t("stopWaitingWallet") : t("stopWaitingChain")}
         </TextButton>
       )}
     </div>
