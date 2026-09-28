@@ -13,7 +13,7 @@ import {
   wasLeveraged,
   type ActivityEvent,
 } from "@/lib/activity";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
@@ -134,7 +134,7 @@ function Header({
         </div>
         <p className="text-xs text-ink-faint">
           {indexedBlock
-            ? `Indexed to block ${indexedBlock.toLocaleString()}. Anything newer is not here yet.`
+            ? `Indexed to block ${formatInteger(indexedBlock)}. Anything newer is not here yet.`
             : "Indexer position unknown."}
         </p>
       </div>
@@ -179,9 +179,9 @@ function ActivityTable({
                 <time
                   dateTime={event.blockTime}
                   className="mt-1 block text-xs text-ink-faint"
-                  title={`Block ${event.blockNumber.toLocaleString()}`}
+                  title={`Block ${formatInteger(event.blockNumber)}`}
                 >
-                  {new Date(event.blockTime).toLocaleString()}
+                  {formatDateTime(event.blockTime)}
                 </time>
               </>
             }
@@ -294,8 +294,8 @@ function Row({
   return (
     <tr className="border-b border-border/60 last:border-0">
       <td className="px-4 py-3 whitespace-nowrap text-ink-muted">
-        <time dateTime={event.blockTime} title={`Block ${event.blockNumber.toLocaleString()}`}>
-          {new Date(event.blockTime).toLocaleString()}
+        <time dateTime={event.blockTime} title={`Block ${formatInteger(event.blockNumber)}`}>
+          {formatDateTime(event.blockTime)}
         </time>
       </td>
 
@@ -356,7 +356,7 @@ function Empty({ indexedBlock }: { indexedBlock?: number }) {
       <p className="text-sm text-ink-muted">Nothing indexed for this address yet.</p>
       <p className="mt-2 text-xs text-ink-faint">
         {indexedBlock
-          ? `The indexer has read to block ${indexedBlock.toLocaleString()}. A transaction sent in the last few blocks will not be here yet.`
+          ? `The indexer has read to block ${formatInteger(indexedBlock)}. A transaction sent in the last few blocks will not be here yet.`
           : "The indexer has not reported a position, so it may not have run against this deployment."}
       </p>
     </Card>

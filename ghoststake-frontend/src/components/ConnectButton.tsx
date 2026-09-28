@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import type { Connector } from "wagmi";
 import { useConnect, useConnectors, useDisconnect } from "wagmi";
@@ -38,12 +39,13 @@ function useWallets() {
 }
 
 /** A dismissed wallet prompt is a normal outcome, and says so quietly. */
-function connectHint(error: Error | null): string | undefined {
+function connectHint(error: Error | null): "cancelled" | "failed" | undefined {
   if (!error) return undefined;
-  return /rejected|denied|User rejected/i.test(error.message) ? "Cancelled" : "Could not connect";
+  return /rejected|denied|User rejected/i.test(error.message) ? "cancelled" : "failed";
 }
 
 export function ConnectButton() {
+  const t = useTranslations("wallet");
   const { address, isSettling } = useWallet();
   const wallets = useWallets();
   const { mutate: connect, isPending, error } = useConnect();
@@ -91,7 +93,7 @@ export function ConnectButton() {
         disabled
         className="rounded-sm bg-raised px-4 py-2 text-sm font-medium text-ink-muted"
       >
-        Connecting…
+        {t("connecting")}
       </button>
     );
   }
@@ -101,6 +103,7 @@ export function ConnectButton() {
   // disabled button and a reload.
   if (!address) {
     const all = [...wallets.detected, ...wallets.other];
+    const hint = stalled ? "noResponse" : connectHint(error);
 
     const pick = (wallet: Connector) => {
       setPicking(false);
@@ -118,11 +121,11 @@ export function ConnectButton() {
     return (
       <div className="relative" ref={menuRef}>
         <ConnectAction
-          label="Connect wallet"
+          label={t("connect")}
           onClick={() => (all.length === 1 ? pick(all[0]) : setPicking((open) => !open))}
           // The stall outranks a stored error: it is the more recent news, and
           // the attempt it describes may still be sitting there unanswered.
-          hint={stalled ? "Your wallet didn't respond" : connectHint(error)}
+          hint={hint && t(hint)}
           expanded={picking}
         />
         {picking && (
@@ -131,13 +134,13 @@ export function ConnectButton() {
             className="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-card border border-border bg-surface shadow-xl"
           >
             {wallets.detected.length > 0 && (
-              <WalletGroup label="In this browser" wallets={wallets.detected} onPick={pick} />
+              <WalletGroup label={t("inThisBrowser")} wallets={wallets.detected} onPick={pick} />
             )}
             {wallets.other.length > 0 && (
               <WalletGroup
                 // Said plainly, because on a phone this group is the only way
                 // in and "WalletConnect" alone means nothing to most people.
-                label={wallets.detected.length > 0 ? "Other wallets" : "Connect a mobile wallet"}
+                label={wallets.detected.length > 0 ? t("otherWallets") : t("mobileWallet")}
                 wallets={wallets.other}
                 onPick={pick}
               />
@@ -154,7 +157,7 @@ export function ConnectButton() {
         variant="outline"
         size="sm"
         onClick={() => disconnect()}
-        title="Disconnect"
+        title={t("disconnect")}
       >
         <span className="size-2 rounded-full bg-positive" />
         <span className="tabular">{shortenAddress(address)}</span>

@@ -7,7 +7,7 @@ import "./globals.css";
 import { Misconfigured } from "@/components/Misconfigured";
 import { Providers } from "@/components/providers";
 import { configProblems } from "@/lib/config";
-import { locale } from "@/i18n/request";
+import { locale } from "@/i18n/locale";
 import { env } from "@/lib/env";
 import { THEME_COLOR } from "@/lib/theme";
 

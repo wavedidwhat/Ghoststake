@@ -6,7 +6,8 @@
   "actions": {
     "goToMarkets": "Go to markets",
     "tryAgain": "Try again",
-    "reload": "Reload"
+    "reload": "Reload",
+    "close": "Close"
   },
   "errors": {
     "reference": "Reference <code>{digest}</code>"
@@ -27,5 +28,71 @@
     "eyebrow": "Something broke",
     "title": "The app could not start",
     "body": "Nothing about your positions has changed — a page failing to render cannot move funds."
+  },
+  "page": {
+    "needsWallet": "Connect a wallet",
+    "notConfigured": "Not deployed here"
+  },
+  "nav": {
+    "mainLabel": "Main",
+    "primaryLabel": "Primary",
+    "testnet": "Testnet",
+    "more": "More",
+    "moreTitle": "Everything else",
+    "sections": {
+      "bet": "Bet",
+      "yourMoney": "Your money",
+      "fundIt": "Fund it",
+      "runIt": "Run it",
+      "learn": "Learn"
+    },
+    "links": {
+      "markets": "Markets",
+      "portfolio": "Portfolio",
+      "stake": "Stake",
+      "borrow": "Borrow",
+      "stocks": "Stock loans",
+      "activity": "Activity",
+      "lend": "Lend",
+      "liquidate": "Liquidate",
+      "operator": "Operator",
+      "howItWorks": "How it works"
+    },
+    "tabs": {
+      "markets": "Markets",
+      "portfolio": "Bets",
+      "stake": "Stake",
+      "lend": "Lend"
+    }
+  },
+  "wallet": {
+    "connect": "Connect wallet",
+    "connecting": "Connecting…",
+    "cancelled": "Cancelled",
+    "failed": "Could not connect",
+    "noResponse": "Your wallet didn't respond",
+    "inThisBrowser": "In this browser",
+    "otherWallets": "Other wallets",
+    "mobileWallet": "Connect a mobile wallet",
+    "disconnect": "Disconnect"
+  },
+  "network": {
+    "wrong": "<lead>Wrong network.</lead> GhostStake is deployed on {expected}.",
+    "wrongWithWallet": "<lead>Wrong network.</lead> GhostStake is deployed on {expected} — your wallet is on {actual}.",
+    "switching": "Switching…",
+    "switchTo": "Switch to {chain}",
+    "declined": "You declined the switch.",
+    "addChainFirst": "Add {chain} to your wallet first.",
+    "couldNotSwitch": "Your wallet could not switch networks.",
+    "noAnswer": "Your wallet hasn’t answered."
+  },
+  "explorer": {
+    "newTab": "(opens the explorer in a new tab)"
+  },
+  "misconfigured": {
+    "eyebrow": "Configuration",
+    "title": "This deployment is misconfigured",
+    "body": "It was built with {count, plural, one {a setting} other {settings}} the app cannot use, so it is not running rather than showing figures read from the wrong place. Nothing on chain is affected.",
+    "rebuild": "These are read when the app is built, so fixing one means rebuilding it."
   }
 }

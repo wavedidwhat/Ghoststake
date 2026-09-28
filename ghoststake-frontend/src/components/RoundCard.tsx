@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatUtcTime } from "@/lib/format";
 import { questionFor, sideLabel } from "@/lib/question";
 import { MarketMark } from "@/components/MarketMark";
 import type { Spot } from "@/hooks/useSpot";
@@ -566,12 +566,7 @@ function SettlementNote({
   // to be checkable. Round 417 on Sepolia is exactly this case.
   if (round.status === Status.Void) return null;
 
-  const at = new Date(Number(round.closeTime) * 1000).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZone: "UTC",
-  });
+  const at = formatUtcTime(Number(round.closeTime) * 1000);
 
   const name = feed?.split(" - ").pop() ?? "the price feed";
 

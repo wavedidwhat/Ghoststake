@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
 
 /**
@@ -25,6 +26,7 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
+  const actions = useTranslations("actions");
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export function Sheet({
           <span aria-hidden="true" className="text-xl leading-none">
             ×
           </span>
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{actions("close")}</span>
         </button>
       </div>
 

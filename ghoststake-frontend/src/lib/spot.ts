@@ -1,3 +1,4 @@
+import { formatSignedPercent } from "./format";
 import { Side, type SideValue } from "./rounds";
 
 /**
@@ -48,15 +49,9 @@ export function standingOf(spot: bigint | undefined, strike: bigint | undefined)
   return { leading: diff > 0n ? Side.Up : Side.Down, bps };
 }
 
-/**
- * The move as a percentage string, e.g. "+0.42%".
- *
- * Signed always, including the zero case: "0.00%" without a sign reads as
- * "no data" next to a figure that does carry one.
- */
+/** The move as a percentage string, e.g. "+0.42%". */
 export function formatMove(bps: number): string {
-  const sign = bps > 0 ? "+" : bps < 0 ? "−" : "±";
-  return `${sign}${(Math.abs(bps) / 100).toFixed(2)}%`;
+  return formatSignedPercent(bps / 100);
 }
 
 /**

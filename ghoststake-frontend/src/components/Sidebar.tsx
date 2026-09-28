@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { isCurrent, sidebarLinks, type NavLink } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
@@ -34,6 +35,7 @@ import { Badge } from "./ui/Badge";
  * that.
  */
 export function Sidebar() {
+  const t = useTranslations("nav");
   const pathname = usePathname();
   const { main, pinned } = sidebarLinks(useIsOperator());
 
@@ -54,7 +56,7 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2">
+      <nav aria-label={t("mainLabel")} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2">
         {main.map((item) => (
           <NavItem key={item.href} item={item} pathname={pathname} />
         ))}
@@ -65,7 +67,7 @@ export function Sidebar() {
           <NavItem key={item.href} item={item} pathname={pathname} />
         ))}
         <p className="px-3 pt-2">
-          <Badge size="sm">Testnet</Badge>
+          <Badge size="sm">{t("testnet")}</Badge>
         </p>
       </div>
     </aside>
@@ -73,6 +75,8 @@ export function Sidebar() {
 }
 
 function NavItem({ item, pathname }: { item: NavLink; pathname: string }) {
+  const t = useTranslations("nav.links");
+  const label = t(item.id);
   const current = isCurrent(pathname, item.href);
   const row = "flex items-center gap-3 rounded-control px-3 py-2 text-sm";
 
@@ -80,7 +84,7 @@ function NavItem({ item, pathname }: { item: NavLink; pathname: string }) {
     return (
       <span className={`${row} cursor-not-allowed text-ink-faint`}>
         <NavIcon href={item.href} current={false} className="size-5 shrink-0" />
-        <span className="truncate">{item.label}</span>
+        <span className="truncate">{label}</span>
       </span>
     );
   }
@@ -94,7 +98,7 @@ function NavItem({ item, pathname }: { item: NavLink; pathname: string }) {
       }`}
     >
       <NavIcon href={item.href} current={current} className="size-5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{label}</span>
     </Link>
   );
 }

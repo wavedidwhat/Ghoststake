@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowSquareOut } from "@phosphor-icons/react";
 
 import { explorerAddressUrl, explorerTxUrl, shortHash } from "@/lib/activity";
@@ -28,6 +29,7 @@ export function ExplorerLink({
   children?: ReactNode;
   className?: string;
 }) {
+  const t = useTranslations("explorer");
   const value = tx ?? address ?? "";
   const href = tx ? explorerTxUrl(tx) : address ? explorerAddressUrl(address) : undefined;
   const label = children ?? <span className="font-mono">{shortHash(value)}</span>;
@@ -44,7 +46,7 @@ export function ExplorerLink({
     >
       {label}
       <ArrowSquareOut aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="sr-only">(opens the explorer in a new tab)</span>
+      <span className="sr-only">{t("newTab")}</span>
     </a>
   );
 }

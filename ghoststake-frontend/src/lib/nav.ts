@@ -28,9 +28,29 @@
  * behind More, and every route stays reachable by URL.
  */
 
+/**
+ * Which entry this is, and so where its words live: `nav.links.<id>` in
+ * `messages/en.json` (GHO-117). Ids rather than labels, because the label is
+ * copy and belongs in the catalog.
+ */
+export type NavId =
+  | "markets"
+  | "portfolio"
+  | "stake"
+  | "borrow"
+  | "stocks"
+  | "activity"
+  | "lend"
+  | "liquidate"
+  | "operator"
+  | "howItWorks";
+
+/** The phone tab bar's four, which have their own, shorter words. */
+export type TabId = "markets" | "portfolio" | "stake" | "lend";
+
 export type NavLink = {
   href: string;
-  label: string;
+  id: NavId;
   /**
    * Held at the bottom of the sidebar rather than in the list: the way in for
    * someone new, not a place anyone works (GHO-100).
@@ -49,15 +69,16 @@ export type NavLink = {
    */
   ready?: boolean;
   /**
-   * What the phone tab bar calls this, when the sidebar's word is too long
-   * for a fifth of a 390px screen. "Positions" truncated to "POSITIO…", which
-   * looks broken and reads worse than a shorter word chosen on purpose.
-   */
-  short?: string;
-  /**
    * Shown in the phone tab bar rather than behind "More". Four, plus More:
    * 390 ÷ 5 = 78px per target, comfortably over the 44px minimum, while all
    * nine destinations would be 43px each before a label is drawn.
+   *
+   * The tab bar reads its words from `nav.tabs.<id>`, not `nav.links.<id>`:
+   * the sidebar's word can be too long for a fifth of a 390px screen.
+   * "Positions" truncated to "POSITIO…", which looks broken and reads worse
+   * than a shorter word chosen on purpose. A slot with a width limit is a
+   * different string from the same idea with room to spare, which is also
+   * what a translator needs to be told.
    */
   tab?: boolean;
   /**
@@ -71,57 +92,49 @@ export type NavLink = {
   operatorOnly?: boolean;
 };
 
-export type NavSection = { section: string; items: NavLink[] };
+/** A heading in the phone's More sheet; its words are `nav.sections.<id>`. */
+export type SectionId = "bet" | "yourMoney" | "fundIt" | "runIt" | "learn";
+
+export type NavSection = { section: SectionId; items: NavLink[] };
 
 export const NAV: NavSection[] = [
   {
-    section: "Bet",
+    section: "bet",
     items: [
-      { href: "/", label: "Markets", ready: true, tab: true },
-      {
-        href: "/portfolio",
-        label: "Portfolio",
-        short: "Bets",
-        ready: true,
-        tab: true,
-      },
+      { href: "/", id: "markets", ready: true, tab: true },
+      { href: "/portfolio", id: "portfolio", ready: true, tab: true },
     ],
   },
   {
-    section: "Your money",
+    section: "yourMoney",
     items: [
-      { href: "/stake", label: "Stake", ready: true, tab: true },
-      { href: "/borrow", label: "Borrow", ready: true },
-      { href: "/stocks", label: "Stock loans", ready: true },
-      { href: "/activity", label: "Activity", ready: true },
+      { href: "/stake", id: "stake", ready: true, tab: true },
+      { href: "/borrow", id: "borrow", ready: true },
+      { href: "/stocks", id: "stocks", ready: true },
+      { href: "/activity", id: "activity", ready: true },
     ],
   },
   {
-    section: "Fund it",
-    items: [{ href: "/lend", label: "Lend", ready: true, tab: true }],
+    section: "fundIt",
+    items: [{ href: "/lend", id: "lend", ready: true, tab: true }],
   },
   {
-    section: "Run it",
+    section: "runIt",
     items: [
-      { href: "/liquidate", label: "Liquidate", ready: true },
-      {
-        href: "/operator",
-        label: "Operator",
-        ready: true,
-        operatorOnly: true,
-      },
+      { href: "/liquidate", id: "liquidate", ready: true },
+      { href: "/operator", id: "operator", ready: true, operatorOnly: true },
     ],
   },
   {
-    section: "Learn",
-    items: [{ href: "/how-it-works", label: "How it works", ready: true, pinned: true }],
+    section: "learn",
+    items: [{ href: "/how-it-works", id: "howItWorks", ready: true, pinned: true }],
   },
 ];
 
 export const NAV_LINKS: NavLink[] = NAV.flatMap((section) => section.items);
 
 /** The four destinations in the phone tab bar, before the More tab. */
-export const TAB_LINKS: NavLink[] = NAV_LINKS.filter((link) => link.tab);
+export const TAB_LINKS = NAV_LINKS.filter((link): link is NavLink & { id: TabId } => Boolean(link.tab));
 
 /**
  * Everything the tab bar doesn't show, under its section heading.

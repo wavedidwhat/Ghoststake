@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import messages from "../../messages/en.json";
+import { locale } from "@/i18n/locale";
 
 /**
  * A throw in the root layout itself, which `error.tsx` cannot catch because
@@ -34,9 +35,9 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang={locale} className="h-full antialiased">
       <body className="min-h-full">
-        <NextIntlClientProvider locale="en" messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <Crashed digest={error.digest} retry={retry} />
         </NextIntlClientProvider>
       </body>

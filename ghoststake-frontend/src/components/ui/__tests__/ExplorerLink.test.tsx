@@ -1,4 +1,3 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // This file re-imports modules after `vi.resetModules()`, which reloads wagmi
@@ -17,18 +16,25 @@ vi.setConfig({ testTimeout: 30_000 });
 const TX = "0x" + "ab".repeat(32);
 const ADDR = "0x0ea31e490f9a9a21d2410add76668e4c2c24ba0e";
 
+/**
+ * The component and the renderer come from the same fresh module graph: after
+ * `resetModules`, a renderer imported at the top would provide the catalog
+ * through a different copy of next-intl than the one the component reads.
+ */
 async function load(chainId: string) {
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_CHAIN_ID", chainId);
-  return (await import("../ExplorerLink")).ExplorerLink;
+  const { ExplorerLink } = await import("../ExplorerLink");
+  const { renderWithMessages } = await import("@/test/intl");
+  return { ExplorerLink, render: renderWithMessages };
 }
 
 describe("ExplorerLink", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("links a transaction to the chain's explorer, in a new tab, safely", async () => {
-    const ExplorerLink = await load("11155111");
-    const html = renderToStaticMarkup(<ExplorerLink tx={TX} />);
+    const { ExplorerLink, render } = await load("11155111");
+    const html = render(<ExplorerLink tx={TX} />);
     expect(html).toContain(`/tx/${TX}"`);
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
@@ -39,13 +45,13 @@ describe("ExplorerLink", () => {
   });
 
   it("links an address to its page", async () => {
-    const ExplorerLink = await load("11155111");
-    expect(renderToStaticMarkup(<ExplorerLink address={ADDR} />)).toContain(`/address/${ADDR}"`);
+    const { ExplorerLink, render } = await load("11155111");
+    expect(render(<ExplorerLink address={ADDR} />)).toContain(`/address/${ADDR}"`);
   });
 
   it("is plain text where the chain has no explorer, never a dead link", async () => {
-    const ExplorerLink = await load("31337");
-    const html = renderToStaticMarkup(<ExplorerLink tx={TX} />);
+    const { ExplorerLink, render } = await load("31337");
+    const html = render(<ExplorerLink tx={TX} />);
     expect(html).not.toContain("<a");
     expect(html).toContain("0xabab");
   });

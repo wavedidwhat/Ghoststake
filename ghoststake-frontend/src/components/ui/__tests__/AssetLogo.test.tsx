@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderWithMessages } from "@/test/intl";
 import { AssetLogo, hasLogo } from "../AssetLogo";
 
 /**
@@ -14,14 +14,14 @@ describe("AssetLogo", () => {
   });
 
   it("draws a brand mark as an svg path, not a letter", () => {
-    const html = renderToStaticMarkup(<AssetLogo symbol="AMZN" />);
+    const html = renderWithMessages(<AssetLogo symbol="AMZN" />);
     expect(html).toContain("<path");
     expect(html).toContain("var(--color-logo-amazon)");
   });
 
   it("falls back to the ticker for an unknown symbol", () => {
     expect(hasLogo("XYZQ")).toBe(false);
-    const html = renderToStaticMarkup(<AssetLogo symbol="xyzq" />);
+    const html = renderWithMessages(<AssetLogo symbol="xyzq" />);
     expect(html).not.toContain("<svg");
     expect(html).toContain("XYZQ");
   });

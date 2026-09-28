@@ -1,8 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useConnection, useSwitchChain } from "wagmi";
 import { useStalled } from "@/hooks/useStalled";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { activeChain } from "@/lib/wagmi";
 import { Button } from "@/components/ui/Button";
 
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/Button";
  * it is empty anyway, and covering it would hide the explanation for why.
  */
 export function NetworkGuard() {
+  const t = useTranslations("network");
   const connection = useConnection();
   const { switchChain, isPending, error, reset } = useSwitchChain();
   const [attempt, setAttempt] = useState(0);
@@ -25,12 +27,15 @@ export function NetworkGuard() {
   if (connection.status !== "connected") return null;
   if (connection.chainId === activeChain.id) return null;
 
+  const lead = (chunks: ReactNode) =><span className="font-medium">{chunks}</span>;
+  const hint = switchHint(error, stalled);
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-warning/30 bg-warning-soft px-6 py-3">
       <p className="text-sm text-warning">
-        <span className="font-medium">Wrong network.</span> GhostStake is deployed on{" "}
-        {activeChain.name}
-        {connection.chain ? ` — your wallet is on ${connection.chain.name}.` : "."}
+        {connection.chain
+          ? t.rich("wrongWithWallet", { lead, expected: activeChain.name, actual: connection.chain.name })
+          : t.rich("wrong", { lead, expected: activeChain.name })}
       </p>
       <div className="flex flex-col items-end gap-1">
         <Button
@@ -43,16 +48,14 @@ export function NetworkGuard() {
           }}
           disabled={isPending}
         >
-          {isPending ? "Switching…" : `Switch to ${activeChain.name}`}
+          {isPending ? t("switching") : t("switchTo", { chain: activeChain.name })}
         </Button>
 
         {/* This had no error path at all (GHO-83): a rejected switch, or a
             wallet that cannot add the chain, left `isPending` false and showed
             nothing. The button looked broken, which is the single most
             reported symptom of this whole class of bug. */}
-        {switchHint(error, stalled) && (
-          <span className="text-xs text-warning/80">{switchHint(error, stalled)}</span>
-        )}
+        {hint && <span className="text-xs text-warning/80">{t(hint, { chain: activeChain.name })}</span>}
       </div>
     </div>
   );
@@ -66,15 +69,16 @@ export function NetworkGuard() {
  * user: a wallet that has never seen this chain needs it added by hand, and a
  * wallet that is busy needs another moment.
  */
-function switchHint(error: Error | null, stalled: boolean): string | undefined {
+function switchHint(
+  error: Error | null,
+  stalled: boolean,
+): "declined" | "addChainFirst" | "couldNotSwitch" | "noAnswer" | undefined {
   if (error) {
     const message = error.message;
-    if (/rejected|denied/i.test(message)) return "You declined the switch.";
-    if (/unrecognized|not added|4902/i.test(message)) {
-      return `Add ${activeChain.name} to your wallet first.`;
-    }
-    return "Your wallet could not switch networks.";
+    if (/rejected|denied/i.test(message)) return "declined";
+    if (/unrecognized|not added|4902/i.test(message)) return "addChainFirst";
+    return "couldNotSwitch";
   }
-  if (stalled) return "Your wallet hasn\u2019t answered.";
+  if (stalled) return "noAnswer";
   return undefined;
 }

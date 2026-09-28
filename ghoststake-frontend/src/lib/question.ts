@@ -1,4 +1,4 @@
-import { formatAmount } from "./format";
+import { formatAmount, formatClock } from "./format";
 import { Side, type SideValue } from "./rounds";
 
 /**
@@ -79,7 +79,7 @@ function assetOf(feed: string | undefined): string {
 function timeOf(closeTime: bigint | number): string {
   const seconds = typeof closeTime === "bigint" ? Number(closeTime) : closeTime;
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  return new Date(seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return formatClock(seconds * 1000);
 }
 
 /**

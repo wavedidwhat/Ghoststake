@@ -16,7 +16,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { parimutuelRoundAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
 import { takenLabel } from "@/lib/question";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
 import {
   byRecency,
   netOf,
@@ -189,7 +189,7 @@ function Header({
         </div>
         <p className="text-xs text-ink-faint">
           {indexedBlock
-            ? `Indexed to block ${indexedBlock.toLocaleString()}. A position opened in the last few blocks is not here yet.`
+            ? `Indexed to block ${formatInteger(indexedBlock)}. A position opened in the last few blocks is not here yet.`
             : "Indexer position unknown."}
         </p>
       </div>
@@ -512,7 +512,7 @@ function PositionsTable({
               </RowField>
               <RowField label="Settled">
                 <time dateTime={position.round.closeTime}>
-                  {new Date(position.round.closeTime).toLocaleString()}
+                  {formatDateTime(position.round.closeTime)}
                 </time>
               </RowField>
               {position.leveraged && <RowField label="Funded by">borrowing</RowField>}
@@ -571,9 +571,9 @@ function Row({
       <td className="px-4 py-3 whitespace-nowrap text-ink-muted">
         <time
           dateTime={position.round.closeTime}
-          title={`Round opened ${new Date(position.round.openTime).toLocaleString()}`}
+          title={`Round opened ${formatDateTime(position.round.openTime)}`}
         >
-          {new Date(position.round.closeTime).toLocaleString()}
+          {formatDateTime(position.round.closeTime)}
         </time>
       </td>
 
@@ -666,7 +666,7 @@ function Empty({ indexedBlock }: { indexedBlock?: number }) {
       <p className="text-sm text-ink-muted">No positions indexed for this address yet.</p>
       <p className="mt-2 text-xs text-ink-faint">
         {indexedBlock
-          ? `The indexer has read to block ${indexedBlock.toLocaleString()}. A position opened in the last few blocks will not be here yet.`
+          ? `The indexer has read to block ${formatInteger(indexedBlock)}. A position opened in the last few blocks will not be here yet.`
           : "The indexer has not reported a position, so it may not have run against this deployment."}
       </p>
     </Card>

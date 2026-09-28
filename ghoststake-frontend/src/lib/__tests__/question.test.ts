@@ -5,7 +5,9 @@ import { Side } from "../rounds";
 const wad = (n: string) => BigInt(n) * 10n ** 18n;
 // 2026-09-24 14:30 local, so the rendered time matches wherever this runs.
 const closeTime = BigInt(Math.floor(new Date(2026, 8, 24, 14, 30).getTime() / 1000));
-const at = new Date(2026, 8, 24, 14, 30).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// Written out rather than computed with the call the code makes: a test that
+// derives its expectation from the implementation agrees with any change to it.
+const at = "2:30 PM";
 
 describe("a market as a question", () => {
   it("states the level and the time", () => {
