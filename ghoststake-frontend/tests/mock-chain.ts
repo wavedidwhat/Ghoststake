@@ -247,6 +247,18 @@ export class MockChain {
 
   private held = new Set<string>();
 
+  /**
+   * Mine every sent transaction as a revert from now on (GHO-104). Sends are
+   * mined as successes by default: the wallet mock returns a hash, and until
+   * this answered `eth_getTransactionReceipt` every transaction in a test
+   * stayed pending forever, so nothing could test what happens after.
+   */
+  revertTransactions() {
+    this.mined = "0x0";
+  }
+
+  private mined: "0x1" | "0x0" = "0x1";
+
   private contract(address: string) {
     const key = address.toLowerCase();
     let c = this.table.get(key);
@@ -297,6 +309,25 @@ export class MockChain {
         return ok(`0x60806040${toFunctionSelector("openRound(uint64,uint64,uint64,uint256)").slice(2)}`);
       case "eth_call":
         return this.call(req);
+      case "eth_getTransactionReceipt": {
+        const hash = (req.params?.[0] ?? `0x${"00".repeat(32)}`) as string;
+        return ok({
+          transactionHash: hash,
+          transactionIndex: "0x0",
+          blockHash: `0x${"11".repeat(32)}`,
+          blockNumber: numberToHex(1000),
+          from: "0x1111111111111111111111111111111111111111",
+          to: E2E.asset,
+          cumulativeGasUsed: "0x5208",
+          gasUsed: "0x5208",
+          effectiveGasPrice: "0x1",
+          contractAddress: null,
+          logs: [],
+          logsBloom: `0x${"00".repeat(256)}`,
+          status: this.mined,
+          type: "0x2",
+        });
+      }
       default:
         return ok(null);
     }

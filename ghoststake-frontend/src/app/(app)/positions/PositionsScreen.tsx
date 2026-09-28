@@ -6,6 +6,7 @@ import { useConnection } from "wagmi";
 import { Page, NeedsWallet } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
 import { LoadFailed } from "@/components/ui/LoadFailed";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Card } from "@/components/ui/Card";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
@@ -175,7 +176,11 @@ function Header({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <Eyebrow>Address</Eyebrow>
-          <p className="mt-1 font-mono text-sm text-ink">{address}</p>
+          <p className="mt-1 text-sm text-ink">
+            <ExplorerLink address={address}>
+              <span className="font-mono break-all">{address}</span>
+            </ExplorerLink>
+          </p>
           {viewingSomeoneElse && (
             <p className="mt-1 text-xs text-ink-faint">
               Not your connected wallet — this is a public read.

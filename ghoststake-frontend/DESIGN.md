@@ -160,7 +160,9 @@ Myriad and Limitless. Nine destinations is past what we should hand-draw, so
 this is the moment the rule above anticipated. `@phosphor-icons/react`,
 pinned exact (2.1.10: MIT, zero dependencies). Every use goes through
 `src/components/NavIcon.tsx`, keyed by route, and since GHO-102 the one
-neutral mark for a question market in `src/components/MarketMark.tsx`. `regular` weight normally and
+neutral mark for a question market in `src/components/MarketMark.tsx`, and
+the leaves-the-app arrow in `src/components/ui/ExplorerLink.tsx` (GHO-103),
+and the bell in `src/components/AlertBell.tsx` (GHO-104). `regular` weight normally and
 `fill` for the current page, so the current page reads without colour. Don't
 import Phosphor anywhere else without adding the use here first, and never
 mix in a second icon family.
@@ -229,6 +231,8 @@ them.
 | `Figure` | every number |
 | `Skeleton` | a placeholder the size of what is loading |
 | `Badge` | a short warning chip, e.g. "Demo feed" |
+| `Toaster` (+ `txToast`) | transient news: a transaction sent, confirmed or reverted, or a new alert. `sonner`, pinned, with its own look switched off for our tokens; toasts are listed, not piled. Every write already toasts through `useTransaction`, so don't add your own |
+| `ExplorerLink` | every transaction hash and contract address. Links the chain's explorer in a new tab, with an arrow; plain text where there is no explorer. Never build an explorer URL by hand (a test fails on it) |
 | `LoadFailed` | a read that failed: what couldn't be read, what is unaffected, Try again |
 | `RowList` / `RowCard` / `RowField` | a table's phone form |
 | `Sheet` | the one decision a screen asks for |

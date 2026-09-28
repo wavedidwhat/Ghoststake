@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { explorerAddressUrl } from "@/lib/activity";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { formatAmount } from "@/lib/format";
 import { questionFor, sideLabel } from "@/lib/question";
 import { MarketMark } from "@/components/MarketMark";
@@ -574,7 +574,7 @@ function SettlementNote({
   });
 
   const name = feed?.split(" - ").pop() ?? "the price feed";
-  const href = feedAddress ? explorerAddressUrl(feedAddress) : undefined;
+
   // Tense matters here more than it looks. This sentence exists to be
   // checked, and a resolved round that still says "settles" reads as a
   // pending one — which would send somebody to the explorer looking for a
@@ -583,15 +583,10 @@ function SettlementNote({
 
   return (
     <p className="mt-3 border-t border-border pt-3 text-[11px] text-ink-faint">
-      {done ? "Settled" : "Settles"} on the {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="underline underline-offset-2 hover:text-ink-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
-        >
+      {done ? "Settled" : "Settles"} on the {feedAddress ? (
+        <ExplorerLink address={feedAddress} className="underline hover:text-ink-muted">
           Chainlink {name}
-        </a>
+        </ExplorerLink>
       ) : (
         <>Chainlink {name}</>
       )}{" "}
