@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useWallet } from "@/hooks/useWallet";
 import { Page } from "@/components/Page";
@@ -25,6 +26,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function PortfolioPage() {
+  const t = useTranslations("portfolio");
   const wallet = useWallet();
   const position = useVaultPosition();
 
@@ -37,19 +39,18 @@ export default function PortfolioPage() {
   // on the status rendered "connect a wallet" over a page already showing that
   // address's balances (GHO-77). If we have an address, we have a wallet.
   return (
-    <Page title="Portfolio" subtitle="What you have staked, borrowed and riding on a market">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!wallet.isConnected ? (
         <Disconnected />
       ) : !contractsConfigured ? (
         <NotDeployed />
       ) : position.isError ? (
         <LoadFailed
-          title="Could not read your position"
+          title={t("unreadable")}
           onRetry={() => position.refetch()}
           className="mx-auto mt-16 max-w-md text-center"
         >
-          The RPC call failed. Your position is unchanged — this screen just cannot see it right
-          now.
+          {t("unreadableDetail")}
         </LoadFailed>
       ) : (
         <Position position={position} />
@@ -59,6 +60,8 @@ export default function PortfolioPage() {
 }
 
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
+  const t = useTranslations("portfolio");
+  const vault = useTranslations("vault");
   const { decimals, symbol } = position;
   const standing = stakeStanding(position.totalLedgerValue, position.collateralValue, decimals);
 
@@ -106,7 +109,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         />
       </div>
 
-      <Stat label="Collateral value" hint="capped at redeemable">
+      <Stat label={t("collateralValue")} hint={t("collateralValueHint")}>
         <PendingFigure value={amount(position.collateralValue)} unit={symbol} />
       </Stat>
 
@@ -115,8 +118,8 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
           finished explaining that nothing stands behind it — the two would be
           arguing with each other on the same screen. See GHO-55. */}
       <Stat
-        label="Accrued yield"
-        hint={standing && !standing.backed ? "credited, not redeemable" : "since last checkpoint"}
+        label={t("accruedYield")}
+        hint={standing && !standing.backed ? t("accruedCredited") : t("accruedSince")}
       >
         <PendingFigure
           value={amount(position.accruedYield)}
@@ -127,7 +130,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
 
       {/* Accounting parentheses: a claim against the position, not a
           balance it holds. */}
-      <Stat label="Debt" hint="principal + interest">
+      <Stat label={t("debt")} hint={t("debtHint")}>
         {position.lien === undefined || decimals === undefined ? (
           <Skeleton className="h-8 w-32" />
         ) : position.lien === 0n ? (
@@ -145,7 +148,7 @@ function Position({ position }: { position: ReturnType<typeof useVaultPosition> 
         )}
       </Stat>
 
-      <Stat label="Still borrowable" hint="to the LTV ceiling">
+      <Stat label={vault("stillBorrowable")} hint={vault("stillBorrowableHint")}>
         <PendingFigure value={amount(position.maxBorrowable)} unit={symbol} />
       </Stat>
 
@@ -233,6 +236,7 @@ function TermsSection({ decimals, symbol }: { decimals: number | undefined; symb
 }
 
 function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol: string }) {
+  const t = useTranslations("portfolio.pool");
   const pool = usePoolStats();
 
   const amount = (value: bigint | undefined) =>
@@ -242,7 +246,7 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
     <section aria-labelledby="pool-heading" className="mt-2">
       <div className="mb-3 flex items-center gap-3">
         <Eyebrow as="h2" id="pool-heading">
-          Lending pool
+          {t("heading")}
         </Eyebrow>
         <span className="h-px flex-1 bg-border" />
         {/* The way in. These figures described a pool nobody outside the seed
@@ -251,29 +255,29 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
           href="/lend"
           className="text-xs text-ink-faint transition-colors hover:text-action focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         >
-          Supply into it →
+          {t("supplyInto")}
         </Link>
       </div>
 
       {pool.isError ? (
         <Card>
-          <p className="text-sm text-ink-muted">Pool figures are unavailable right now.</p>
+          <p className="text-sm text-ink-muted">{t("unavailable")}</p>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Stat label="Total supplied" hint="lender deposits">
+          <Stat label={t("totalSupplied")} hint={t("totalSuppliedHint")}>
             <PendingFigure value={amount(pool.totalSupplied)} unit={symbol} />
           </Stat>
-          <Stat label="Total borrowed" hint="outstanding">
+          <Stat label={t("totalBorrowed")} hint={t("totalBorrowedHint")}>
             <PendingFigure value={amount(pool.totalBorrowed)} unit={symbol} />
           </Stat>
-          <Stat label="Utilization" hint="borrowed / supplied">
+          <Stat label={t("utilization")} hint={t("utilizationHint")}>
             <PendingFigure
               value={pool.utilization === undefined ? undefined : formatPercent(pool.utilization)}
               unit=""
             />
           </Stat>
-          <Stat label="Borrow rate" hint="simple, annualised">
+          <Stat label={t("borrowRate")} hint={t("borrowRateHint")}>
             <PendingFigure
               value={
                 pool.borrowRatePerSecond === undefined
@@ -286,7 +290,7 @@ function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol:
           {/* Lower than the borrow rate by two effects at once: only the
               borrowed fraction earns anything, and the protocol keeps a
               reserve cut of what it does earn. */}
-          <Stat label="Supply rate" hint="what lenders earn">
+          <Stat label={t("supplyRate")} hint={t("supplyRateHint")}>
             <PendingFigure
               value={
                 pool.supplyRatePerSecond === undefined
@@ -324,26 +328,23 @@ function PendingFigure({
  * stays readable whether or not a wallet is connected.
  */
 function Disconnected() {
+  const t = useTranslations("portfolio");
   return (
     <div className="mx-auto mt-10 max-w-md text-center">
-      <h2 className="display text-xl uppercase">Connect to see your position</h2>
-      <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-        A portfolio is tied to an address: what you have staked, what you have
-        borrowed against it, and what is riding on a market. Markets themselves
-        are public — you can read every round without connecting.
-      </p>
+      <h2 className="display text-xl uppercase">{t("connect")}</h2>
+      <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t("connectDetail")}</p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <Link
           href="/"
           className={buttonClass({ variant: "outline", className: "display uppercase" })}
         >
-          Browse markets
+          {t("browseMarkets")}
         </Link>
         <Link
           href="/how-it-works"
           className={buttonClass({ variant: "outline", className: "display uppercase" })}
         >
-          How it works
+          {t("howItWorks")}
         </Link>
       </div>
     </div>
@@ -355,14 +356,15 @@ function Disconnected() {
  * indistinguishable from a real position holding nothing.
  */
 function NotDeployed() {
+  const t = useTranslations("portfolio");
   return (
     <Card className="mx-auto mt-16 max-w-md text-center">
-      <h2 className="text-lg font-semibold">Contracts not configured</h2>
+      <h2 className="text-lg font-semibold">{t("notDeployed")}</h2>
       <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-        No addresses are set for {activeChain.name}. Set{" "}
-        <code className="text-ink">NEXT_PUBLIC_VAULT_ADDRESS</code> and{" "}
-        <code className="text-ink">NEXT_PUBLIC_POOL_ADDRESS</code> once GHO-21
-        has deployed.
+        {t.rich("notDeployedDetail", {
+          chain: activeChain.name,
+          code: (chunks) => <code className="text-ink">{chunks}</code>,
+        })}
       </p>
     </Card>
   );

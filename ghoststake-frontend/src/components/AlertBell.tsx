@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Bell } from "@phosphor-icons/react";
 
@@ -18,6 +19,8 @@ import { Button, buttonClass } from "@/components/ui/Button";
  * `negative` only when one of the alerts is danger.
  */
 export function AlertBell() {
+  const t = useTranslations("alerts.bell");
+  const root = useTranslations();
   const { address } = useWallet();
   const alerts = useAlerts();
   const browser = useBrowserNotifications();
@@ -32,7 +35,7 @@ export function AlertBell() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={count === 0 ? "Notifications, none" : `Notifications, ${count}`}
+        aria-label={t("label", { count })}
         className="relative flex size-11 cursor-pointer items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
       >
         <Bell aria-hidden="true" weight={count > 0 ? "fill" : "regular"} className="size-5" />
@@ -48,11 +51,9 @@ export function AlertBell() {
         )}
       </button>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Notifications">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t("title")}>
         {count === 0 ? (
-          <p className="text-sm text-ink-muted">
-            Nothing needs you right now. Winnings to claim and a falling safety factor show up here.
-          </p>
+          <p className="text-sm text-ink-muted">{t("empty")}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {alerts.map((a) => (
@@ -66,14 +67,14 @@ export function AlertBell() {
                       : "border-border bg-raised"
                 }`}
               >
-                <p className="font-medium text-ink">{a.title}</p>
-                <p className="mt-1 text-sm text-ink-muted">{a.body}</p>
+                <p className="font-medium text-ink">{root(a.title.key, a.title.values)}</p>
+                <p className="mt-1 text-sm text-ink-muted">{root(a.body.key, a.body.values)}</p>
                 <Link
                   href={a.href}
                   onClick={() => setOpen(false)}
                   className={buttonClass({ size: "sm", className: "mt-3" })}
                 >
-                  {a.action}
+                  {root(a.action.key, a.action.values)}
                 </Link>
               </li>
             ))}
@@ -85,13 +86,11 @@ export function AlertBell() {
         {browser.supported && browser.permission !== "granted" && (
           <div className="mt-5 border-t border-border pt-4">
             <p className="text-xs text-ink-muted">
-              {browser.permission === "denied"
-                ? "Browser notifications are blocked for this site. They can be allowed in the browser's site settings."
-                : "Get these as browser notifications while this tab is in the background."}
+              {browser.permission === "denied" ? t("browserBlocked") : t("browserOffer")}
             </p>
             {browser.permission !== "denied" && (
               <Button variant="outline" size="sm" className="mt-2" onClick={() => void browser.request()}>
-                Turn on browser notifications
+                {t("browserTurnOn")}
               </Button>
             )}
           </div>

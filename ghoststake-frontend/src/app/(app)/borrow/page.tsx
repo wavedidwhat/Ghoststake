@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
@@ -21,15 +22,16 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function BorrowPage() {
+  const t = useTranslations("borrow");
   const wallet = useWallet();
   const position = useVaultPosition();
 
   return (
-    <Page title="Borrow" subtitle="Draw against your collateral, or repay what you owe">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!wallet.isConnected ? (
-        <NeedsWallet what="Borrowing capacity is a property of your deposited collateral." />
+        <NeedsWallet what={t("needsWallet")} />
       ) : !contractsConfigured ? (
-        <NotConfigured what="No vault is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : position.decimals === undefined ? (
         <Card>
           <Skeleton className="h-24" />
@@ -57,6 +59,10 @@ function BorrowScreen({
   decimals: number;
   address: `0x${string}`;
 }) {
+  const t = useTranslations("borrow");
+  const vault = useTranslations("vault");
+  const actions = useTranslations("actions");
+  const amounts = useTranslations("amount");
   const [mode, setMode] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -138,7 +144,7 @@ function BorrowScreen({
         <HealthFactorCard value={position.healthFactor} liquidatable={position.isLiquidatable} />
       </div>
 
-      <Stat label="Still borrowable" hint="to the LTV ceiling">
+      <Stat label={vault("stillBorrowable")} hint={vault("stillBorrowableHint")}>
         <Figure
           value={formatOptional(position.maxBorrowable, (v) => formatAmount(v, decimals)) ?? "…"}
           unit={position.symbol}
@@ -149,10 +155,10 @@ function BorrowScreen({
       <div className="lg:col-span-3">
         <Card>
           <SegmentedControl
-            label="Borrow or repay"
+            label={t("modeLabel")}
             options={[
-              { value: "borrow", label: "Borrow" },
-              { value: "repay", label: "Repay" },
+              { value: "borrow", label: t("borrow") },
+              { value: "repay", label: t("repay") },
             ]}
             value={mode}
             onChange={(m) => {
@@ -165,13 +171,13 @@ function BorrowScreen({
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-4">
               <AmountField
-                label={mode === "borrow" ? "Amount to borrow" : "Amount to repay"}
+                label={mode === "borrow" ? t("amountToBorrow") : t("amountToRepay")}
                 value={amount}
                 onChange={setAmount}
                 max={max}
                 decimals={decimals}
                 symbol={position.symbol}
-                maxLabel={mode === "borrow" ? "Capacity" : "Owed"}
+                maxLabel={mode === "borrow" ? t("capacityMax") : t("owedMax")}
                 disabled={busy}
               />
 
@@ -180,30 +186,28 @@ function BorrowScreen({
                 disabled={disabled}
               >
                 {busy
-                  ? "Working…"
+                  ? actions("working")
                   : needsApproval
-                    ? "Approve and repay"
+                    ? t("approveAndRepay")
                     : mode === "borrow"
-                      ? "Borrow"
-                      : "Repay"}
+                      ? t("borrow")
+                      : t("repay")}
               </Button>
 
               {overMax && (
                 <p className="text-xs text-negative">
-                  {mode === "borrow"
-                    ? "Above your borrowing capacity."
-                    : "More than you owe. Repaying is capped at the debt."}
+                  {mode === "borrow" ? t("overCapacity") : t("overDebt")}
                 </p>
               )}
               {overWallet && (
-                <p className="text-xs text-negative">More than your wallet holds.</p>
+                <p className="text-xs text-negative">{amounts("overWallet")}</p>
               )}
               <TxStatus tx={tx} />
             </div>
 
             <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-xs text-ink-muted">Health factor after</span>
+                <span className="text-xs text-ink-muted">{vault("healthAfter")}</span>
                 <span className="flex items-baseline gap-2">
                   {position.healthFactor !== undefined && (
                     <span className="tabular text-xs text-ink-faint">
@@ -215,11 +219,7 @@ function BorrowScreen({
                   </span>
                 </span>
               </div>
-              <p className="text-xs text-ink-muted">
-                Interest accrues every second at the pool&rsquo;s current rate, so the debt grows
-                on its own between transactions. Borrowing stops at the LTV ceiling, which sits
-                well below the liquidation line.
-              </p>
+              <p className="text-xs text-ink-muted">{t("interestNote")}</p>
             </div>
           </div>
         </Card>

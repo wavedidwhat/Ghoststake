@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { AmountField, TxStatus } from "@/components/AmountField";
@@ -37,18 +38,19 @@ const ROBINHOOD_FAUCET = "https://faucet.testnet.chain.robinhood.com";
 type Loan = ReturnType<typeof useStockLoan>;
 
 export default function StocksPage() {
+  const t = useTranslations("stocks");
   const wallet = useWallet();
   const loan = useStockLoan();
 
   return (
-    <Page title="Stock loans" subtitle="Borrow dollars against your shares, without selling them">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!loan.configured ? (
-        <NotConfigured what="Stock loans need tokenized stock, which only Robinhood Chain has. No stock vault is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : !wallet.isConnected ? (
-        <NeedsWallet what="A loan is secured by the stock you deposit." />
+        <NeedsWallet what={t("needsWallet")} />
       ) : loan.isError ? (
         <Card>
-          <p className="text-sm text-negative">Could not read the stock vault. Retrying in a few seconds.</p>
+          <p className="text-sm text-negative">{t("unreadable")}</p>
         </Card>
       ) : !loan.ready || loan.stableDecimals === undefined || loan.originationFee === undefined ? (
         <Card>
@@ -77,6 +79,7 @@ function StockScreen({
   fee: bigint;
   address: `0x${string}`;
 }) {
+  const t = useTranslations("stocks");
   const now = useNow();
   const [selected, setSelected] = useState(loan.collaterals[0]?.token);
   const chosen = loan.collaterals.find((c) => c.token === selected) ?? loan.collaterals[0];
@@ -89,30 +92,24 @@ function StockScreen({
       <div className="lg:col-span-2">
         <HealthFactorCard value={loan.healthFactor} liquidatable={loan.healthFactor !== undefined && loan.healthFactor < 10n ** 18n} />
       </div>
-      <Stat label="Borrowed" hint="grows every second">
+      <Stat label={t("borrowed")} hint={t("borrowedHint")}>
         <Figure value={formatAmount(debt, decimals)} unit={loan.stableSymbol} size="stat" />
       </Stat>
-      <Stat label="Collateral value">
+      <Stat label={t("collateralValue")}>
         <Figure value={formatAmount(loan.summary.value, decimals)} unit={loan.stableSymbol} size="stat" />
       </Stat>
-      <Stat label="Borrow limit" hint="loan may reach this">
+      <Stat label={t("borrowLimit")} hint={t("borrowLimitHint")}>
         <Figure value={formatAmount(loan.summary.borrowLimit, decimals)} unit={loan.stableSymbol} size="stat" />
       </Stat>
-      <Stat label="Liquidation line" hint="loan above this is sold">
+      <Stat label={t("liquidationLine")} hint={t("liquidationLineHint")}>
         <Figure value={formatAmount(loan.summary.liquidationLine, decimals)} unit={loan.stableSymbol} size="stat" />
       </Stat>
 
       {loan.summary.incomplete && (
         <div className="lg:col-span-3">
           <Card className="border-negative/40">
-            <p className="text-sm text-ink">
-              The price of some stock you hold could not be read, so the figures above leave it
-              out and understate what your collateral is worth.
-            </p>
-            <p className="mt-1 text-xs text-ink-muted">
-              The vault uses its own price when you sign, so nothing is lent against a number
-              shown here. Repaying and withdrawing with no loan still work.
-            </p>
+            <p className="text-sm text-ink">{t("incomplete")}</p>
+            <p className="mt-1 text-xs text-ink-muted">{t("incompleteDetail")}</p>
           </Card>
         </div>
       )}
@@ -121,14 +118,14 @@ function StockScreen({
         <div className="lg:col-span-3">
           <Card className="border-warning/40">
             <p className="text-sm text-ink">
-              {stale.map((c) => c.symbol).join(", ")} {stale.length === 1 ? "has" : "have"} not traded
-              for over {formatDuration(stale[0].maxAge)}, so new borrowing
-              {hasDebt ? " and withdrawing" : ""} is paused until the price updates.
+              {t("stale", {
+                symbols: stale.map((c) => c.symbol).join(", "),
+                count: stale.length,
+                duration: formatDuration(stale[0].maxAge),
+                debt: hasDebt ? "yes" : "no",
+              })}
             </p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Normal when the stock market is closed, overnight and at weekends. Repaying always
-              works{hasDebt ? "" : ", and so does withdrawing, because you owe nothing"}.
-            </p>
+            <p className="mt-1 text-xs text-ink-muted">{t("staleDetail", { debt: hasDebt ? "yes" : "no" })}</p>
           </Card>
         </div>
       )}
@@ -136,14 +133,14 @@ function StockScreen({
       <div className="lg:col-span-3">
         <Card>
           <div className="flex items-baseline justify-between gap-2">
-            <Eyebrow as="h2">Your stock</Eyebrow>
+            <Eyebrow as="h2">{t("yourStock")}</Eyebrow>
             <a
               href={ROBINHOOD_FAUCET}
               target="_blank"
               rel="noreferrer"
               className="text-xs text-ink-faint hover:text-action"
             >
-              Get test stock from Robinhood&rsquo;s faucet ↗
+              {t("faucet")}
             </a>
           </div>
           <ul className="mt-3 divide-y divide-border">
@@ -189,6 +186,7 @@ function CollateralRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const t = useTranslations("stocks");
   const age = priceAge(c, now);
   const deposited = c.deposited ?? 0n;
   const value = valueOfAmount(c, deposited);
@@ -206,12 +204,15 @@ function CollateralRow({
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium text-ink">{c.symbol}</span>
           <span className="block truncate text-xs text-ink-muted">
-            {c.name} · borrow up to {formatPercent(c.maxLTV, 0)}
+            {t("borrowUpTo", { name: c.name, ltv: formatPercent(c.maxLTV, 0) })}
           </span>
           {/* The deposit column is hidden on a phone, so what you have in
               the vault still has to be said somewhere in the row. */}
           <span className="tabular block text-xs text-ink-faint sm:hidden">
-            {formatAmount(deposited, c.decimals, 4)} deposited · {formatAmount(c.wallet ?? 0n, c.decimals, 4)} in wallet
+            {t("depositedInWallet", {
+              deposited: formatAmount(deposited, c.decimals, 4),
+              wallet: formatAmount(c.wallet ?? 0n, c.decimals, 4),
+            })}
           </span>
         </span>
         <span className="text-right">
@@ -219,16 +220,21 @@ function CollateralRow({
             {c.valuePerToken === undefined ? "—" : `${formatAmount(c.valuePerToken, decimals, 2)} ${symbol}`}
           </span>
           <span className={`block text-xs ${age !== undefined && age > c.maxAge ? "text-warning" : "text-ink-faint"}`}>
-            {age === undefined ? "…" : `price ${formatDuration(age)} old`}
+            {age === undefined ? "…" : t("priceAge", { age: formatDuration(age) })}
           </span>
         </span>
         <span className="hidden w-56 text-right sm:block">
           <span className="tabular block text-sm text-ink">
-            {formatAmount(deposited, c.decimals, 4)} deposited
+            {t("deposited", { amount: formatAmount(deposited, c.decimals, 4) })}
           </span>
           <span className="tabular block text-xs text-ink-faint">
-            {value === undefined ? "" : `${formatAmount(value, decimals, 2)} ${symbol} · `}
-            {formatAmount(c.wallet ?? 0n, c.decimals, 4)} in wallet
+            {value === undefined
+              ? t("inWallet", { amount: formatAmount(c.wallet ?? 0n, c.decimals, 4) })
+              : t("valueInWallet", {
+                  value: formatAmount(value, decimals, 2),
+                  symbol,
+                  amount: formatAmount(c.wallet ?? 0n, c.decimals, 4),
+                })}
           </span>
         </span>
       </button>
@@ -237,6 +243,9 @@ function CollateralRow({
 }
 
 function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral; blocked: boolean }) {
+  const t = useTranslations("stocks");
+  const actions = useTranslations("actions");
+  const amounts = useTranslations("amount");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -276,17 +285,19 @@ function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral;
       <div className="flex items-center gap-3">
         <AssetLogo symbol={c.symbol} size="lg" />
         <div>
-          <h2 className="text-sm font-medium text-ink">{c.symbol} collateral</h2>
+          <h2 className="text-sm font-medium text-ink">{t("collateralTitle", { symbol: c.symbol })}</h2>
           <p className="text-xs text-ink-muted">
-            Liquidated past {formatPercent(c.liquidationThreshold, 0)} of its value, at a{" "}
-            {formatPercent(c.liquidationBonus, 0)} discount to the liquidator.
+            {t("collateralTerms", {
+              threshold: formatPercent(c.liquidationThreshold, 0),
+              bonus: formatPercent(c.liquidationBonus, 0),
+            })}
           </p>
         </div>
       </div>
       <div className="mt-4">
         <SegmentedControl
-          label="Deposit or withdraw stock"
-          options={[{ value: "deposit", label: "Deposit" }, { value: "withdraw", label: "Withdraw" }] as const}
+          label={t("collateralModeLabel")}
+          options={[{ value: "deposit", label: t("deposit") }, { value: "withdraw", label: t("withdraw") }] as const}
           value={mode}
           onChange={(m) => {
             setMode(m);
@@ -297,25 +308,31 @@ function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral;
       </div>
       <div className="mt-4 flex flex-col gap-4">
         <AmountField
-          label={mode === "deposit" ? "Amount to deposit" : "Amount to withdraw"}
+          label={mode === "deposit" ? t("amountToDeposit") : t("amountToWithdraw")}
           value={amount}
           onChange={setAmount}
           max={max}
           decimals={c.decimals}
           symbol={c.symbol}
-          maxLabel={mode === "deposit" ? "Wallet" : loan.debt ? "Free" : "Deposited"}
+          maxLabel={mode === "deposit" ? t("walletMax") : loan.debt ? t("freeMax") : t("depositedMax")}
           disabled={busy}
         />
         <Button onClick={submit} disabled={disabled}>
-          {busy ? "Working…" : needsApproval ? `Approve and deposit` : mode === "deposit" ? "Deposit" : "Withdraw"}
+          {busy
+            ? actions("working")
+            : needsApproval
+              ? t("approveAndDeposit")
+              : mode === "deposit"
+                ? t("deposit")
+                : t("withdraw")}
         </Button>
         {overMax && (
           <p className="text-xs text-negative">
-            {mode === "deposit" ? "More than your wallet holds." : "Your loan needs this much to stay within its limit."}
+            {mode === "deposit" ? amounts("overWallet") : t("loanNeedsIt")}
           </p>
         )}
         {mode === "withdraw" && blocked && (
-          <p className="text-xs text-warning">Paused while a price is stale, because you have a loan.</p>
+          <p className="text-xs text-warning">{t("withdrawPaused")}</p>
         )}
         <TxStatus tx={tx} />
       </div>
@@ -336,6 +353,10 @@ function LoanPanel({
   address: `0x${string}`;
   blocked: boolean;
 }) {
+  const t = useTranslations("stocks");
+  const vault = useTranslations("vault");
+  const actions = useTranslations("actions");
+  const amounts = useTranslations("amount");
   const [mode, setMode] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -389,15 +410,16 @@ function LoanPanel({
 
   return (
     <Card>
-      <h2 className="text-sm font-medium text-ink">Your loan</h2>
+      <h2 className="text-sm font-medium text-ink">{t("yourLoan")}</h2>
       <p className="text-xs text-ink-muted">
-        {loan.borrowRate === undefined ? "" : `${formatApr(loan.borrowRate)} a year, `}
-        plus a one-off {formatPercent(fee, 1)} fee on each borrow.
+        {loan.borrowRate === undefined
+          ? t("loanTerms", { fee: formatPercent(fee, 1) })
+          : t("loanTermsRate", { rate: formatApr(loan.borrowRate), fee: formatPercent(fee, 1) })}
       </p>
       <div className="mt-4">
         <SegmentedControl
-          label="Borrow or repay"
-          options={[{ value: "borrow", label: "Borrow" }, { value: "repay", label: "Repay" }] as const}
+          label={t("loanModeLabel")}
+          options={[{ value: "borrow", label: t("borrow") }, { value: "repay", label: t("repay") }] as const}
           value={mode}
           onChange={(m) => {
             setMode(m);
@@ -408,53 +430,59 @@ function LoanPanel({
       </div>
       <div className="mt-4 flex flex-col gap-4">
         <AmountField
-          label={mode === "borrow" ? "Amount to receive" : "Amount to repay"}
+          label={mode === "borrow" ? t("amountToReceive") : t("amountToRepay")}
           value={amount}
           onChange={setAmount}
           max={max}
           decimals={decimals}
           symbol={loan.stableSymbol}
-          maxLabel={mode === "borrow" ? "Capacity" : "Owed"}
+          maxLabel={mode === "borrow" ? t("capacityMax") : t("owedMax")}
           disabled={busy}
         />
         <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-raised/40 p-3 text-xs">
           {mode === "borrow" && (
             <div className="flex justify-between gap-3">
-              <span className="text-ink-muted">Fee, added to your loan</span>
+              <span className="text-ink-muted">{t("feeAdded")}</span>
               <span className="tabular text-ink">
                 {formatAmount(feeDue, decimals, 2)} {loan.stableSymbol}
               </span>
             </div>
           )}
           <div className="flex justify-between gap-3">
-            <span className="text-ink-muted">Loan after</span>
+            <span className="text-ink-muted">{t("loanAfter")}</span>
             <span className="tabular text-ink">
               {formatAmount(debtAfter > 0n ? debtAfter : 0n, decimals, 2)} {loan.stableSymbol}
             </span>
           </div>
           <div className="flex justify-between gap-3">
-            <span className="text-ink-muted">Health factor after</span>
+            <span className="text-ink-muted">{vault("healthAfter")}</span>
             <span className={`tabular ${preview === null ? "text-ink-muted" : toneOf(preview)}`}>
-              {preview === null ? "no loan" : (formatHealthFactor(preview) ?? "—")}
+              {preview === null ? t("noLoan") : (formatHealthFactor(preview) ?? "—")}
             </span>
           </div>
         </div>
         <Button onClick={submit} disabled={disabled}>
-          {busy ? "Working…" : needsApproval ? "Approve and repay" : mode === "borrow" ? "Borrow" : "Repay"}
+          {busy
+            ? actions("working")
+            : needsApproval
+              ? t("approveAndRepay")
+              : mode === "borrow"
+                ? t("borrow")
+                : t("repay")}
         </Button>
         {mode === "borrow" && blocked && (
-          <p className="text-xs text-warning">Paused until the stale price updates.</p>
+          <p className="text-xs text-warning">{t("borrowPaused")}</p>
         )}
         {overMax && (
           <p className="text-xs text-negative">
             {mode === "borrow"
               ? borrowMax > liquidity
-                ? "More than the pool has available to lend."
-                : "Above your borrow limit, once the fee is added."
-              : "More than you owe."}
+                ? t("overPool")
+                : t("overLimit")
+              : t("overDebt")}
           </p>
         )}
-        {overWallet && <p className="text-xs text-negative">More than your wallet holds.</p>}
+        {overWallet && <p className="text-xs text-negative">{amounts("overWallet")}</p>}
         <TxStatus tx={tx} />
       </div>
     </Card>
@@ -462,6 +490,9 @@ function LoanPanel({
 }
 
 function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; address: `0x${string}` }) {
+  const t = useTranslations("stocks");
+  const actions = useTranslations("actions");
+  const amounts = useTranslations("amount");
   const [mode, setMode] = useState<"supply" | "withdraw">("supply");
   const [amount, setAmount] = useState("");
   const tx = useTransaction();
@@ -503,19 +534,19 @@ function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; 
       <div className="flex items-center gap-3">
         <AssetLogo symbol={loan.stableSymbol} size="lg" />
         <div>
-          <h2 className="text-sm font-medium text-ink">Lend to stock borrowers</h2>
+          <h2 className="text-sm font-medium text-ink">{t("lendTitle")}</h2>
           <p className="text-xs text-ink-muted">
-            {loan.supplyRate === undefined ? "" : `Earning ${formatApr(loan.supplyRate)} a year now. `}
-            If a loan goes bad, its stock is sold and the proceeds come back here; any shortfall is
-            paid from the platform&rsquo;s reserves first, then by lenders.
+            {loan.supplyRate === undefined
+              ? t("lendTerms")
+              : t("lendTermsRate", { rate: formatApr(loan.supplyRate) })}
           </p>
         </div>
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
           <SegmentedControl
-            label="Lend or withdraw"
-            options={[{ value: "supply", label: "Lend" }, { value: "withdraw", label: "Withdraw" }] as const}
+            label={t("lendModeLabel")}
+            options={[{ value: "supply", label: t("lend") }, { value: "withdraw", label: t("withdraw") }] as const}
             value={mode}
             onChange={(m) => {
               setMode(m);
@@ -524,27 +555,33 @@ function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; 
             }}
           />
           <AmountField
-            label={mode === "supply" ? "Amount to lend" : "Amount to withdraw"}
+            label={mode === "supply" ? t("amountToLend") : t("amountToWithdraw")}
             value={amount}
             onChange={setAmount}
             max={max}
             decimals={decimals}
             symbol={loan.stableSymbol}
-            maxLabel={mode === "supply" ? "Wallet" : "Available"}
+            maxLabel={mode === "supply" ? t("walletMax") : t("availableMax")}
             disabled={busy}
           />
           <Button onClick={submit} disabled={disabled}>
-            {busy ? "Working…" : needsApproval ? "Approve and lend" : mode === "supply" ? "Lend" : "Withdraw"}
+            {busy
+              ? actions("working")
+              : needsApproval
+                ? t("approveAndLend")
+                : mode === "supply"
+                  ? t("lend")
+                  : t("withdraw")}
           </Button>
           {overMax && (
             <p className="text-xs text-negative">
-              {mode === "supply" ? "More than your wallet holds." : "More than is free to withdraw right now."}
+              {mode === "supply" ? amounts("overWallet") : t("overFree")}
             </p>
           )}
           <TxStatus tx={tx} />
         </div>
         <div className="flex flex-col gap-3">
-          <Stat label="You have lent">
+          <Stat label={t("youHaveLent")}>
             <Figure value={formatAmount(supplied, decimals)} unit={loan.stableSymbol} size="stat" />
           </Stat>
           <Faucet

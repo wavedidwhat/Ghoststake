@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
@@ -43,20 +44,20 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * is selling the upside of a position without its terms — see `lib/lend.ts`.
  */
 export default function LendPage() {
+  const t = useTranslations("lend");
   const pool = useLendPosition();
 
   return (
-    <Page title="Lend" subtitle="Supply the pool that borrowers draw from, and earn what they pay">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!poolConfigured ? (
-        <NotConfigured what="No lending pool is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : pool.isError ? (
         <LoadFailed
-          title="Could not read the pool"
+          title={t("unreadable")}
           onRetry={pool.refetch}
           className="mx-auto mt-16 max-w-md text-center"
         >
-          The RPC call failed. Any balance you have supplied is unchanged — this screen just cannot
-          see it right now.
+          {t("unreadableDetail")}
         </LoadFailed>
       ) : pool.decimals === undefined ? (
         <Loading />
@@ -76,6 +77,7 @@ function LendScreen({
   pool: ReturnType<typeof useLendPosition>;
   decimals: number;
 }) {
+  const t = useTranslations("lend");
   const wallet = useWallet();
   const { symbol } = pool;
 
@@ -95,7 +97,7 @@ function LendScreen({
         <PoolStrip pool={pool} decimals={decimals} symbol={symbol} />
       </div>
 
-      <Stat label="Your supply" hint="principal + interest">
+      <Stat label={t("yourSupply")} hint={t("yourSupplyHint")}>
         <Figure
           value={pool.balance === undefined ? "—" : formatAmount(balance, decimals)}
           unit={symbol}
@@ -104,7 +106,7 @@ function LendScreen({
         />
       </Stat>
 
-      <Stat label="Share of the pool" hint="of everything supplied">
+      <Stat label={t("share")} hint={t("shareHint")}>
         <Figure
           value={pool.balance === undefined ? "—" : formatPercent(share)}
           unit=""
@@ -113,7 +115,7 @@ function LendScreen({
         />
       </Stat>
 
-      <Stat label="Withdrawable now" hint="capped by cash on hand">
+      <Stat label={t("withdrawable")} hint={t("withdrawableHint")}>
         <Figure
           value={
             pool.balance === undefined || pool.availableLiquidity === undefined
@@ -137,7 +139,7 @@ function LendScreen({
               key={w.code}
               className="rounded-sm border border-border bg-raised/40 px-4 py-3 text-xs leading-relaxed text-ink-muted"
             >
-              {w.text}
+              {t(`warnings.${w.code}`)}
             </p>
           ))}
         </div>
@@ -146,10 +148,8 @@ function LendScreen({
       {!wallet.isConnected ? (
         <div className="lg:col-span-3">
           <Card className="text-center">
-            <h2 className="text-base font-medium text-ink">Connect a wallet to supply</h2>
-            <p className="mt-2 text-sm text-ink-muted">
-              The pool figures above are the same for everyone. A supply balance is per address.
-            </p>
+            <h2 className="text-base font-medium text-ink">{t("connectToSupply")}</h2>
+            <p className="mt-2 text-sm text-ink-muted">{t("connectToSupplyDetail")}</p>
           </Card>
         </div>
       ) : (
@@ -185,6 +185,7 @@ function PoolStrip({
   decimals: number;
   symbol: string;
 }) {
+  const t = useTranslations("lend.pool");
   const utilization = pool.utilization;
   const kink = pool.kink;
   const strained = utilization !== undefined && kink !== undefined && utilization > kink;
@@ -192,20 +193,21 @@ function PoolStrip({
   return (
     <section className="rounded-card border border-border bg-surface p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-ink">The lending pool</h2>
+        <h2 className="text-sm font-medium text-ink">{t("heading")}</h2>
         {pool.borrowRatePerSecond !== undefined && (
           <span className="text-xs text-ink-faint">
-            borrowers pay{" "}
-            <span className="tabular text-ink">{formatApr(pool.borrowRatePerSecond)}</span>, and
-            that is where the supply rate comes from
+            {t.rich("borrowersPay", {
+              rate: formatApr(pool.borrowRatePerSecond),
+              figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+            })}
           </span>
         )}
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Line
-          label="Supply rate"
-          hint="simple, annualised"
+          label={t("supplyRate")}
+          hint={t("simpleAnnualised")}
           value={
             pool.supplyRatePerSecond === undefined
               ? undefined
@@ -214,14 +216,14 @@ function PoolStrip({
           tone="positive"
         />
         <Line
-          label="Utilization"
-          hint={kink === undefined ? undefined : `target ${formatPercent(kink, 0)}`}
+          label={t("utilization")}
+          hint={kink === undefined ? undefined : t("target", { kink: formatPercent(kink, 0) })}
           value={utilization === undefined ? undefined : formatPercent(utilization)}
           tone={strained ? "warning" : "default"}
         />
         <Line
-          label="Available to withdraw"
-          hint="cash in the pool"
+          label={t("available")}
+          hint={t("availableHint")}
           value={
             pool.availableLiquidity === undefined
               ? undefined
@@ -229,8 +231,8 @@ function PoolStrip({
           }
         />
         <Line
-          label="Supplied / borrowed"
-          hint="all lenders"
+          label={t("suppliedBorrowed")}
+          hint={t("suppliedBorrowedHint")}
           value={
             pool.totalSupplied === undefined || pool.totalBorrowed === undefined
               ? undefined
@@ -240,11 +242,7 @@ function PoolStrip({
       </div>
 
       {/* The sentence the whole page exists to make sayable. */}
-      <p className="mt-5 text-xs leading-relaxed text-ink-muted">
-        Utilization is the fraction of the pool that is out on loan. It is what you earn — idle
-        liquidity pays nobody — and it is what stands between you and the exit, because money
-        that is lent out is not money you can withdraw. The two readings are the whole decision.
-      </p>
+      <p className="mt-5 text-xs leading-relaxed text-ink-muted">{t("utilizationNote")}</p>
     </section>
   );
 }
@@ -258,6 +256,9 @@ function SupplyWithdraw({
   decimals: number;
   address: `0x${string}`;
 }) {
+  const t = useTranslations("lend");
+  const actions = useTranslations("actions");
+  const amounts = useTranslations("amount");
   const { symbol } = pool;
   const [mode, setMode] = useState<"supply" | "withdraw">("supply");
   const [amount, setAmount] = useState("");
@@ -342,10 +343,10 @@ function SupplyWithdraw({
   return (
     <Card>
       <SegmentedControl
-        label="Supply or withdraw"
+        label={t("modeLabel")}
         options={[
-          { value: "supply", label: "Supply" },
-          { value: "withdraw", label: "Withdraw" },
+          { value: "supply", label: t("supply") },
+          { value: "withdraw", label: t("withdraw") },
         ]}
         value={mode}
         onChange={(m) => {
@@ -358,13 +359,13 @@ function SupplyWithdraw({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
           <AmountField
-            label={mode === "supply" ? "Amount to supply" : "Amount to withdraw"}
+            label={mode === "supply" ? t("amountToSupply") : t("amountToWithdraw")}
             value={amount}
             onChange={setAmount}
             max={max}
             decimals={decimals}
             symbol={symbol}
-            maxLabel={mode === "supply" ? "Wallet" : "Withdrawable"}
+            maxLabel={mode === "supply" ? t("walletMax") : t("withdrawableMax")}
             disabled={busy}
           />
 
@@ -373,23 +374,19 @@ function SupplyWithdraw({
             disabled={disabled}
           >
             {busy
-              ? "Working…"
+              ? actions("working")
               : needsApproval
-                ? "Approve and supply"
+                ? t("approveAndSupply")
                 : mode === "supply"
-                  ? "Supply"
-                  : "Withdraw"}
+                  ? t("supply")
+                  : t("withdraw")}
           </Button>
 
-          {overWallet && <p className="text-xs text-negative">More than your wallet holds.</p>}
-          {problem === "over-balance" && (
-            <p className="text-xs text-negative">More than you have supplied.</p>
-          )}
+          {overWallet && <p className="text-xs text-negative">{amounts("overWallet")}</p>}
+          {problem === "over-balance" && <p className="text-xs text-negative">{t("overBalance")}</p>}
           {problem === "over-liquidity" && (
             <p className="text-xs text-warning">
-              More than the pool holds in cash. {formatAmount(available, decimals, 2)} {symbol} is
-              available right now — the rest of your balance is out as someone else&rsquo;s loan
-              and comes back as borrowers repay.
+              {t("overLiquidity", { amount: formatAmount(available, decimals, 2), symbol })}
             </p>
           )}
           <TxStatus tx={tx} />
@@ -397,7 +394,7 @@ function SupplyWithdraw({
 
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-ink-muted">Utilization after</span>
+            <span className="text-xs text-ink-muted">{t("utilizationAfter")}</span>
             <span className="flex items-baseline gap-2">
               {pool.utilization !== undefined && (
                 <span className="tabular text-xs text-ink-faint">
@@ -410,9 +407,7 @@ function SupplyWithdraw({
             </span>
           </div>
           <p className="text-xs leading-relaxed text-ink-muted">
-            {mode === "supply"
-              ? "Supplying lowers utilization, and with it the rate you are about to earn — the curve prices scarcity, so adding liquidity makes it less scarce. The figure above is the rate's input after your deposit lands."
-              : "Withdrawing raises utilization for everyone left in the pool, which raises the borrow rate and the supply rate together. Past the target the curve turns steep on purpose."}
+            {mode === "supply" ? t("supplyNote") : t("withdrawNote")}
           </p>
         </div>
       </div>

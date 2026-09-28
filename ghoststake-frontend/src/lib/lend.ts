@@ -68,9 +68,11 @@ export function utilizationAfter(borrowed: bigint, available: bigint, delta: big
 }
 
 export type LendWarning = {
-  /** Stable key, so a list of these can be rendered and tested by identity. */
+  /**
+   * Stable key, so a list of these can be rendered and tested by identity.
+   * Also where its words are: `lend.warnings.<code>` in the catalog (GHO-119).
+   */
   code: "exit-blocked" | "exit-limited" | "past-kink";
-  text: string;
 };
 
 /**
@@ -95,31 +97,16 @@ export function lendWarnings({
   const warnings: LendWarning[] = [];
 
   if (balance > 0n && available === 0n) {
-    warnings.push({
-      code: "exit-blocked",
-      text:
-        "Every token in the pool is out on loan, so nothing can be withdrawn right now. " +
-        "Your balance keeps earning, and liquidity returns as borrowers repay.",
-    });
+    warnings.push({ code: "exit-blocked" });
   } else if (balance > available) {
-    warnings.push({
-      code: "exit-limited",
-      text:
-        "More of your balance is out on loan than the pool holds in cash, so only part of it " +
-        "can be withdrawn right now. The rest returns as borrowers repay.",
-    });
+    warnings.push({ code: "exit-limited" });
   }
 
   // The kink is where the curve turns steep, by design: past it the rate has
   // to both deter borrowing and pull supply in. Saying so turns a high APR
   // from bait into a description of a pool under strain.
   if (utilization > kink) {
-    warnings.push({
-      code: "past-kink",
-      text:
-        "The pool is lent out past its target, which is why the rate is high. The same fact " +
-        "makes exiting harder: the rate is steep here to pull supply in and slow borrowing down.",
-    });
+    warnings.push({ code: "past-kink" });
   }
 
   return warnings;

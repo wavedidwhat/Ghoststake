@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Phase } from "@/lib/rounds";
 import { formatAmount, formatPercent } from "@/lib/format";
 import { useMarkets } from "@/hooks/useMarkets";
@@ -25,6 +26,7 @@ import { useWallet } from "@/hooks/useWallet";
  * read or absent (GHO-86).
  */
 export function MoneyStrip() {
+  const t = useTranslations("moneyStrip");
   const wallet = useWallet();
   const position = useVaultPosition();
   const { markets } = useMarkets();
@@ -33,15 +35,12 @@ export function MoneyStrip() {
   if (!wallet.isConnected) {
     return (
       <section className="rounded-card border border-border bg-surface p-4">
-        <p className="text-sm leading-relaxed text-ink-muted">
-          Stake once and it keeps earning — including while it is riding on a question. That is the
-          difference here: you are not choosing between a yield and a bet.
-        </p>
+        <p className="text-sm leading-relaxed text-ink-muted">{t("pitch")}</p>
         <Link
           href="/how-it-works"
           className="mt-2 inline-block text-xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
         >
-          How that works
+          {t("howItWorks")}
         </Link>
       </section>
     );
@@ -74,7 +73,7 @@ export function MoneyStrip() {
         <span className="tabular text-3xl text-ink">
           {decimals === undefined || staked === undefined ? "…" : formatAmount(staked, decimals, 2)}
         </span>
-        <span className="text-xs text-ink-muted">{symbol} staked</span>
+        <span className="text-xs text-ink-muted">{t("staked", { symbol })}</span>
       </div>
 
       {/* The committed head of one pot, not two bars: the money is not split,
@@ -84,34 +83,27 @@ export function MoneyStrip() {
       </div>
 
       <p className="mt-2.5 text-sm leading-relaxed text-ink-muted">
-        {decimals === undefined ? (
-          "Reading your position…"
-        ) : atRisk === 0n ? (
-          <>Nothing riding on a question yet. It is earning either way.</>
-        ) : (
-          <>
-            <span className="tabular text-ink">{formatAmount(atRisk, decimals, 2)}</span> of your
-            stake is riding on <span className="tabular text-ink">{open}</span>{" "}
-            {open === 1 ? "question" : "questions"}
-            {position.yieldRatePerSecond === undefined ? (
-              ". All of it is still earning."
-            ) : (
-              <>
-                . All of it is still earning{" "}
-                <span className="tabular text-ink">{formatPercent(annualised(position.yieldRatePerSecond))}</span>.
-              </>
-            )}
-          </>
-        )}
+        {decimals === undefined
+          ? t("reading")
+          : atRisk === 0n
+            ? t("nothingRiding")
+            : position.yieldRatePerSecond === undefined
+              ? t.rich("riding", { amount: formatAmount(atRisk, decimals, 2), count: open, figure: (chunks) => <span className="tabular text-ink">{chunks}</span> })
+              : t.rich("ridingEarning", {
+                  amount: formatAmount(atRisk, decimals, 2),
+                  count: open,
+                  rate: formatPercent(annualised(position.yieldRatePerSecond)),
+                  figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+                })}
       </p>
 
       {position.healthFactor !== undefined && position.lien !== undefined && position.lien > 0n && (
         <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-          <span className="text-xs text-ink-muted">Safety</span>
+          <span className="text-xs text-ink-muted">{t("safety")}</span>
           <span className={`tabular text-sm ${position.isLiquidatable ? "text-negative" : "text-up"}`}>
             {formatAmount(position.healthFactor, 18, 2)}
           </span>
-          <span className="text-xs text-ink-faint">· liquidated below 1.00</span>
+          <span className="text-xs text-ink-faint">{t("liquidatedBelow")}</span>
         </div>
       )}
     </section>

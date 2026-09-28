@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import { claimKey, totalClaimable, type Claimable } from "./claims";
 import { formatAmount, formatHealthFactor, healthBand } from "./format";
 
@@ -16,14 +17,18 @@ import { formatAmount, formatHealthFactor, healthBand } from "./format";
  * rounds, so a newly settled round is news even with others already
  * waiting. Safety is keyed by band, so dropping from caution to danger is
  * news, while drifting inside a band is not.
+ *
+ * The words are messages, not English (GHO-119): the same alert is shown in
+ * the bell, as a toast and as a browser notification, and each of those
+ * translates it where it renders.
  */
 export type Alert = {
   id: string;
   tone: "positive" | "warning" | "negative";
-  title: string;
-  body: string;
+  title: Message;
+  body: Message;
   href: string;
-  action: string;
+  action: Message;
 };
 
 export function alertsFor(input: {
@@ -43,27 +48,23 @@ export function alertsFor(input: {
       alerts.push({
         id: `health:${band}`,
         tone: band === "danger" ? "negative" : "warning",
-        title: `Safety ${shown}`,
-        body:
-          band === "danger"
-            ? "Close to 1.00, where anyone may liquidate you. Add stake or repay now."
-            : "Below 1.5. Interest alone moves it down, so add stake or repay while it is cheap to.",
+        title: message("alerts.health.title", { health: shown }),
+        body: band === "danger" ? message("alerts.health.danger") : message("alerts.health.caution"),
         href: "/borrow",
-        action: "Add stake or repay",
+        action: message("alerts.health.action"),
       });
     }
   }
 
   if (claims.length > 0 && decimals !== undefined) {
     const keys = claims.map(claimKey).sort();
-    const rounds = claims.length === 1 ? "a round" : `${claims.length} rounds`;
     alerts.push({
       id: `claim:${keys.join(",")}`,
       tone: "positive",
-      title: `${formatAmount(totalClaimable(claims), decimals, 2)} ${symbol} to claim`,
-      body: `You won ${rounds}. It stays yours until you collect it.`,
+      title: message("alerts.claim.title", { amount: formatAmount(totalClaimable(claims), decimals, 2), symbol }),
+      body: message("alerts.claim.body", { count: claims.length }),
       href: "/portfolio",
-      action: "Claim",
+      action: message("alerts.claim.action"),
     });
   }
 

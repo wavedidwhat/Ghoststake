@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import { maxUint256 } from "viem";
 import { alertsFor, unseen } from "../alerts";
 
@@ -18,7 +19,8 @@ describe("alertsFor (GHO-104)", () => {
   it("warns below 1.5 and calls it danger below 1.2, the bands the safety card uses", () => {
     const caution = alertsFor({ ...base, healthFactor: hf(1.38) });
     expect(caution).toHaveLength(1);
-    expect(caution[0]).toMatchObject({ id: "health:caution", tone: "warning", title: "Safety 1.38" });
+    expect(caution[0]).toMatchObject({ id: "health:caution", tone: "warning" });
+    expect(translate(caution[0].title)).toBe("Safety 1.38");
 
     const danger = alertsFor({ ...base, healthFactor: hf(1.12) });
     expect(danger[0]).toMatchObject({ id: "health:danger", tone: "negative", href: "/borrow" });
@@ -32,8 +34,8 @@ describe("alertsFor (GHO-104)", () => {
         { market: M, roundId: 4n, amount: 1_600_000n },
       ],
     });
-    expect(a.title).toBe("20.00 mUSDC to claim");
-    expect(a.body).toContain("2 rounds");
+    expect(translate(a.title)).toBe("20.00 mUSDC to claim");
+    expect(translate(a.body)).toContain("2 rounds");
     expect(a.href).toBe("/portfolio");
   });
 

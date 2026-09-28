@@ -6,6 +6,8 @@
  * nobody explained, which is what happens when the two drift apart.
  */
 
+import { message, type Message } from "@/i18n/message";
+
 /** Parses the field back to a bigint. Returns null for anything unusable. */
 export function parseAmount(input: string, decimals: number): bigint | null {
   const trimmed = input.trim();
@@ -28,14 +30,14 @@ export function parseAmount(input: string, decimals: number): bigint | null {
  * if it can — or if it is simply not finished yet ("" or "."), which is a
  * field being typed into, not a mistake.
  */
-export function amountProblem(input: string, decimals: number): string | null {
+export function amountProblem(input: string, decimals: number): Message | null {
   const trimmed = input.trim();
   if (trimmed === "" || trimmed === ".") return null;
   const fraction = trimmed.split(".")[1] ?? "";
   if (fraction.length > decimals) {
     return decimals === 0
-      ? "This token has no decimal places."
-      : `This token has ${decimals} decimal places; that amount has ${fraction.length}.`;
+      ? message("amount.noDecimals")
+      : message("amount.tooPrecise", { decimals, given: fraction.length });
   }
-  return parseAmount(trimmed, decimals) === null ? "Not an amount." : null;
+  return parseAmount(trimmed, decimals) === null ? message("amount.notAnAmount") : null;
 }

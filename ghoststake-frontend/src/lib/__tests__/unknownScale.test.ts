@@ -1,5 +1,6 @@
 import { ContractFunctionExecutionError, ContractFunctionRevertedError, HttpRequestError } from "viem";
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import { amountProblem, parseAmount } from "../amount";
 import { formatAmount } from "../format";
 import { isRevert } from "../probe";
@@ -24,10 +25,14 @@ describe("a figure never borrows a scale", () => {
 
 describe("an over-precise amount says so", () => {
   it("names the token's precision and the input's", () => {
-    expect(amountProblem("1.1234567", 6)).toBe(
-      "This token has 6 decimal places; that amount has 7.",
-    );
-    expect(amountProblem("1.5", 0)).toBe("This token has no decimal places.");
+    const problem = (input: string, decimals: number) => {
+      const found = amountProblem(input, decimals);
+      return found && translate(found);
+    };
+    expect(problem("1.1234567", 6)).toBe("This token has 6 decimal places; that amount has 7.");
+    expect(problem("1.5", 0)).toBe("This token has no decimal places.");
+    // A plural now, where the template read "1 decimal places" (GHO-119).
+    expect(problem("1.25", 1)).toBe("This token has 1 decimal place; that amount has 2.");
   });
 
   it("is quiet for a valid amount and for one still being typed", () => {
