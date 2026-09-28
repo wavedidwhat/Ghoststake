@@ -74,7 +74,7 @@ test.describe("stock loans", () => {
     await expect(connected(page)).toBeVisible({ timeout: 20_000 });
 
     await expect(page.getByText(/TSLA has not traded for over 24h/)).toBeVisible();
-    await expect(page.getByText(/Normal when the stock market is closed/)).toBeVisible();
+    await expect(page.getByText(/normal when the stock market is closed/)).toBeVisible();
     await page.getByLabel("Amount to receive").fill("100");
     await expect(action(page, /^Borrow$/)).toBeDisabled();
     // With no loan, taking stock back needs no price at all.
@@ -89,6 +89,6 @@ test.describe("stock loans", () => {
     await installMockWallet(page);
     await page.goto("/stocks");
     await expect(connected(page)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/could not be read, so the figures above leave it out/)).toBeVisible();
+    await expect(page.getByText(/couldn’t read the price of some stock you hold/)).toBeVisible();
   });
 });

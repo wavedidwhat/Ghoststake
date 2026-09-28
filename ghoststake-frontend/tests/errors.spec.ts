@@ -15,15 +15,15 @@ test("a component that throws renders the error screen, with a way out", async (
 
   await page.goto("/e2e/throw");
 
-  await expect(page.getByRole("heading", { name: "This page could not be shown" })).toBeVisible();
-  await expect(page.getByText(/Nothing about your money has changed/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This page couldn’t load" })).toBeVisible();
+  await expect(page.getByText(/Your money hasn’t moved/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 
   // The way out works, and lands on the app rather than another error.
   await page.getByRole("link", { name: "Go to markets" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("h1")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "This page could not be shown" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "This page couldn’t load" })).toHaveCount(0);
 });
 
 test("a malformed market URL is a 404 with a way home", async ({ page }) => {

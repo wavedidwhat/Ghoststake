@@ -95,7 +95,7 @@ test.describe("a market that cannot be fully read", () => {
     // simply was not there.
     chain.revert(E2E.market, "rake");
     await page.goto(MARKET_URL);
-    await expect(page.getByText(/terms could not be read/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/couldn’t read this market’s terms/i)).toBeVisible({ timeout: 20_000 });
   });
 
   test("a rate-limited faucet probe does not hide the faucet for good", async ({ page, chain }) => {

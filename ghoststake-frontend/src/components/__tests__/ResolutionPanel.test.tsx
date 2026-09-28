@@ -85,6 +85,6 @@ describe("ResolutionPanel", () => {
       <ResolutionPanel question={{ state: "abandoned", abandonedAt: "2026-09-28T10:00:00Z" }} decimals={18} />,
     );
     expect(html).toMatch(/refunded/);
-    expect(html).toMatch(/nobody wins by\s*staying quiet/);
+    expect(html).toMatch(/Staying quiet wins you nothing/);
   });
 });
