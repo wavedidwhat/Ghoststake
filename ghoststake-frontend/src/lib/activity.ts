@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import { request } from "./api";
 import { activeChain } from "./wagmi";
 
@@ -92,29 +93,29 @@ export function fetchActivity(
  * and the pool's are entirely different actions, and the API separates them
  * precisely so this does not have to guess.
  */
-const LABELS: Record<ActivityType, string> = {
-  deposit: "Staked",
-  vault_withdraw: "Unstaked",
-  supply: "Supplied to pool",
-  pool_withdraw: "Withdrew from pool",
-  borrow: "Borrowed",
-  repay: "Repaid",
-  yield: "Yield settled",
-  lien_settled: "Lien settled on exit",
-  liquidation: "Liquidated",
-  share_transfer_in: "Shares received",
-  share_transfer_out: "Shares sent",
-  position: "Took a position",
-  claim: "Claimed",
-};
+const KNOWN: ReadonlySet<string> = new Set<ActivityType>([
+  "deposit",
+  "vault_withdraw",
+  "supply",
+  "pool_withdraw",
+  "borrow",
+  "repay",
+  "yield",
+  "lien_settled",
+  "liquidation",
+  "share_transfer_in",
+  "share_transfer_out",
+  "position",
+  "claim",
+]);
 
-export function activityLabel(event: ActivityEvent): string {
-  const label = LABELS[event.type as ActivityType];
-  if (label) return label;
+/** The label's words are `activity.types.<type>` in the catalog (GHO-120). */
+export function activityLabel(event: ActivityEvent): Message {
+  if (KNOWN.has(event.type)) return message(`activity.types.${event.type as ActivityType}`);
   // Anything the server sent that this build does not know about shows as
   // itself. A row reading "RoundVoided" is odd but honest; one reading
   // "Unknown" looks like the data is broken.
-  return event.eventName || event.type;
+  return message("activity.types.unknown", { name: event.eventName || event.type });
 }
 
 /**

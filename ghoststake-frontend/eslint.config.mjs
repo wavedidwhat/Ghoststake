@@ -41,58 +41,17 @@ const noInlineCopy = (level) => ({
   ],
 });
 
-/**
- * Files whose copy has moved to the catalog, where inline text is now an
- * error. Everything else warns until its screen is migrated; add the file
- * here in the PR that migrates it, and once every file is listed the
- * split goes and the rule is an error everywhere.
- */
-const MIGRATED = [
-  "src/app/not-found.tsx",
-  "src/app/error.tsx",
-  "src/app/global-error.tsx",
-  "src/components/ConnectButton.tsx",
-  "src/components/Misconfigured.tsx",
-  "src/components/MobileNav.tsx",
-  "src/components/NetworkGuard.tsx",
-  "src/components/Page.tsx",
-  "src/components/Sidebar.tsx",
-  "src/components/ui/ExplorerLink.tsx",
-  "src/components/ui/LoadFailed.tsx",
-  "src/components/ui/Notice.tsx",
-  "src/components/ui/Sheet.tsx",
-  "src/app/(app)/markets/[market]/MarketScreen.tsx",
-  "src/app/(app)/markets/[market]/[id]/RoundScreen.tsx",
-  "src/components/CategoryTabs.tsx",
-  "src/components/ClaimAllPanel.tsx",
-  "src/components/FeesPanel.tsx",
-  "src/components/MarketBlock.tsx",
-  "src/components/MarketsScreen.tsx",
-  "src/components/ResolutionPanel.tsx",
-  "src/components/RoundCard.tsx",
-  "src/components/Terms.tsx",
-  "src/app/(app)/borrow/page.tsx",
-  "src/app/(app)/lend/page.tsx",
-  "src/app/(app)/liquidate/page.tsx",
-  "src/app/(app)/portfolio/page.tsx",
-  "src/app/(app)/stake/page.tsx",
-  "src/app/(app)/stocks/page.tsx",
-  "src/components/AlertBell.tsx",
-  "src/components/AmountField.tsx",
-  "src/components/HealthFactor.tsx",
-  "src/components/MoneyStrip.tsx",
-  "src/components/PipelineSummary.tsx",
-];
-
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
     files: ["src/**/*.tsx"],
     ignores: ["src/**/__tests__/**", "src/app/e2e/**"],
-    rules: noInlineCopy("warn"),
+    // An error everywhere since GHO-120, when the last screen moved. It was a
+    // warning with an error list of migrated files while the move was under
+    // way, so a migrated screen could not slip back.
+    rules: noInlineCopy("error"),
   },
-  { files: MIGRATED, rules: noInlineCopy("error") },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import messages from "../../messages/en.json";
 
 /**
  * The card a shared link shows in a wallet browser, a group chat or a tweet
@@ -11,7 +12,12 @@ import { ImageResponse } from "next/og";
  * through Satori, which reads TTF/OTF/WOFF and not WOFF2. That's the one
  * reason a second Nippo file exists in `src/fonts`.
  */
-export const alt = "GhostStake — stake, borrow against it, and take a position";
+// Read from the catalog directly (GHO-120): an image route renders outside
+// the provider, and at build time, where there is no request to ask for a
+// locale. With one locale there is nothing to choose.
+const copy = messages.og;
+
+export const alt = copy.alt;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -38,20 +44,20 @@ export default async function Image() {
             <path d="M32 2 60 32H4z" fill="#2fd07a" />
             <path d="M32 62 4 32h56z" fill="#ff5470" />
           </svg>
-          <span style={{ fontSize: 44, letterSpacing: 1, color: "#e8394f" }}>GHOSTSTAKE</span>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <span style={{ fontSize: 76, lineHeight: 1.05 }}>Your stake keeps earning</span>
-          <span style={{ fontSize: 76, lineHeight: 1.05, color: "#2fd07a" }}>
-            while it backs your call
+          <span style={{ fontSize: 44, letterSpacing: 1, color: "#e8394f" }}>
+            {messages.app.title.toUpperCase()}
           </span>
         </div>
 
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <span style={{ fontSize: 76, lineHeight: 1.05 }}>{copy.headline}</span>
+          <span style={{ fontSize: 76, lineHeight: 1.05, color: "#2fd07a" }}>{copy.headlineAccent}</span>
+        </div>
+
         <div style={{ display: "flex", gap: 40, fontSize: 30, color: "#a0aaa5" }}>
-          <span>Stake earns</span>
-          <span>Borrow against it</span>
-          <span>Take a side — without unwinding</span>
+          <span>{copy.stepStake}</span>
+          <span>{copy.stepBorrow}</span>
+          <span>{copy.stepSide}</span>
         </div>
       </div>
     ),

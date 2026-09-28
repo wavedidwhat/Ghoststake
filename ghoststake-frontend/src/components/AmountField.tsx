@@ -163,7 +163,9 @@ export function TxStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {
           ? t("confirmed")
           : state.status === "cancelled"
             ? t("cancelled")
-            : state.message;
+            : state.code
+              ? t(`failed.${state.code}`)
+              : (state.detail ?? t("failed.notSent"));
 
   const tone =
     state.status === "confirmed"

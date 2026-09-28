@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { deployedContracts } from "@/lib/contracts";
 import { useMarkets } from "@/hooks/useMarkets";
 import { activeChain } from "@/lib/wagmi";
@@ -15,6 +16,7 @@ import { ExplorerLink } from "@/components/ui/ExplorerLink";
  * by someone who doesn't trust the page telling them.
  */
 export function ContractsList() {
+  const t = useTranslations("contracts");
   const configured = deployedContracts();
   const { markets } = useMarkets();
 
@@ -26,21 +28,18 @@ export function ContractsList() {
     <section aria-labelledby="contracts-heading" className="mt-8 flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <Eyebrow as="h2" id="contracts-heading">
-          Check it yourself
+          {t("heading")}
         </Eyebrow>
         <span className="h-px flex-1 bg-border" />
       </div>
-      <p className="text-sm leading-relaxed text-ink-muted">
-        Every contract this app uses on {activeChain.name}, and what it does. Each links to the
-        chain&rsquo;s explorer, where the code and every transaction are public.
-      </p>
+      <p className="text-sm leading-relaxed text-ink-muted">{t("intro", { chain: activeChain.name })}</p>
 
       <ul className="divide-y divide-border rounded-card border border-border bg-surface">
         {configured.map((c) => (
           <li key={c.address} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
             <div className="min-w-0">
-              <p className="text-sm text-ink">{c.name}</p>
-              <p className="text-xs leading-relaxed text-ink-muted">{c.role}</p>
+              <p className="text-sm text-ink">{t(`${c.id}.name`)}</p>
+              <p className="text-xs leading-relaxed text-ink-muted">{t(`${c.id}.role`)}</p>
             </div>
             <ExplorerLink address={c.address} className="shrink-0 text-xs text-ink-muted" />
           </li>
@@ -48,10 +47,9 @@ export function ContractsList() {
         {listed.map((m) => (
           <li key={m.key} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
             <div className="min-w-0">
-              <p className="text-sm text-ink">Market</p>
+              <p className="text-sm text-ink">{t("market.name")}</p>
               <p className="text-xs leading-relaxed text-ink-muted">
-                Listed in the registry{m.enabled ? "" : ", now delisted"}. Holds the pools for each
-                round and pays out when it settles.
+                {t("listed", { enabled: m.enabled ? "yes" : "no" })}
               </p>
             </div>
             <ExplorerLink address={m.address} className="shrink-0 text-xs text-ink-muted" />

@@ -2,6 +2,7 @@ import { createConfig, http } from "wagmi";
 import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
 import { SUPPORTED, activeChain } from "./chains";
 import { env } from "./env";
+import messages from "../../messages/en.json";
 
 export { activeChain };
 
@@ -46,7 +47,9 @@ const connectors = [
           projectId: env.walletConnectProjectId,
           metadata: {
             name: "GhostStake",
-            description: "Stake, borrow against it, and take a position.",
+            // From the catalog: shown in the wallet's connect prompt, and
+            // read at module scope, outside any provider (GHO-120).
+            description: messages.wallet.appDescription,
             // The wallet shows this and WalletConnect's Verify checks it
             // against the real origin, so it must be where the page is served.
             url: window.location.origin,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useSimulateContract } from "wagmi";
 import { TxStatus } from "./AmountField";
 import { useTransaction } from "@/hooks/useTransaction";
@@ -33,6 +34,7 @@ export function Faucet({
   address: `0x${string}`;
   onMinted: () => void;
 }) {
+  const t = useTranslations("faucet");
   const tx = useTransaction();
 
   // Probes the asset rather than assuming. A simulation, not a read: `mint`
@@ -67,15 +69,13 @@ export function Faucet({
     // button would offer a transaction that may not exist.
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-raised/40 p-4">
-        <p className="text-xs text-ink-muted">
-          Could not check whether test {symbol} can be minted here. The network did not answer.
-        </p>
+        <p className="text-xs text-ink-muted">{t("unchecked", { symbol })}</p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => void mintable.refetch()}
         >
-          Check again
+          {t("checkAgain")}
         </Button>
       </div>
     );
@@ -87,11 +87,8 @@ export function Faucet({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-raised/40 p-4">
       <div>
-        <p className="text-sm text-ink">Need test tokens?</p>
-        <p className="text-xs text-ink-muted">
-          {symbol} is a stand-in asset on this testnet. Anyone can mint it, and it is worth
-          nothing.
-        </p>
+        <p className="text-sm text-ink">{t("heading")}</p>
+        <p className="text-xs text-ink-muted">{t("body", { symbol })}</p>
       </div>
       <div className="flex items-center gap-3">
         <TxStatus tx={tx} />
@@ -109,7 +106,7 @@ export function Faucet({
             if (ok) onMinted();
           }}
         >
-          {busy ? "Minting…" : `Get ${formatAmount(amount, decimals, 0)} ${symbol}`}
+          {busy ? t("minting") : t("get", { amount: formatAmount(amount, decimals, 0), symbol })}
         </Button>
       </div>
     </div>

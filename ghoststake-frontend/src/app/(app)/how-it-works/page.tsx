@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Page } from "@/components/Page";
 import { Landing } from "@/components/Landing";
 import { ContractsList } from "@/components/ContractsList";
@@ -15,8 +16,9 @@ import { ContractsList } from "@/components/ContractsList";
  * out?" was exactly backwards.
  */
 export default function HowItWorksPage() {
+  const t = useTranslations("howItWorks");
   return (
-    <Page title="How it works" subtitle="Stake earns. Borrow against it. Take a view.">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       <Landing />
       {/* The contracts behind every claim above, linked (GHO-103). */}
       <ContractsList />

@@ -1,3 +1,4 @@
+import messages from "../../../messages/en.json";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // This file re-imports modules after `vi.resetModules()`, which reloads wagmi
@@ -37,7 +38,7 @@ describe("deployedContracts", () => {
     vi.stubEnv("NEXT_PUBLIC_VAULT_ADDRESS", VAULT);
     const { deployedContracts } = await import("../contracts");
 
-    expect(deployedContracts().map((c) => c.name)).toEqual(["Collateral vault"]);
+    expect(deployedContracts().map((c) => c.id)).toEqual(["vault"]);
   });
 
   it("says what each one does, in a sentence", async () => {
@@ -45,6 +46,6 @@ describe("deployedContracts", () => {
     vi.stubEnv("NEXT_PUBLIC_POOL_ADDRESS", POOL);
     const { deployedContracts } = await import("../contracts");
 
-    for (const c of deployedContracts()) expect(c.role).toMatch(/^[A-Z].*\.$/);
+    for (const c of deployedContracts()) expect(messages.contracts[c.id].role).toMatch(/^[A-Z].*\.$/);
   });
 });

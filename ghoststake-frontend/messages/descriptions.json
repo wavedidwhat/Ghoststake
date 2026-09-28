@@ -75,7 +75,8 @@
     "inThisBrowser": "Group heading in the wallet menu: wallets installed in this browser.",
     "otherWallets": "Group heading in the wallet menu: WalletConnect, when browser wallets are also listed.",
     "mobileWallet": "Group heading in the wallet menu: WalletConnect, when it is the only way to connect (usually on a phone).",
-    "disconnect": "Tooltip on the connected-address button; clicking it disconnects."
+    "disconnect": "Tooltip on the connected-address button; clicking it disconnects.",
+    "appDescription": "App description shown in the wallet's connect prompt (WalletConnect, Coinbase)."
   },
   "network": {
     "wrong": "Warning banner when the wallet is on another network and its name is unknown. <lead> is set bold. {expected} is a network name.",
@@ -426,7 +427,16 @@
     "view": "Link to a confirmed transaction.",
     "see": "Link to a failed transaction.",
     "stopWaitingWallet": "Escape shown when the wallet prompt goes quiet. It stops the app waiting; it cancels nothing.",
-    "stopWaitingChain": "Escape shown when a sent transaction takes unusually long. It stops the app waiting; it cancels nothing."
+    "stopWaitingChain": "Escape shown when a sent transaction takes unusually long. It stops the app waiting; it cancels nothing.",
+    "toast": {
+      "sent": "Toast title after the wallet sends a transaction.",
+      "confirmed": "Toast title once the transaction is mined."
+    },
+    "failed": {
+      "reverted": "Failure: mined, and reverted. The person paid gas for it.",
+      "noConnection": "Failure: no RPC client to wait on the receipt with.",
+      "notSent": "Failure when the wallet gave no reason. Otherwise the wallet's own error text is shown."
+    }
   },
   "health": {
     "label": "Card label. Collateral against debt; 1.00 is the liquidation line.",
@@ -729,5 +739,261 @@
     "approveAndLend": "Submit button when a token approval must be signed first.",
     "overFree": "Error when withdrawing more than the cash on hand.",
     "youHaveLent": "Stat label."
+  },
+  "faucet": {
+    "heading": "Heading of the testnet faucet strip.",
+    "body": "Explains the faucet. {symbol} is a token symbol.",
+    "get": "Faucet button. {amount} is a whole number; {symbol} a token symbol.",
+    "minting": "Faucet button while minting.",
+    "unchecked": "When the faucet check fails. {symbol} is a token symbol.",
+    "checkAgain": "Retries the faucet check."
+  },
+  "contracts": {
+    "heading": "Section heading: every contract the app uses, linked to the explorer.",
+    "intro": "Intro. {chain} is a network name.",
+    "vault": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "pool": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "registry": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "router": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "market": {
+      "name": "Contract name, also for markets listed in the registry.",
+      "role": "What the contract does. One sentence."
+    },
+    "demoMarket": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "stockVault": {
+      "name": "Contract name.",
+      "role": "What the contract does. One sentence."
+    },
+    "listed": "A market found in the registry. {enabled} is yes unless the market was delisted."
+  },
+  "howItWorks": {
+    "title": "Page title.",
+    "subtitle": "Page subtitle."
+  },
+  "landing": {
+    "headline": "Headline of the explainer.",
+    "lede": "Under the headline.",
+    "browseFirst": "Button to the market list.",
+    "readOnly": "Under the buttons.",
+    "stake": {
+      "title": "Step 1 title.",
+      "figureLabel": "Beside the yield rate figure.",
+      "body": "Step 1 text."
+    },
+    "borrow": {
+      "title": "Step 2 title.",
+      "figureLabel": "Beside the max LTV figure.",
+      "body": "Step 2 text."
+    },
+    "view": {
+      "title": "Step 3 title.",
+      "figure": "Step 3's figure: the kind of market. Lowercase.",
+      "figureLabel": "Beside 'parimutuel'.",
+      "body": "Step 3 text."
+    },
+    "risks": {
+      "heading": "Heading of the risks list.",
+      "debtStands": "Risk. <lead> is set brighter.",
+      "interest": "Risk. <lead> is set brighter.",
+      "liquidation": "Risk, when the bonus is unknown. <lead> is set brighter.",
+      "liquidationBonus": "Risk. {bonus} is a percentage. <lead> is set brighter.",
+      "voided": "Risk. <lead> is set brighter."
+    },
+    "testnet": "Footnote."
+  },
+  "og": {
+    "alt": "Alt text of the link-preview image.",
+    "headline": "Link-preview image, first line. Large; keep short.",
+    "headlineAccent": "Link-preview image, second line, in green. Large; keep short.",
+    "stepStake": "Link-preview image, first of three small labels.",
+    "stepBorrow": "Link-preview image, second of three small labels.",
+    "stepSide": "Link-preview image, third of three small labels."
+  },
+  "activity": {
+    "title": "Page title.",
+    "subtitle": "Page subtitle.",
+    "needsWallet": "Body of the connect-a-wallet placeholder. ?address=0x… is a URL parameter; keep it.",
+    "unreadable": "Title when the history fails to load; the raw error follows.",
+    "reading": "While the history loads.",
+    "loading": "Load-older button while loading.",
+    "loadOlder": "Button that loads the next page of history.",
+    "address": "Label above the address being shown.",
+    "someoneElse": "When the page shows another address.",
+    "indexedTo": "Indexer lag. {block} is a block number.",
+    "indexerUnknown": "When the indexer's progress is unknown.",
+    "leveraged": "Tag on an event funded by borrowing. Lowercase.",
+    "block": "Tooltip on an event's time. {block} is a block number.",
+    "detail": "Row label and table column.",
+    "transaction": "Row label and table column.",
+    "when": "Table column.",
+    "what": "Table column.",
+    "amount": "Table column.",
+    "shares": "Unit for an amount of vault shares. Lowercase.",
+    "round": "Detail for a market event. {id} is a round number.",
+    "empty": "When there is no history.",
+    "emptyIndexed": "Under the empty message. {block} is a block number.",
+    "emptyUnindexed": "Under the empty message when the indexer's progress is unknown.",
+    "types": {
+      "deposit": "History event: a deposit into the vault.",
+      "vault_withdraw": "History event: a withdrawal from the vault. Must differ from pool_withdraw.",
+      "supply": "History event.",
+      "pool_withdraw": "History event: a withdrawal from the lending pool. Must differ from vault_withdraw.",
+      "borrow": "History event.",
+      "repay": "History event.",
+      "yield": "History event.",
+      "lien_settled": "History event: debt paid out of a full withdrawal.",
+      "liquidation": "History event.",
+      "share_transfer_in": "History event.",
+      "share_transfer_out": "History event.",
+      "position": "History event.",
+      "claim": "History event.",
+      "unknown": "An event type this build doesn't know. {name} is the server's own event name, shown as it is."
+    }
+  },
+  "positions": {
+    "title": "Page title.",
+    "subtitle": "Page subtitle.",
+    "needsWallet": "Body of the connect-a-wallet placeholder. ?address=0x… is a URL parameter; keep it.",
+    "unreadable": "Title when the positions fail to load; the raw error follows.",
+    "reading": "While the positions load.",
+    "stillRunning": "Section heading: positions in rounds that have not settled.",
+    "settled": "Section heading, stat label and row label.",
+    "indexedTo": "Indexer lag. {block} is a block number.",
+    "claimsUnreadable": "When the on-chain claim check fails.",
+    "claimsUnreadableDetail": "Under the claim-check failure.",
+    "unclaimed": "Label above the total waiting to be claimed.",
+    "pullBased": "Explains pull-based payouts.",
+    "round": "One claimable round. {id} is a round number.",
+    "claiming": "Claim button while in flight.",
+    "claim": "Claim button.",
+    "won": "Stat label: rounds won.",
+    "wonOf": "Rounds won out of rounds decided. {won} and {decided} are counts.",
+    "voidedCount": "Hint: voided rounds. {voided} is a count.",
+    "winRate": "Hint: win rate. {rate} is a whole percentage.",
+    "winRateVoided": "Hint: win rate and voided rounds. {rate} is a whole percentage; {voided} a count.",
+    "staked": "Stat label, row label and table column.",
+    "net": "Stat label, row label and table column.",
+    "marketFallback": "In place of the market's feed name when it is unknown.",
+    "marketRound": "Under the market name on a phone row. {market} is a short address; {id} a round number.",
+    "side": "Row label and table column.",
+    "both": "A position on both sides. {up} and {down} are amounts. Lowercase yes/no, as in the side column.",
+    "bothTitle": "Tooltip on a both-sides position.",
+    "fundedBy": "Row label on a leveraged position.",
+    "borrowing": "Value of 'Funded by'. Lowercase.",
+    "when": "Table column.",
+    "market": "Table column.",
+    "outcome": "Table column.",
+    "opened": "Tooltip on the time. {at} is a date and time.",
+    "roundLower": "Beside the market name. {id} is a round number. Lowercase.",
+    "leveraged": "Tag on a position funded by borrowing. Lowercase.",
+    "empty": "When there are no positions.",
+    "emptyIndexed": "Under the empty message. {block} is a block number.",
+    "outcomes": {
+      "void": "Outcome tag.",
+      "won": "Outcome tag.",
+      "lost": "Outcome tag.",
+      "running": "Outcome tag for an unsettled round."
+    }
+  },
+  "operator": {
+    "title": "Page title.",
+    "subtitle": "Page subtitle.",
+    "needsWallet": "Body of the connect-a-wallet placeholder.",
+    "unreachable": "When the chain read fails.",
+    "marketFallback": "Name of a market whose feed has no readable description.",
+    "youOwn": "Beside the market name for its owner.",
+    "ownerIs": "Beside the market name for anyone else. {owner} is a short address.",
+    "noRound": "When a market has no live round.",
+    "warnings": {
+      "thin-side": "Round warning.",
+      "lock-window-missed": "Round warning.",
+      "lock-window-closing": "Round warning.",
+      "resolve-deadline-closing": "Round warning."
+    },
+    "schedule": {
+      "past": "Schedule problem.",
+      "entryTooShort": "Schedule problem. {cutoff} is a whole number of seconds.",
+      "noObservation": "Schedule problem."
+    },
+    "open": {
+      "heading": "Form heading.",
+      "lead": "Field label: seconds until the round opens.",
+      "leadHint": "Hint under 'Lead'.",
+      "entry": "Field label: seconds from open to lock.",
+      "entryHint": "Hint under 'Entry window'. {cutoff} is a whole number of seconds.",
+      "observation": "Field label: seconds from lock to close.",
+      "observationHint": "Hint under 'Observation'.",
+      "secondsUnit": "Unit after each seconds field. An abbreviation for seconds.",
+      "strike": "Amount field label: the price the round asks about.",
+      "strikeHint": "Hint under 'Strike' when spot is unknown.",
+      "strikeHintSpot": "Hint under 'Strike'. {spot} is a price.",
+      "noSpot": "Strike problem.",
+      "notAPrice": "Strike problem.",
+      "legacy": "For an older market.",
+      "opens": "Schedule preview label.",
+      "locks": "Schedule preview label.",
+      "closes": "Schedule preview label.",
+      "in": "After a previewed time. {countdown} is mm:ss.",
+      "heartbeat": "Note under the schedule.",
+      "ownerOnly": "Warning for a non-owner.",
+      "opening": "Submit button while in flight.",
+      "submit": "Submit button."
+    },
+    "round": {
+      "title": "Round heading. {id} is a round number.",
+      "pools": "Pool sizes. {up} and {down} are amounts; {symbol} a token symbol. Operator-facing, so the contract's up/down.",
+      "deadline": {
+        "lockWindow": "Countdown. {countdown} is mm:ss.",
+        "refundable": "Countdown. {countdown} is mm:ss.",
+        "closes": "Countdown. {countdown} is mm:ss.",
+        "locks": "Countdown. {countdown} is mm:ss."
+      },
+      "nothingYet": "When no action is due.",
+      "actions": {
+        "lock": "Action button.",
+        "unwind": "Action button: void a round that never locked.",
+        "refund": "Action button: void a round past its resolve deadline."
+      },
+      "ownerYou": "Beside an owner-only action for the owner.",
+      "ownerOther": "Beside an owner-only action for anyone else.",
+      "permissionless": "Beside a permissionless action."
+    },
+    "resolve": {
+      "searching": "Button while searching.",
+      "find": "Button that searches the feed.",
+      "explain": "Beside the search button.",
+      "notPublished": "Search result.",
+      "unreadable": "Search failure.",
+      "refused": "Search result. {round} is a feed round id.",
+      "found": "Search result. {round} is a feed round id; {price} a price.",
+      "behindLock": "Warning under a found round.",
+      "resolving": "Button while in flight.",
+      "resolve": "Button that settles the round."
+    },
+    "demo": {
+      "heading": "Demo feed panel heading.",
+      "explain": "Explains the demo feed. <lead> is set bold in warning colour.",
+      "price": "Field label.",
+      "publishing": "Button while in flight.",
+      "publish": "Button that pushes the price.",
+      "latest": "Beside the button. {round} is a feed round id.",
+      "badPrice": "Field problem.",
+      "notOwner": "Warning for anyone but the feed owner. {owner} is a short address."
+    }
   }
 }

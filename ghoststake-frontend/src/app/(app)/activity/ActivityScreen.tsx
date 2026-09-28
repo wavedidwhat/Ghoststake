@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useConnection } from "wagmi";
 import { Page, NeedsWallet } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
@@ -45,13 +46,14 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
     requested && connected && requested.toLowerCase() !== connected.toLowerCase(),
   );
 
+  const t = useTranslations("activity");
   const activity = useActivity(address ?? undefined);
   const decimals = useActivityDecimals();
 
   return (
-    <Page title="Activity" subtitle="Everything this address has done here, newest first">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!address ? (
-        <NeedsWallet what="Connect a wallet to see its history, or open this page with ?address=0x…" />
+        <NeedsWallet what={t("needsWallet")} />
       ) : (
         <div className="space-y-4">
           <Header
@@ -62,13 +64,13 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
 
           {activity.isError ? (
             <LoadFailed
-              title="Could not read the history"
+              title={t("unreadable")}
               detail={String(activity.error)}
               onRetry={() => void activity.refetch()}
             />
           ) : activity.isLoading ? (
             <Card>
-              <p className="text-sm text-ink-muted">Reading the ledger…</p>
+              <p className="text-sm text-ink-muted">{t("reading")}</p>
             </Card>
           ) : activity.events.length === 0 ? (
             <Empty indexedBlock={activity.indexedBlock} />
@@ -88,7 +90,7 @@ export function ActivityScreen({ requested }: { requested: string | undefined })
                   disabled={activity.isLoadingMore}
                   className="w-full rounded-card border border-border bg-surface py-3 text-sm text-ink-muted transition-colors hover:bg-raised/60 hover:text-ink disabled:opacity-50"
                 >
-                  {activity.isLoadingMore ? "Loading…" : "Load older"}
+                  {activity.isLoadingMore ? t("loading") : t("loadOlder")}
                 </button>
               )}
             </>
@@ -116,26 +118,23 @@ function Header({
   viewingSomeoneElse: boolean;
   indexedBlock?: number;
 }) {
+  const t = useTranslations("activity");
   return (
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <Eyebrow>Address</Eyebrow>
+          <Eyebrow>{t("address")}</Eyebrow>
           <p className="mt-1 text-sm text-ink">
             <ExplorerLink address={address}>
               <span className="font-mono break-all">{address}</span>
             </ExplorerLink>
           </p>
           {viewingSomeoneElse && (
-            <p className="mt-1 text-xs text-ink-faint">
-              Not your connected wallet — this is a public read.
-            </p>
+            <p className="mt-1 text-xs text-ink-faint">{t("someoneElse")}</p>
           )}
         </div>
         <p className="text-xs text-ink-faint">
-          {indexedBlock
-            ? `Indexed to block ${formatInteger(indexedBlock)}. Anything newer is not here yet.`
-            : "Indexer position unknown."}
+          {indexedBlock ? t("indexedTo", { block: formatInteger(indexedBlock) }) : t("indexerUnknown")}
         </p>
       </div>
     </Card>
@@ -155,11 +154,13 @@ function ActivityTable({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
+  const t = useTranslations("activity");
+  const root = useTranslations();
   const rows = events.map((event) => ({
     event,
     // Formatted once and shared by both layouts, so the phone and the desktop
     // can never disagree about a figure.
-    formatted: formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol }),
+    formatted: formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares") }),
   }));
 
   return (
@@ -170,16 +171,16 @@ function ActivityTable({
             key={event.id}
             title={
               <>
-                <span className="text-sm text-ink">{activityLabel(event)}</span>
+                <span className="text-sm text-ink">{root(activityLabel(event).key, activityLabel(event).values)}</span>
                 {formatted.leveraged && (
                   <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
-                    leveraged
+                    {t("leveraged")}
                   </span>
                 )}
                 <time
                   dateTime={event.blockTime}
                   className="mt-1 block text-xs text-ink-faint"
-                  title={`Block ${formatInteger(event.blockNumber)}`}
+                  title={t("block", { block: formatInteger(event.blockNumber) })}
                 >
                   {formatDateTime(event.blockTime)}
                 </time>
@@ -193,10 +194,10 @@ function ActivityTable({
               </span>
             }
           >
-            <RowField label="Detail">
+            <RowField label={t("detail")}>
               <Detail event={event} />
             </RowField>
-            <RowField label="Transaction">
+            <RowField label={t("transaction")}>
               <TxLink hash={event.txHash} />
             </RowField>
           </RowCard>
@@ -207,11 +208,11 @@ function ActivityTable({
       <table className="w-full min-w-[52rem] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs tracking-wide text-ink-faint uppercase">
-            <th className="px-4 py-3 font-medium">When</th>
-            <th className="px-4 py-3 font-medium">What</th>
-            <th className="px-4 py-3 text-right font-medium">Amount</th>
-            <th className="px-4 py-3 font-medium">Detail</th>
-            <th className="px-4 py-3 text-right font-medium">Transaction</th>
+            <th className="px-4 py-3 font-medium">{t("when")}</th>
+            <th className="px-4 py-3 font-medium">{t("what")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("amount")}</th>
+            <th className="px-4 py-3 font-medium">{t("detail")}</th>
+            <th className="px-4 py-3 text-right font-medium">{t("transaction")}</th>
           </tr>
         </thead>
         <tbody>
@@ -251,11 +252,14 @@ function formatEvent(
     assetDecimals,
     shareDecimals,
     assetSymbol,
+    sharesUnit,
   }: {
     address: string;
     assetDecimals?: number;
     shareDecimals?: number;
     assetSymbol: string;
+    /** What a share amount is called, from the catalog. */
+    sharesUnit: string;
   },
 ) {
   const direction = activityDirection(event);
@@ -263,7 +267,7 @@ function formatEvent(
 
   return {
     amount: decimals === undefined ? "…" : formatAmount(BigInt(event.amount), decimals, 4),
-    unit: event.asset === "shares" ? "shares" : assetSymbol,
+    unit: event.asset === "shares" ? sharesUnit : assetSymbol,
     sign: direction === "in" ? "+" : direction === "out" ? "−" : "",
     tone:
       direction === "in" ? "text-positive" : direction === "out" ? "text-ink" : "text-ink-muted",
@@ -289,21 +293,23 @@ function Row({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
-  const formatted = formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol });
+  const t = useTranslations("activity");
+  const root = useTranslations();
+  const formatted = formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares") });
 
   return (
     <tr className="border-b border-border/60 last:border-0">
       <td className="px-4 py-3 whitespace-nowrap text-ink-muted">
-        <time dateTime={event.blockTime} title={`Block ${formatInteger(event.blockNumber)}`}>
+        <time dateTime={event.blockTime} title={t("block", { block: formatInteger(event.blockNumber) })}>
           {formatDateTime(event.blockTime)}
         </time>
       </td>
 
       <td className="px-4 py-3">
-        <span className="text-ink">{activityLabel(event)}</span>
+        <span className="text-ink">{root(activityLabel(event).key, activityLabel(event).values)}</span>
         {formatted.leveraged && (
           <span className="ml-2 rounded-sm bg-raised px-1.5 py-0.5 text-[11px] text-ink-faint">
-            leveraged
+            {t("leveraged")}
           </span>
         )}
       </td>
@@ -328,11 +334,13 @@ function Row({
 }
 
 function Detail({ event }: { event: ActivityEvent }) {
+  const t = useTranslations("activity");
+  const taken = useTranslations("round.taken");
   if (event.roundId) {
     return (
       <span>
-        Round {event.roundId}
-        {event.side && <> · {event.side === "up" ? "yes" : "no"}</>}
+        {t("round", { id: event.roundId })}
+        {event.side && <> · {taken(event.side === "up" ? "yes" : "no")}</>}
         {/* The market is shown, not just the round id. Round ids restart at 1
             in every market, so "round 7" on its own names as many different
             rounds as there are markets. */}
@@ -351,15 +359,13 @@ function Detail({ event }: { event: ActivityEvent }) {
 }
 
 function Empty({ indexedBlock }: { indexedBlock?: number }) {
+  const t = useTranslations("activity");
   return (
     <Card>
-      <p className="text-sm text-ink-muted">Nothing indexed for this address yet.</p>
+      <p className="text-sm text-ink-muted">{t("empty")}</p>
       <p className="mt-2 text-xs text-ink-faint">
-        {indexedBlock
-          ? `The indexer has read to block ${formatInteger(indexedBlock)}. A transaction sent in the last few blocks will not be here yet.`
-          : "The indexer has not reported a position, so it may not have run against this deployment."}
+        {indexedBlock ? t("emptyIndexed", { block: formatInteger(indexedBlock) }) : t("emptyUnindexed")}
       </p>
     </Card>
   );
 }
-

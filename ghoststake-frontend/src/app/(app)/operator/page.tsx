@@ -62,14 +62,16 @@ import { Badge } from "@/components/ui/Badge";
  * owner-gated, and those say whose key is needed.
  */
 export default function OperatorPage() {
+  const t = useTranslations("operator");
+  const markets = useTranslations("markets");
   const wallet = useWallet();
 
   return (
-    <Page title="Operator" subtitle="Drive rounds — open, lock, settle, unwind">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!anyMarketConfigured() ? (
-        <NotConfigured what="No market is configured for this network." />
+        <NotConfigured what={markets("notConfigured")} />
       ) : !wallet.isConnected ? (
-        <NeedsWallet what="Every action here is a transaction, so a wallet is needed to send one." />
+        <NeedsWallet what={t("needsWallet")} />
       ) : (
         <Console address={wallet.address} />
       )}
@@ -78,6 +80,7 @@ export default function OperatorPage() {
 }
 
 function Console({ address }: { address: `0x${string}` }) {
+  const t = useTranslations("operator");
   const now = useNow();
   // Every market, including delisted ones. An operator's job includes the
   // markets nobody is browsing — a delisted market with a locked round still
@@ -91,10 +94,7 @@ function Console({ address }: { address: `0x${string}` }) {
   if (isError) {
     return (
       <Card>
-        <p className="text-sm text-ink-muted">
-          The chain is unreachable right now. Nothing has changed — this screen just cannot see
-          it.
-        </p>
+        <p className="text-sm text-ink-muted">{t("unreachable")}</p>
       </Card>
     );
   }
@@ -163,8 +163,10 @@ function MarketConsole({
   symbol: string;
   refetch: () => void;
 }) {
+  const t = useTranslations("operator");
+  const feedT = useTranslations("feed");
   const isOwner = address.toLowerCase() === params.owner.toLowerCase();
-  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
+  const label = feed ? (feed.description.split(" - ").pop() ?? t("marketFallback")) : feedT("reading");
 
   // Newest first, and only the ones still in play — a settled round needs no
   // operator and a list of them buries the two that do.
@@ -175,18 +177,16 @@ function MarketConsole({
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold text-ink">{label}</h2>
         {feed?.isDemo && (
-          <Badge>
-            Demo feed
-          </Badge>
+          <Badge>{feedT("demo")}</Badge>
         )}
         <span className="text-xs text-ink-faint">
           {isOwner ? (
-            <span className="text-positive">You are the owner of this market.</span>
+            <span className="text-positive">{t("youOwn")}</span>
           ) : (
-            <>
-              Owner is <code className="text-ink-muted">{short(params.owner)}</code> — you can
-              still lock, resolve and unwind.
-            </>
+            t.rich("ownerIs", {
+              owner: short(params.owner),
+              code: (chunks) => <code className="text-ink-muted">{chunks}</code>,
+            })
           )}
         </span>
       </div>
@@ -197,9 +197,7 @@ function MarketConsole({
 
       {live.length === 0 ? (
         <Card>
-          <p className="text-sm text-ink-muted">
-            No round is in play on this market. Open one above.
-          </p>
+          <p className="text-sm text-ink-muted">{t("noRound")}</p>
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
@@ -244,6 +242,8 @@ function OpenRoundForm({
   now: bigint | undefined;
   onDone: () => void;
 }) {
+  const t = useTranslations("operator.open");
+  const root = useTranslations();
   const [lead, setLead] = useState("60");
   const [entry, setEntry] = useState("300");
   const [observation, setObservation] = useState("300");
@@ -265,8 +265,8 @@ function OpenRoundForm({
   const strikeProblem =
     shape.strikeAtOpen && strikeAmount === null
       ? shape.spot === undefined
-        ? "The feed has no usable price to strike against yet."
-        : "That is not a price."
+        ? t("noSpot")
+        : t("notAPrice")
       : null;
 
   const seconds = (value: string) => {
@@ -290,21 +290,21 @@ function OpenRoundForm({
 
   return (
     <Card>
-      <h3 className="text-sm font-medium text-ink">Open a round</h3>
+      <h3 className="text-sm font-medium text-ink">{t("heading")}</h3>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <SecondsField label="Lead" value={lead} onChange={setLead} disabled={busy}
-          hint="Time before the round opens. Has to outlive signing and mining." />
-        <SecondsField label="Entry window" value={entry} onChange={setEntry} disabled={busy}
-          hint={`Open to locked. Entry actually stops ${params.entryCutoff}s before the lock.`} />
-        <SecondsField label="Observation" value={observation} onChange={setObservation} disabled={busy}
-          hint="Locked to close. The outcome is the price at the end of this." />
+        <SecondsField label={t("lead")} value={lead} onChange={setLead} disabled={busy}
+          hint={t("leadHint")} />
+        <SecondsField label={t("entry")} value={entry} onChange={setEntry} disabled={busy}
+          hint={t("entryHint", { cutoff: params.entryCutoff.toString() })} />
+        <SecondsField label={t("observation")} value={observation} onChange={setObservation} disabled={busy}
+          hint={t("observationHint")} />
       </div>
 
       {shape.strikeAtOpen && (
         <div className="mt-4">
           <AmountField
-            label="Strike"
+            label={t("strike")}
             value={strikeInput}
             onChange={setStrike}
             max={undefined}
@@ -313,43 +313,35 @@ function OpenRoundForm({
             disabled={busy}
             hint={
               suggested === null
-                ? "The level the round asks about. Stated from the moment it opens."
-                : `The level the round asks about, stated from the moment it opens. Spot rounds to ${formatAmount(suggested, 18, 2)}.`
+                ? t("strikeHint")
+                : t("strikeHintSpot", { spot: formatAmount(suggested, 18, 2) })
             }
           />
         </div>
       )}
 
       {shape.strikeAtOpen === false && (
-        <p className="mt-4 text-xs text-ink-faint">
-          This market was deployed before rounds carried a strike, so its rounds ask only whether the
-          price will be higher at the close, and the level is read when the round locks.
-        </p>
+        <p className="mt-4 text-xs text-ink-faint">{t("legacy")}</p>
       )}
 
       {schedule && (
         <dl className="mt-4 grid gap-2 rounded-sm border border-border bg-raised/40 p-3 text-xs sm:grid-cols-3">
-          <Preview label="Opens" at={schedule.openTime} now={now} />
-          <Preview label="Locks" at={schedule.lockTime} now={now} />
-          <Preview label="Closes" at={schedule.closeTime} now={now} />
+          <Preview label={t("opens")} at={schedule.openTime} now={now} />
+          <Preview label={t("locks")} at={schedule.lockTime} now={now} />
+          <Preview label={t("closes")} at={schedule.closeTime} now={now} />
         </dl>
       )}
 
       {/* The feed's cadence, not ours, is the floor on a round's length —
           worth saying next to the observation window, where someone is about
           to choose one. */}
-      <p className="mt-3 text-xs text-ink-faint">
-        A round cannot settle until its feed publishes after the close. On a real feed that is a
-        heartbeat measured in tens of minutes, whatever this window says.
-      </p>
+      <p className="mt-3 text-xs text-ink-faint">{t("heartbeat")}</p>
 
-      {problem && <p className="mt-3 text-xs text-negative">{problem}</p>}
+      {problem && <p className="mt-3 text-xs text-negative">{root(problem.key, problem.values)}</p>}
       {strikeProblem && <p className="mt-3 text-xs text-negative">{strikeProblem}</p>}
 
       {!isOwner && (
-        <p className="mt-3 text-xs text-warning">
-          Opening a round is owner-only. Connected as a different address, this will revert.
-        </p>
+        <p className="mt-3 text-xs text-warning">{t("ownerOnly")}</p>
       )}
 
       <div className="mt-4 flex items-center gap-3">
@@ -385,7 +377,7 @@ function OpenRoundForm({
             if (ok) onDone();
           }}
         >
-          {busy ? "Opening…" : "Open round"}
+          {busy ? t("opening") : t("submit")}
         </Button>
         <TxStatus tx={tx} />
       </div>
@@ -413,6 +405,8 @@ function RoundRow({
   symbol: string;
   onDone: () => void;
 }) {
+  const t = useTranslations("operator.round");
+  const warn = useTranslations("operator.warnings");
   const phases = useTranslations("round.phases");
   const phase = (round.phase ?? Phase.None) as PhaseValue;
   const action = now === undefined ? Action.None : actionFor(round.round, phase, params, now);
@@ -432,28 +426,33 @@ function RoundRow({
     <article className="rounded-card border border-border bg-surface p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-ink">Round {round.id.toString()}</span>
+          <span className="text-sm font-medium text-ink">{t("title", { id: round.id.toString() })}</span>
           <span className="rounded-sm bg-raised px-2 py-0.5 text-xs text-ink-muted">
             {phases(phaseKey(phase))}
           </span>
           {decimals !== undefined && (
             <span className="tabular text-xs text-ink-faint">
-              {formatAmount(round.round.upPool, decimals, 0)} up ·{" "}
-              {formatAmount(round.round.downPool, decimals, 0)} down {symbol}
+              {t("pools", {
+                up: formatAmount(round.round.upPool, decimals, 0),
+                down: formatAmount(round.round.downPool, decimals, 0),
+                symbol,
+              })}
             </span>
           )}
         </div>
         {remaining !== undefined && (
           <span className="text-xs text-ink-faint">
-            {deadlineLabel(action, phase)}{" "}
-            <span className="tabular text-ink">{formatCountdown(remaining)}</span>
+            {t.rich(`deadline.${deadlineKey(action, phase)}`, {
+              countdown: formatCountdown(remaining),
+              figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+            })}
           </span>
         )}
       </header>
 
       {warnings.map((w) => (
         <p key={w.code} className="mt-3 text-xs text-warning">
-          {w.text}
+          {warn(w.code)}
         </p>
       ))}
 
@@ -468,7 +467,7 @@ function RoundRow({
       ) : action !== Action.None ? (
         <SimpleAction market={market} roundId={round.id} action={action} isOwner={isOwner} onDone={onDone} />
       ) : (
-        <p className="mt-3 text-xs text-ink-muted">Nothing to do yet — waiting on the clock.</p>
+        <p className="mt-3 text-xs text-ink-muted">{t("nothingYet")}</p>
       )}
     </article>
   );
@@ -487,9 +486,12 @@ function SimpleAction({
   isOwner: boolean;
   onDone: () => void;
 }) {
+  const t = useTranslations("operator.round");
+  const actions = useTranslations("actions");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
   const ownerOnly = isOwnerOnly(action);
+  const key = actionKey(action);
 
   const fn =
     action === Action.Lock
@@ -513,14 +515,10 @@ function SimpleAction({
           if (ok) onDone();
         }}
       >
-        {busy ? "Working…" : actionLabel(action)}
+        {busy ? actions("working") : key && t(`actions.${key}`)}
       </Button>
       <span className="text-xs text-ink-faint">
-        {ownerOnly
-          ? isOwner
-            ? "Owner-only, and that is you."
-            : "Owner-only. Connected as a different address, this will revert."
-          : "Permissionless — anyone connected may call this."}
+        {ownerOnly ? (isOwner ? t("ownerYou") : t("ownerOther")) : t("permissionless")}
       </span>
       <TxStatus tx={tx} />
     </div>
@@ -550,11 +548,12 @@ function ResolveControl({
   lockOracleRoundId: bigint;
   onDone: () => void;
 }) {
+  const t = useTranslations("operator.resolve");
   const client = usePublicClient({ chainId: activeChain.id });
   const tx = useTransaction();
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<
-    | { kind: "none"; reason: string }
+    | { kind: "none"; reason: "notPublished" | "unreadable" }
     | { kind: "found"; feedRound: bigint; price: bigint }
     | { kind: "refused"; feedRound: bigint }
     | null
@@ -609,11 +608,7 @@ function ResolveControl({
       );
 
       if (candidate === null) {
-        setResult({
-          kind: "none",
-          reason:
-            "The feed has not published since this round closed. Nothing can settle it yet — that is the pinning rule doing its job, not a fault.",
-        });
+        setResult({ kind: "none", reason: "notPublished" });
         return;
       }
 
@@ -628,7 +623,7 @@ function ResolveControl({
 
       setResult(ok ? { kind: "found", feedRound: candidate, price } : { kind: "refused", feedRound: candidate });
     } catch {
-      setResult({ kind: "none", reason: "The feed could not be read. Try again." });
+      setResult({ kind: "none", reason: "unreadable" });
     } finally {
       setSearching(false);
     }
@@ -648,37 +643,27 @@ function ResolveControl({
           disabled={searching || !feed.data}
           onClick={search}
         >
-          {searching ? "Searching the feed…" : "Find the closing feed round"}
+          {searching ? t("searching") : t("find")}
         </Button>
-        <span className="text-xs text-ink-faint">
-          Resolving names the feed round at the close. Permissionless — anyone may send it.
-        </span>
+        <span className="text-xs text-ink-faint">{t("explain")}</span>
       </div>
 
-      {result?.kind === "none" && <p className="text-xs text-warning">{result.reason}</p>}
+      {result?.kind === "none" && <p className="text-xs text-warning">{t(result.reason)}</p>}
 
       {result?.kind === "refused" && (
-        <p className="text-xs text-warning">
-          Feed round {result.feedRound.toString()} is the last one before the close, but the
-          adapter will not read it — stale, or the sequencer was down, or the feed is paused.
-          Resolving now would revert.
-        </p>
+        <p className="text-xs text-warning">{t("refused", { round: result.feedRound.toString() })}</p>
       )}
 
       {result?.kind === "found" && (
         <div className="flex flex-col gap-2 rounded-sm border border-border bg-raised/40 p-3">
           <p className="text-xs text-ink-muted">
-            Feed round <span className="tabular text-ink">{result.feedRound.toString()}</span>{" "}
-            settles this at{" "}
-            <span className="tabular text-ink">{formatAmount(result.price, 18, 2)}</span>. The
-            adapter accepted it on a dry run, so the transaction will land.
+            {t.rich("found", {
+              round: result.feedRound.toString(),
+              price: formatAmount(result.price, 18, 2),
+              figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+            })}
           </p>
-          {behindLock && (
-            <p className="text-xs text-negative">
-              That round predates the strike read, which the contract refuses. Something is wrong
-              with the feed rather than with this round.
-            </p>
-          )}
+          {behindLock && <p className="text-xs text-negative">{t("behindLock")}</p>}
           <div className="flex items-center gap-3">
             <Button
               size="sm"
@@ -698,7 +683,7 @@ function ResolveControl({
                 if (ok) onDone();
               }}
             >
-              {busy ? "Resolving…" : "Resolve"}
+              {busy ? t("resolving") : t("resolve")}
             </Button>
             <TxStatus tx={tx} />
           </div>
@@ -718,6 +703,7 @@ function ResolveControl({
  * and it has no successor. That cost an hour the first time.
  */
 function DemoFeedControl({ market, address }: { market: Market; address: `0x${string}` }) {
+  const t = useTranslations("operator.demo");
   const [price, setPrice] = useState("2000");
   const tx = useTransaction();
 
@@ -764,16 +750,14 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
 
   return (
     <Card className="border-warning/40 bg-warning/5">
-      <h3 className="text-sm font-medium text-ink">Publish a price</h3>
+      <h3 className="text-sm font-medium text-ink">{t("heading")}</h3>
       <p className="mt-1 text-xs text-ink-muted">
-        This market&rsquo;s price is whatever you publish here. Settling a round takes{" "}
-        <span className="font-medium text-warning">two pushes</span>: one before the close, which
-        becomes the settlement price, and one after it, which proves the first was the last.
+        {t.rich("explain", { lead: (chunks) => <span className="font-medium text-warning">{chunks}</span> })}
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Price
+          {t("price")}
           <input
             value={price}
             onChange={(e) => setPrice(e.target.value)}
@@ -798,26 +782,22 @@ function DemoFeedControl({ market, address }: { market: Market; address: `0x${st
             if (ok) void latestRoundId.refetch();
           }}
         >
-          {busy ? "Publishing…" : "Publish"}
+          {busy ? t("publishing") : t("publish")}
         </Button>
 
         {latestRoundId.data !== undefined && (
           <span className="text-xs text-ink-faint">
-            latest feed round{" "}
-            <span className="tabular text-ink">{latestRoundId.data.toString()}</span>
+            {t.rich("latest", { round: latestRoundId.data.toString(), figure: (chunks) => <span className="tabular text-ink">{chunks}</span> })}
           </span>
         )}
       </div>
 
       {parsed === null && (
-        <p className="mt-2 text-xs text-negative">
-          A price, with at most 8 decimal places — the feed&rsquo;s scale.
-        </p>
+        <p className="mt-2 text-xs text-negative">{t("badPrice")}</p>
       )}
       {feedOwner.data !== undefined && !isFeedOwner && (
         <p className="mt-2 text-xs text-warning">
-          Only <code>{short(feedOwner.data)}</code> can publish on this feed. Without that key the
-          demo market cannot be settled at all.
+          {t.rich("notOwner", { owner: short(feedOwner.data), code: (chunks) => <code>{chunks}</code> })}
         </p>
       )}
       <div className="mt-2">
@@ -840,6 +820,7 @@ function SecondsField({
   hint: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("operator.open");
   return (
     <label className="flex flex-col gap-1">
       <span className="text-xs text-ink-muted">{label}</span>
@@ -851,7 +832,7 @@ function SecondsField({
           inputMode="numeric"
           className="tabular w-full rounded-sm border border-border bg-ground px-3 py-2 text-sm text-ink focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
         />
-        <span className="text-xs text-ink-faint">s</span>
+        <span className="text-xs text-ink-faint">{t("secondsUnit")}</span>
       </div>
       <span className="text-[11px] leading-relaxed text-ink-faint">{hint}</span>
     </label>
@@ -859,37 +840,40 @@ function SecondsField({
 }
 
 function Preview({ label, at, now }: { label: string; at: bigint; now: bigint | undefined }) {
+  const t = useTranslations("operator.open");
   return (
     <div>
       <dt className="text-ink-faint">{label}</dt>
       <dd className="tabular text-ink">
         {formatTime(Number(at) * 1000)}
         {now !== undefined && (
-          <span className="ml-2 text-ink-faint">in {formatCountdown(at - now)}</span>
+          <span className="ml-2 text-ink-faint">{t("in", { countdown: formatCountdown(at - now) })}</span>
         )}
       </dd>
     </div>
   );
 }
 
-function actionLabel(action: ActionValue): string {
+/** The action's button words are `operator.round.actions.<key>`. */
+function actionKey(action: ActionValue): "lock" | "unwind" | "refund" | null {
   switch (action) {
     case Action.Lock:
-      return "Lock";
+      return "lock";
     case Action.VoidUnlocked:
-      return "Unwind — never locked";
+      return "unwind";
     case Action.VoidUnsettled:
-      return "Refund — past the deadline";
+      return "refund";
     default:
-      return "";
+      return null;
   }
 }
 
-function deadlineLabel(action: ActionValue, phase: PhaseValue): string {
-  if (action === Action.Lock) return "lock window closes in";
-  if (action === Action.Resolve) return "refundable in";
-  if (phase === Phase.Observation) return "closes in";
-  return "locks in";
+/** Which deadline the countdown names: `operator.round.deadline.<key>`. */
+function deadlineKey(action: ActionValue, phase: PhaseValue): "lockWindow" | "refundable" | "closes" | "locks" {
+  if (action === Action.Lock) return "lockWindow";
+  if (action === Action.Resolve) return "refundable";
+  if (phase === Phase.Observation) return "closes";
+  return "locks";
 }
 
 function short(address: string): string {

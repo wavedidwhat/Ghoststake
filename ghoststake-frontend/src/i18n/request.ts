@@ -1,6 +1,7 @@
 import { getRequestConfig } from "next-intl/server";
 import messages from "../../messages/en.json";
 import { locale } from "./locale";
+import { pseudoCatalog } from "./pseudo";
 
 /**
  * Where UI copy comes from (GHO-116).
@@ -15,4 +16,12 @@ import { locale } from "./locale";
  * file there is nothing to choose between, and a static import is what lets
  * `global.d.ts` type every key against it.
  */
-export default getRequestConfig(async () => ({ locale, messages }));
+export default getRequestConfig(async () => ({
+  locale,
+  // `GHOSTSTAKE_PSEUDO=1` swaps in the pseudo-locale (GHO-120), read per
+  // request like `GHOSTSTAKE_E2E`, so one build can be checked both ways.
+  // Built once and kept: the catalog is static, so the transform is too.
+  messages: process.env.GHOSTSTAKE_PSEUDO === "1" ? (pseudo ??= pseudoCatalog(messages)) : messages,
+}));
+
+let pseudo: typeof messages | undefined;
