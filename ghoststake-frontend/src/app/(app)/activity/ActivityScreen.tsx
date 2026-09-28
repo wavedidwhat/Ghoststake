@@ -4,13 +4,12 @@ import { useConnection } from "wagmi";
 import { Page, NeedsWallet } from "@/components/Page";
 import { RowCard, RowField, RowList } from "@/components/ui/Rows";
 import { LoadFailed } from "@/components/ui/LoadFailed";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Card } from "@/components/ui/Card";
 import { useActivity, useActivityDecimals } from "@/hooks/useActivity";
 import {
   activityDirection,
   activityLabel,
-  explorerTxUrl,
-  shortHash,
   wasLeveraged,
   type ActivityEvent,
 } from "@/lib/activity";
@@ -122,7 +121,11 @@ function Header({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <Eyebrow>Address</Eyebrow>
-          <p className="mt-1 font-mono text-sm text-ink">{address}</p>
+          <p className="mt-1 text-sm text-ink">
+            <ExplorerLink address={address}>
+              <span className="font-mono break-all">{address}</span>
+            </ExplorerLink>
+          </p>
           {viewingSomeoneElse && (
             <p className="mt-1 text-xs text-ink-faint">
               Not your connected wallet — this is a public read.
@@ -268,24 +271,9 @@ function formatEvent(
   };
 }
 
-/** The hash, linked if this chain has an explorer. */
+/** The hash, linked if this chain has an explorer (see `ExplorerLink`). */
 function TxLink({ hash }: { hash: string }) {
-  const explorer = explorerTxUrl(hash);
-
-  return explorer ? (
-    <a
-      href={explorer}
-      target="_blank"
-      rel="noreferrer"
-      className="font-mono text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-    >
-      {shortHash(hash)}
-    </a>
-  ) : (
-    // No explorer on this chain — a local anvil. The hash is still the useful
-    // thing; a link that goes nowhere is not.
-    <span className="font-mono text-ink-faint">{shortHash(hash)}</span>
-  );
+  return <ExplorerLink tx={hash} className="text-ink-muted" />;
 }
 
 function Row({
@@ -349,18 +337,14 @@ function Detail({ event }: { event: ActivityEvent }) {
             in every market, so "round 7" on its own names as many different
             rounds as there are markets. */}
         {event.market && (
-          <span className="ml-1 font-mono text-xs text-ink-faint">
-            {shortHash(event.market, 6, 4)}
-          </span>
+          <ExplorerLink address={event.market} className="ml-1 text-xs text-ink-faint" />
         )}
       </span>
     );
   }
   if (event.counterparty) {
     return (
-      <span className="font-mono text-xs">
-        {shortHash(event.counterparty, 6, 4)}
-      </span>
+      <ExplorerLink address={event.counterparty} className="text-xs" />
     );
   }
   return <span className="text-ink-faint">—</span>;

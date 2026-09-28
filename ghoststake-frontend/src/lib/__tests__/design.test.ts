@@ -135,6 +135,13 @@ describe("screens use the primitives in components/ui (GHO-96)", () => {
     expect(offending(/animate-pulse/)).toEqual([]);
   });
 
+  it("links the explorer only through ExplorerLink (GHO-103)", () => {
+    // Every hand-built explorer link was one more place to forget
+    // `rel="noopener"`, the fallback for a chain with no explorer, or the
+    // arrow that says the link leaves the app.
+    expect(offending(/explorer(Tx|Address)Url\(|["'`]\/(tx|address)\/["'`$]/)).toEqual([]);
+  });
+
   it("keeps raw <button>s to the ones that are meant to be different", () => {
     // Each of these is a deliberate exception, not a button that was missed.
     // Adding a file here is fine; the point is that it is a decision someone
@@ -146,6 +153,7 @@ describe("screens use the primitives in components/ui (GHO-96)", () => {
       "components/MobileNav.tsx": "tab-bar items",
       "components/ConnectButton.tsx": "the wallet menu rows and the pre-hydration placeholder",
       "components/AmountField.tsx": "the Max shortcut beside the label",
+      "components/AlertBell.tsx": "the icon-only bell in the header, with its count (GHO-104)",
       "activity/ActivityScreen.tsx": "the full-width load-more row",
       "stocks/page.tsx": "the stock picker rows, which carry a logo and two figures",
     };

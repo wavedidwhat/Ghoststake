@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// This file re-imports modules after `vi.resetModules()`, which reloads wagmi
+// and viem's chain list from cold on every test. Alone that is quick; in the
+// full parallel suite it can pass vitest's 5s default, and a timeout reads as
+// a broken assertion (GHO-103, and likely the unexplained config/markets/wagmi
+// failure in runbook Part 7.92). The limit is raised for this pattern only.
+vi.setConfig({ testTimeout: 30_000 });
+
 /**
  * GHO-85: a bad `NEXT_PUBLIC_*` value used to throw at module scope. That
  * module is imported by `proxy.ts`, so the throw was a blank 500 on every URL,

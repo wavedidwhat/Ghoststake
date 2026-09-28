@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ConnectButton } from "./ConnectButton";
+import { AlertBell } from "./AlertBell";
 import { activeChain } from "@/lib/wagmi";
 
 /**
@@ -46,7 +47,8 @@ export function Page({
         GhostStake
       </span>
 
-      <div className="ml-auto md:order-3">
+      <div className="ml-auto flex items-center gap-1 md:order-3">
+        <AlertBell />
         <ConnectButton />
       </div>
 

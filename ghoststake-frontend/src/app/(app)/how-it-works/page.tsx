@@ -2,6 +2,7 @@
 
 import { Page } from "@/components/Page";
 import { Landing } from "@/components/Landing";
+import { ContractsList } from "@/components/ContractsList";
 
 /**
  * The explainer, on its own page (GHO-62).
@@ -17,6 +18,8 @@ export default function HowItWorksPage() {
   return (
     <Page title="How it works" subtitle="Stake earns. Borrow against it. Take a view.">
       <Landing />
+      {/* The contracts behind every claim above, linked (GHO-103). */}
+      <ContractsList />
     </Page>
   );
 }

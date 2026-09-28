@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { MobileNav } from "@/components/MobileNav";
 import { NetworkGuard } from "@/components/NetworkGuard";
 import { Sidebar } from "@/components/Sidebar";
+import { Toaster } from "@/components/ui/Toaster";
 
 /**
  * The frame every screen sits in: the sidebar, the phone tab bar and the
@@ -32,6 +33,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       <MobileNav />
+      {/* In the frame, so a toast outlives the page that raised it (GHO-104). */}
+      <Toaster />
     </div>
   );
 }
