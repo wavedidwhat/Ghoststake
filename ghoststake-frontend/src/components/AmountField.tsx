@@ -7,6 +7,7 @@ import { explorerTxUrl } from "@/lib/activity";
 import type { useTransaction } from "@/hooks/useTransaction";
 import { useStalled } from "@/hooks/useStalled";
 import { TextButton } from "@/components/ui/Button";
+import { AssetLogo, hasLogo } from "@/components/ui/AssetLogo";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
@@ -71,7 +72,10 @@ export function AmountField({
           aria-describedby={problem ? `${id}-problem` : undefined}
           className="tabular w-full bg-transparent text-lg text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <span className="text-sm text-ink-faint">{symbol}</span>
+        <span className="flex shrink-0 items-center gap-1.5 text-sm text-ink-faint">
+          {hasLogo(symbol) && <AssetLogo symbol={symbol} size="xs" />}
+          {symbol}
+        </span>
       </div>
 
       {/* Stated at the field (GHO-86). `parseAmount` has always refused an

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { erc20Abi } from "viem";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { Page, NeedsWallet, NotConfigured } from "@/components/Page";
-import { AssetLogo } from "@/components/AssetLogo";
+import { AssetLogo } from "@/components/ui/AssetLogo";
 import { Card, Stat } from "@/components/ui/Card";
 import { Faucet } from "@/components/Faucet";
 import { Figure } from "@/components/ui/Figure";

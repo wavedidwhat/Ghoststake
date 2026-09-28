@@ -1,6 +1,20 @@
 import { faAmazon } from "@fortawesome/free-brands-svg-icons";
+import TokenARB from "@web3icons/react/icons/tokens/TokenARB";
+import TokenAVAX from "@web3icons/react/icons/tokens/TokenAVAX";
+import TokenBNB from "@web3icons/react/icons/tokens/TokenBNB";
+import TokenBTC from "@web3icons/react/icons/tokens/TokenBTC";
+import TokenDAI from "@web3icons/react/icons/tokens/TokenDAI";
+import TokenDOGE from "@web3icons/react/icons/tokens/TokenDOGE";
 import TokenETH from "@web3icons/react/icons/tokens/TokenETH";
+import TokenLINK from "@web3icons/react/icons/tokens/TokenLINK";
+import TokenMATIC from "@web3icons/react/icons/tokens/TokenMATIC";
+import TokenOP from "@web3icons/react/icons/tokens/TokenOP";
+import TokenPOL from "@web3icons/react/icons/tokens/TokenPOL";
+import TokenSOL from "@web3icons/react/icons/tokens/TokenSOL";
 import TokenUSDC from "@web3icons/react/icons/tokens/TokenUSDC";
+import TokenUSDT from "@web3icons/react/icons/tokens/TokenUSDT";
+import TokenWBTC from "@web3icons/react/icons/tokens/TokenWBTC";
+import TokenXRP from "@web3icons/react/icons/tokens/TokenXRP";
 import { siAmd, siNetflix, siPalantir, siTesla } from "simple-icons";
 
 /**
@@ -15,7 +29,9 @@ import { siAmd, siNetflix, siPalantir, siTesla } from "simple-icons";
  * - `@fortawesome/free-brands-svg-icons` (CC BY 4.0): Amazon. Amazon had its
  *   mark removed from Simple Icons and it is absent from the `logos` set too;
  *   Font Awesome's brand set is the open source that carries it.
- * - `@web3icons/react` (MIT): USDC and ETH.
+ * - `@web3icons/react` (MIT): USDC and ETH, and since GHO-102 the rest of
+ *   the crypto bases `lib/marketCategory.ts` recognises (a test holds the
+ *   two lists together).
  *
  * All static SVG shipped in the bundle; nothing is fetched at runtime.
  *
@@ -48,6 +64,20 @@ const TOKENS: Record<string, typeof TokenUSDC> = {
   MUSDC: TokenUSDC,
   ETH: TokenETH,
   WETH: TokenETH,
+  BTC: TokenBTC,
+  WBTC: TokenWBTC,
+  SOL: TokenSOL,
+  LINK: TokenLINK,
+  ARB: TokenARB,
+  OP: TokenOP,
+  USDT: TokenUSDT,
+  DAI: TokenDAI,
+  AVAX: TokenAVAX,
+  BNB: TokenBNB,
+  DOGE: TokenDOGE,
+  XRP: TokenXRP,
+  POL: TokenPOL,
+  MATIC: TokenMATIC,
 };
 
 function fromSimpleIcon(icon: { path: string; hex: string }): Glyph {
@@ -60,7 +90,11 @@ export function hasLogo(symbol: string): boolean {
   return key in GLYPHS || key in TOKENS;
 }
 
-const SIZES = { sm: "size-6", md: "size-8", lg: "size-10" } as const;
+// `xs` sits inline beside a unit ("1,000.00 ◉ mUSDC", GHO-102). The white
+// tile's padding scales with it: 6px of padding on a 16px tile would leave a
+// 4px mark nobody can recognise.
+const SIZES = { xs: "size-4", sm: "size-6", md: "size-8", lg: "size-10" } as const;
+const TILE_PAD = { xs: "p-0.5", sm: "p-1", md: "p-1.5", lg: "p-1.5" } as const;
 
 export function AssetLogo({
   symbol,
@@ -84,7 +118,7 @@ export function AssetLogo({
     // trademark to suit the theme is not ours to do.
     return (
       <span
-        className={`${box} inline-flex shrink-0 items-center justify-center rounded-full border border-border bg-white p-1.5`}
+        className={`${box} inline-flex shrink-0 items-center justify-center rounded-full border border-border bg-white ${TILE_PAD[size]}`}
         aria-hidden="true"
       >
         <svg viewBox={glyph.viewBox} fill={glyph.color} className="size-full">

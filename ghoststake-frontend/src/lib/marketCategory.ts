@@ -36,7 +36,6 @@ const CRYPTO = new Set([
   "WBTC",
   "ETH",
   "WETH",
-  "STETH",
   "SOL",
   "LINK",
   "ARB",
@@ -84,3 +83,20 @@ export function categoryOf(feed: { description: string; isQuestion: boolean }): 
 export function parseCategory(value: string | undefined): Category | undefined {
   return CATEGORIES.find((c) => c.value === value)?.value;
 }
+
+/**
+ * Which logo stands for a market (GHO-102): the token behind the price.
+ *
+ * A Robinhood equity feed prices "RHTSLA", but the company people recognise
+ * is TSLA, which is also the symbol the stock token itself reports and the
+ * key `AssetLogo` knows it by. A question has no asset, so no logo: it gets
+ * a neutral mark of its own rather than some brand its words mention.
+ */
+export function logoSymbolFor(feed: { description: string; isQuestion: boolean }): string | undefined {
+  if (feed.isQuestion) return undefined;
+  const base = baseAsset(feed.description);
+  return /^RH[A-Z]{1,5}$/.test(base) ? base.slice(2) : base;
+}
+
+/** The crypto bases, for the test that holds them to `AssetLogo`'s marks. */
+export const CRYPTO_BASES: readonly string[] = [...CRYPTO];
