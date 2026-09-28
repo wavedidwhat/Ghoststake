@@ -1,9 +1,11 @@
 "use client";
 
 import "./globals.css";
+import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
+import messages from "../../messages/en.json";
 
 /**
  * A throw in the root layout itself, which `error.tsx` cannot catch because
@@ -15,6 +17,10 @@ import { Notice } from "@/components/ui/Notice";
  * whose only job is to say what happened. A plain `<a>` rather than `Link`,
  * because a full reload is the more likely thing to recover from a broken
  * root.
+ *
+ * Brings its own messages for the same reason (GHO-116): the provider in the
+ * root layout is gone with the layout. The catalog is a static import, so
+ * nothing that can fail at runtime stands between this page and its copy.
  */
 export default function GlobalError({
   error,
@@ -30,32 +36,48 @@ export default function GlobalError({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
-        <title>Something broke · GhostStake</title>
-        <Notice
-          eyebrow="Something broke"
-          title="The app could not start"
-          actions={
-            <>
-              <Button size="lg" onClick={() => retry()}>
-                Try again
-              </Button>
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full reload is the point */}
-              <a href="/" className="inline-flex min-h-11 items-center rounded-control border border-border px-5 py-2.5 text-sm text-ink">
-                Reload
-              </a>
-            </>
-          }
-        >
-          <p>
-            Nothing about your positions has changed — a page failing to render cannot move funds.
-          </p>
-          {error.digest && (
-            <p className="text-xs text-ink-faint">
-              Reference <code className="font-mono">{error.digest}</code>
-            </p>
-          )}
-        </Notice>
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <Crashed digest={error.digest} retry={retry} />
+        </NextIntlClientProvider>
       </body>
     </html>
+  );
+}
+
+/** Split out because `useTranslations` needs the provider above it. */
+function Crashed({ digest, retry }: { digest?: string; retry: () => void }) {
+  const t = useTranslations("globalError");
+  const actions = useTranslations("actions");
+  const errors = useTranslations("errors");
+
+  return (
+    <>
+    <title>{t("metaTitle")}</title>
+    <Notice
+      eyebrow={t("eyebrow")}
+      title={t("title")}
+      actions={
+        <>
+          <Button size="lg" onClick={() => retry()}>
+            {actions("tryAgain")}
+          </Button>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full reload is the point */}
+          <a href="/" className="inline-flex min-h-11 items-center rounded-control border border-border px-5 py-2.5 text-sm text-ink">
+            {actions("reload")}
+          </a>
+        </>
+      }
+    >
+      <p>{t("body")}</p>
+      {digest && (
+        <p className="text-xs text-ink-faint">
+          {errors.rich("reference", {
+            digest,
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
+        </p>
+      )}
+    </Notice>
+    </>
   );
 }

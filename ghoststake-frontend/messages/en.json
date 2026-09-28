@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "GhostStake",
+    "description": "Stake, borrow against it, and take a position — without unwinding."
+  },
+  "actions": {
+    "goToMarkets": "Go to markets",
+    "tryAgain": "Try again",
+    "reload": "Reload"
+  },
+  "errors": {
+    "reference": "Reference <code>{digest}</code>"
+  },
+  "notFound": {
+    "metaTitle": "Not found · GhostStake",
+    "eyebrow": "404",
+    "title": "Nothing here",
+    "body": "This link does not point at a market, a round or a page. If someone shared it, the address in it may have been cut short."
+  },
+  "routeError": {
+    "eyebrow": "Something broke",
+    "title": "This page could not be shown",
+    "body": "The app hit an error drawing this screen. Nothing about your positions has changed — a page failing to render cannot move funds."
+  },
+  "globalError": {
+    "metaTitle": "Something broke · GhostStake",
+    "eyebrow": "Something broke",
+    "title": "The app could not start",
+    "body": "Nothing about your positions has changed — a page failing to render cannot move funds."
+  }
+}

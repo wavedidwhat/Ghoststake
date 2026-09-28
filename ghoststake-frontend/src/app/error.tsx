@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
@@ -25,32 +26,36 @@ export default function RouteError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const t = useTranslations("routeError");
+  const actions = useTranslations("actions");
+  const errors = useTranslations("errors");
+
   useEffect(() => {
     console.error(error);
   }, [error]);
 
   return (
     <Notice
-      eyebrow="Something broke"
-      title="This page could not be shown"
+      eyebrow={t("eyebrow")}
+      title={t("title")}
       actions={
         <>
           <Button size="lg" onClick={() => retry()}>
-            Try again
+            {actions("tryAgain")}
           </Button>
           <Link href="/" className={buttonClass({ variant: "outline", size: "lg" })}>
-            Go to markets
+            {actions("goToMarkets")}
           </Link>
         </>
       }
     >
-      <p>
-        The app hit an error drawing this screen. Nothing about your positions has changed — a page
-        failing to render cannot move funds.
-      </p>
+      <p>{t("body")}</p>
       {error.digest && (
         <p className="text-xs text-ink-faint">
-          Reference <code className="font-mono">{error.digest}</code>
+          {errors.rich("reference", {
+            digest: error.digest,
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
       )}
     </Notice>
