@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
 import { useLendingTerms, useRoundTerms } from "@/hooks/useTerms";
 import {
@@ -43,96 +45,78 @@ export function Terms({
   decimals: number | undefined;
   symbol: string;
 }) {
+  const t = useTranslations("terms");
   const lending = useLendingTerms();
 
   return (
     <section aria-labelledby="terms-heading" className="mt-2">
       <div className="mb-3 flex items-center gap-3">
         <Eyebrow as="h2" id="terms-heading">
-          Terms
+          {t("heading")}
         </Eyebrow>
         <span className="h-px flex-1 bg-border" />
-        <span className="text-xs text-ink-faint">read from the contracts</span>
+        <span className="text-xs text-ink-faint">{t("source")}</span>
       </div>
 
       {lending.isError ? (
         <p className="rounded-card border border-border bg-surface p-5 text-sm text-ink-muted">
-          The contract terms are unavailable right now.
+          {t("unavailable")}
         </p>
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
-          <Group title="Staking">
+          <Group title={t("staking.title")}>
             <Term
-              name="Yield rate"
+              name={t("staking.yieldRate")}
               value={formatOptional(lending.yieldRatePerSecond, formatApr)}
             >
-              Simple, not compounding — yield never folds back into the earning
-              base, so what you earn is a function of stake and time and nothing
-              else.
+              {t("staking.yieldRateNote")}
             </Term>
-            <Term name="Withdrawals" value="anytime">
-              Staking is not locked. A withdrawal is limited only by what your
-              debt allows: enough collateral has to stay to keep the position
-              above the liquidation threshold.
+            <Term name={t("staking.withdrawals")} value={t("staking.withdrawalsValue")}>
+              {t("staking.withdrawalsNote")}
             </Term>
           </Group>
 
-          <Group title="Borrowing">
-            <Term name="Max LTV" value={formatOptional(lending.maxLTV, formatPercent)}>
-              The most you may borrow against your stake. A borrow that would
-              cross this is refused rather than allowed and then liquidated.
+          <Group title={t("borrowing.title")}>
+            <Term name={t("borrowing.maxLtv")} value={formatOptional(lending.maxLTV, formatPercent)}>
+              {t("borrowing.maxLtvNote")}
             </Term>
             <Term
-              name="Liquidation threshold"
+              name={t("borrowing.threshold")}
               value={formatOptional(lending.liquidationThreshold, formatPercent)}
             >
-              {lending.maxLTV && lending.liquidationThreshold ? (
-                <>
-                  Where the health factor reaches 1.00 and liquidation becomes
-                  possible. The{" "}
-                  <span className="tabular text-ink">
-                    {formatPercent(lending.liquidationThreshold - lending.maxLTV)}
-                  </span>{" "}
-                  gap above the LTV ceiling is deliberate: it is the room a
-                  position has to accrue interest before anyone can touch it.
-                </>
-              ) : (
-                "Where the health factor reaches 1.00 and liquidation becomes possible."
-              )}
+              {lending.maxLTV && lending.liquidationThreshold
+                ? t.rich("borrowing.thresholdNoteGap", {
+                    gap: formatPercent(lending.liquidationThreshold - lending.maxLTV),
+                    figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+                  })
+                : t("borrowing.thresholdNote")}
             </Term>
             <Term
-              name="Utilization kink"
+              name={t("borrowing.kink")}
               value={formatOptional(lending.kink, formatPercent)}
             >
-              Where the borrow rate stops rising gently and starts rising
-              steeply, so lenders are paid to refill a pool that is running dry.
+              {t("borrowing.kinkNote")}
             </Term>
           </Group>
 
-          <Group title="If you are liquidated">
+          <Group title={t("liquidated.title")}>
             <Term
-              name="Close factor"
+              name={t("liquidated.closeFactor")}
               value={formatOptional(lending.closeFactor, formatPercent)}
             >
-              The most of your debt one liquidation may clear. It caps what a
-              single price dip costs you — the rest of the position survives it.
+              {t("liquidated.closeFactorNote")}
             </Term>
             <Term
-              name="Liquidator bonus"
+              name={t("liquidated.bonus")}
               value={formatOptional(lending.liquidationBonus, formatPercent)}
             >
-              The discount a liquidator takes on the collateral they seize, paid
-              out of your position. It is what makes anyone show up to close an
-              underwater loan, which is what keeps the pool solvent.
+              {t("liquidated.bonusNote")}
             </Term>
             <Term
-              name="Full liquidation below"
+              name={t("liquidated.full")}
               value={formatOptional(lending.fullLiquidationThreshold, formatHealthLine)}
             >
-              Below this health factor the close-factor cap is lifted and the
-              whole lien may be cleared at once. It is derived on chain from the
-              threshold and the bonus, not configured — it is precisely the
-              point where a capped liquidation stops making a position healthier.
+              {t("liquidated.fullNote")}
             </Term>
           </Group>
         </div>
@@ -161,6 +145,7 @@ function RoundTermsTable({
   decimals: number | undefined;
   symbol: string;
 }) {
+  const t = useTranslations("terms.rounds");
   const { terms } = useRoundTerms(markets);
   const feeds = useMarketFeeds(markets);
 
@@ -169,11 +154,8 @@ function RoundTermsTable({
   return (
     <div className="mt-4 rounded-card border border-border bg-surface p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium text-ink">Taking a position</h3>
-        <p className="text-xs text-ink-faint">
-          Odds come from how the pool splits, so the protocol never takes the
-          other side of your view.
-        </p>
+        <h3 className="text-sm font-medium text-ink">{t("title")}</h3>
+        <p className="text-xs text-ink-faint">{t("intro")}</p>
       </div>
 
       {/* Scrolls in its own box rather than pushing the page sideways. */}
@@ -181,33 +163,33 @@ function RoundTermsTable({
         <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-xs tracking-wide text-ink-muted uppercase">
-              <th className="pb-2 font-medium">Market</th>
-              <th className="pb-2 font-medium">Rake</th>
-              <th className="pb-2 font-medium">Entry closes</th>
-              <th className="pb-2 font-medium">Min per side</th>
+              <th className="pb-2 font-medium">{t("market")}</th>
+              <th className="pb-2 font-medium">{t("rake")}</th>
+              <th className="pb-2 font-medium">{t("entryCloses")}</th>
+              <th className="pb-2 font-medium">{t("minPerSide")}</th>
             </tr>
           </thead>
           <tbody>
-            {terms.map((t, i) => (
-              <tr key={t.market} className="border-t border-border">
+            {terms.map((term, i) => (
+              <tr key={term.market} className="border-t border-border">
                 {/* The feed's own description, falling back to the address.
                     Never a hardcoded label: the registry stores none, and a
                     copy of a name can disagree with the thing it names. */}
                 <td className="py-2 pr-4 text-ink">
-                  {feeds.byMarket.get(markets[i].key)?.description || shortenAddress(t.market)}
+                  {feeds.byMarket.get(markets[i].key)?.description || shortenAddress(term.market)}
                 </td>
                 <td className="tabular py-2 pr-4 text-ink-muted">
-                  {t.rake === undefined ? "—" : formatPercent(t.rake)}
+                  {term.rake === undefined ? "—" : formatPercent(term.rake)}
                 </td>
                 <td className="tabular py-2 pr-4 text-ink-muted">
-                  {t.entryCutoff === undefined
+                  {term.entryCutoff === undefined
                     ? "—"
-                    : `${formatDuration(t.entryCutoff)} before lock`}
+                    : t("beforeLock", { duration: formatDuration(term.entryCutoff) })}
                 </td>
                 <td className="tabular py-2 text-ink-muted">
-                  {t.minSidePool === undefined || decimals === undefined
+                  {term.minSidePool === undefined || decimals === undefined
                     ? "—"
-                    : `${formatAmount(t.minSidePool, decimals, 2)} ${symbol}`}
+                    : `${formatAmount(term.minSidePool, decimals, 2)} ${symbol}`}
                 </td>
               </tr>
             ))}
@@ -217,26 +199,16 @@ function RoundTermsTable({
 
       <dl className="mt-4 grid gap-3 text-xs leading-relaxed text-ink-muted sm:grid-cols-3">
         <div>
-          <dt className="font-medium text-ink">Rake</dt>
-          <dd>
-            Taken from the losing pool at settlement, so it is already inside
-            the odds you were shown rather than deducted from a win afterwards.
-          </dd>
+          <dt className="font-medium text-ink">{t("rake")}</dt>
+          <dd>{t("rakeNote")}</dd>
         </div>
         <div>
-          <dt className="font-medium text-ink">Entry cutoff</dt>
-          <dd>
-            Entry closes before the round locks so nobody can take a side in the
-            last second against a price they can already see moving.
-          </dd>
+          <dt className="font-medium text-ink">{t("entryCutoff")}</dt>
+          <dd>{t("entryCutoffNote")}</dd>
         </div>
         <div>
-          <dt className="font-medium text-ink">Minimum per side</dt>
-          <dd>
-            A round whose losing side never reaches this is voided and every
-            stake is refunded in full — a one-sided pool has nothing to pay a
-            winner from.
-          </dd>
+          <dt className="font-medium text-ink">{t("minimumPerSide")}</dt>
+          <dd>{t("minimumPerSideNote")}</dd>
         </div>
       </dl>
     </div>
@@ -253,7 +225,7 @@ function formatHealthLine(wad: bigint): string {
   return formatAmount(wad, 18, 4);
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-card border border-border bg-surface p-5">
       <h3 className="text-sm font-medium text-ink">{title}</h3>
@@ -277,7 +249,7 @@ function Term({
 }: {
   name: string;
   value: string | undefined;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div>

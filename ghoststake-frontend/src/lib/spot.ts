@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import { formatSignedPercent } from "./format";
 import { Side, type SideValue } from "./rounds";
 
@@ -90,15 +91,14 @@ export function priceAge(updatedAt: bigint | undefined, now: bigint | undefined)
  * changes once an hour implies the number is moving, which is the exact
  * misreading this label exists to prevent.
  */
-export function formatAge(seconds: number): string {
-  if (seconds < 90) return "just now";
+export function formatAge(seconds: number): Message {
+  if (seconds < 90) return message("age.justNow");
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return message("age.minutes", { minutes });
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  if (hours === 1 && rest === 0) return "1 hour ago";
-  if (rest === 0) return `${hours} hours ago`;
-  return `${hours}h ${rest}m ago`;
+  if (rest === 0) return message("age.hours", { hours });
+  return message("age.hoursMinutes", { hours, minutes: rest });
 }
 
 /**

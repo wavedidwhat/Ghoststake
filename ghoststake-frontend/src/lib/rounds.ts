@@ -95,20 +95,21 @@ export function willVoidOnLock(round: Round, minSidePool: bigint): boolean {
   return round.upPool < minSidePool || round.downPool < minSidePool;
 }
 
-export function phaseLabel(phase: PhaseValue): string {
+/** A phase as the key its word lives under: `round.phases.<key>` (GHO-118). */
+export function phaseKey(phase: PhaseValue): "open" | "cutoff" | "running" | "settled" | "voided" | "unknown" {
   switch (phase) {
     case Phase.Open:
-      return "Open";
+      return "open";
     case Phase.Cutoff:
-      return "Entry closed";
+      return "cutoff";
     case Phase.Observation:
-      return "Running";
+      return "running";
     case Phase.Resolved:
-      return "Settled";
+      return "settled";
     case Phase.Void:
-      return "Voided";
+      return "voided";
     default:
-      return "Unknown";
+      return "unknown";
   }
 }
 

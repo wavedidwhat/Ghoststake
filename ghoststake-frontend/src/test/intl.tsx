@@ -1,8 +1,9 @@
-import { NextIntlClientProvider } from "next-intl";
+import { NextIntlClientProvider, createTranslator } from "next-intl";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import messages from "../../messages/en.json";
 import { locale } from "@/i18n/locale";
+import type { Message } from "@/i18n/message";
 
 /**
  * Renders to markup with the real catalog, the way the root layout provides
@@ -15,4 +16,15 @@ export function renderWithMessages(ui: ReactNode): string {
       {ui}
     </NextIntlClientProvider>,
   );
+}
+
+const t = createTranslator({ locale, messages });
+
+/**
+ * A `Message` from `lib/` as a user reads it (GHO-118). Tests of the helpers
+ * that decide what to say assert on the sentence, not on the key, so a
+ * wording change in the catalog shows up where the behaviour is tested.
+ */
+export function translate(message: Message): string {
+  return t(message.key, message.values);
 }

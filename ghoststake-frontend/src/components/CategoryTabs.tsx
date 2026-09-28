@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { CATEGORIES, type Category } from "@/lib/marketCategory";
 
@@ -25,21 +26,22 @@ export function CategoryTabs({
   counts: Map<Category, number>;
   total: number;
 }) {
-  const shown = CATEGORIES.filter((c) => (counts.get(c.value) ?? 0) > 0 || c.value === current);
+  const t = useTranslations("markets");
+  const shown = CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0 || c === current);
   if (shown.length < 2 && !current) return null;
 
   const tabs = [
-    { href: "/", label: "All", count: total, on: current === undefined },
+    { href: "/", label: t("categories.all"), count: total, on: current === undefined },
     ...shown.map((c) => ({
-      href: `/?c=${c.value}`,
-      label: c.label,
-      count: counts.get(c.value) ?? 0,
-      on: current === c.value,
+      href: `/?c=${c}`,
+      label: t(`categories.${c}`),
+      count: counts.get(c) ?? 0,
+      on: current === c,
     })),
   ];
 
   return (
-    <nav aria-label="Categories" className="-mt-1 border-b border-border">
+    <nav aria-label={t("categoriesLabel")} className="-mt-1 border-b border-border">
       <ul className="flex gap-5 overflow-x-auto">
         {tabs.map((tab) => (
           <li key={tab.href} className="shrink-0">

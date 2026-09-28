@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Side } from "../rounds";
-import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "../spot";
+import { translate } from "@/test/intl";
+import { formatAge as ageOf, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "../spot";
+
+const formatAge = (seconds: number) => translate(ageOf(seconds));
 
 const usd = (n: string) => BigInt(Math.round(parseFloat(n) * 1e6)) * 10n ** 12n;
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { questionFor, sideLabel, winnerLabel } from "../question";
+import messages from "../../../messages/en.json";
+import { translate } from "@/test/intl";
+import { questionFor as ask, sideKey, winnerKey } from "../question";
 import { Side } from "../rounds";
+
+const questionFor = (input: Parameters<typeof ask>[0]) => translate(ask(input));
 
 const wad = (n: string) => BigInt(n) * 10n ** 18n;
 // 2026-09-24 14:30 local, so the rendered time matches wherever this runs.
@@ -38,10 +42,20 @@ describe("a market as a question", () => {
 
 describe("the two answers", () => {
   it("are Yes and No on screen, whatever the contract calls them", () => {
-    expect(sideLabel(Side.Up)).toBe("Yes");
-    expect(sideLabel(Side.Down)).toBe("No");
-    expect(winnerLabel("up")).toBe("Yes");
-    expect(winnerLabel("down")).toBe("No");
-    expect(winnerLabel(null)).toBeNull();
+    const word = (key: "yes" | "no" | null) => (key === null ? null : messages.round.sides[key]);
+    expect(word(sideKey(Side.Up))).toBe("Yes");
+    expect(word(sideKey(Side.Down))).toBe("No");
+    expect(word(winnerKey("up"))).toBe("Yes");
+    expect(word(winnerKey("down"))).toBe("No");
+    expect(winnerKey(null)).toBeNull();
+  });
+
+  it("passes a question market's own words through untouched", () => {
+    expect(questionFor({ feed: "Will it rain?", strike: 10n ** 18n, closeTime, isQuestion: true })).toBe(
+      "Will it rain?",
+    );
+    expect(questionFor({ feed: " ", strike: 10n ** 18n, closeTime, isQuestion: true })).toBe(
+      "An outcome somebody has to report",
+    );
   });
 });

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { isAddress } from "viem";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { feedLabel, pool, price, shortAddress } from "@/lib/marketMeta";
 import { fetchRounds } from "@/lib/roundsApi";
 import { RoundScreen } from "./RoundScreen";
@@ -22,7 +23,8 @@ type Props = { params: Promise<{ market: string; id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { market, id } = await params;
-  if (!isAddress(market)) return { title: "Round · GhostStake" };
+  const t = await getTranslations("roundMeta");
+  if (!isAddress(market)) return { title: t("fallbackTitle") };
 
   const [label, rounds] = await Promise.all([
     feedLabel(market),
@@ -32,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = label ?? shortAddress(market);
   const round = rounds?.rounds.find((r) => String(r.id) === id);
   if (!round) {
-    return { title: `Round ${id} · ${name} · GhostStake` };
+    return { title: t("unknownTitle", { id, name }) };
   }
 
   // The one line worth putting in front of somebody who has been sent a link.
@@ -44,16 +46,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // outcome itself, so "struck at $1.00, closed at $2.00" would be the two
   // most confusing numbers the app could put in front of somebody following
   // a link. What settled it is the claim.
+  const winner = round.winner === "up" ? "yes" : "no";
   const description =
     round.status === "resolved" && round.question
-      ? `${round.winner === "up" ? "Yes" : "No"} won, on a claim nobody argued with inside the window.`
+      ? t("wonOnClaim", { winner })
       : round.status === "resolved"
-        ? `${round.winner === "up" ? "Yes" : "No"} won. Struck at ${price(round.lockPrice)}, closed at ${price(round.closePrice)}.`
+        ? t("won", { winner, strike: price(round.lockPrice), close: price(round.closePrice) })
         : round.status === "void"
-          ? `Voided${round.voidReason ? ` — ${round.voidReason}` : ""}. Every stake was refunded.`
-          : `${round.phase}. ${pool(round.upPool)} up against ${pool(round.downPool)} down.`;
+          ? round.voidReason
+            ? t("voidedBecause", { reason: round.voidReason })
+            : t("voided")
+          : t("live", { phase: round.phase, up: pool(round.upPool), down: pool(round.downPool) });
 
-  const title = `${name} · round ${round.id} · GhostStake`;
+  const title = t("title", { name, id: round.id });
   return { title, description, openGraph: { title, description } };
 }
 

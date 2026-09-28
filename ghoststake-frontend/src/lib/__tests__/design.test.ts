@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import messages from "../../../messages/en.json";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -25,6 +26,13 @@ function walk(dir: string, match: RegExp): string[] {
 
 const components = walk(SRC, /\.tsx?$/).filter((p) => !p.includes("__tests__"));
 const source = (path: string) => readFileSync(path, "utf8");
+
+type Tree = { [key: string]: string | Tree };
+/** Every message in the catalog as [key, text]. */
+const catalog = (tree: Tree = messages, prefix = ""): [string, string][] =>
+  Object.entries(tree).flatMap(([key, value]) =>
+    typeof value === "string" ? [[`${prefix}${key}`, value] as [string, string]] : catalog(value, `${prefix}${key}.`),
+  );
 
 /**
  * Comments are where these names are supposed to appear — every rule here was
@@ -181,6 +189,11 @@ describe("a market is a question (GHO-78)", () => {
       // A quoted or JSX-rendered "Up"/"Down" on its own.
       if (/(["'>]\s*)(Up|Down)(\s*[<"'])/.test(body)) offenders.push(path.replace(SRC, ""));
     }
+    // And in the catalog, which is where the words live now (GHO-118): a
+    // component that says `t("…")` has no "Up" in its source to catch.
+    for (const [key, text] of catalog()) {
+      if (/(^|[\s>{])(Up|Down)([\s<}.,]|$)/.test(text)) offenders.push(`messages: ${key}`);
+    }
     expect(offenders).toEqual([]);
   });
 
@@ -188,10 +201,14 @@ describe("a market is a question (GHO-78)", () => {
     // One number without the other reads as odds somebody set, rather than
     // the crowd's own position. Both surfaces that render a multiple render a
     // percentage in the same component.
-    for (const path of ["components/RoundCard.tsx", "components/MarketsScreen.tsx"]) {
-      const body = code(join(SRC, path));
-      expect(body).toMatch(/×/);
-      expect(body).toMatch(/%/);
-    }
+    // The list row builds the pair in its own markup.
+    const row = code(join(SRC, "components/MarketsScreen.tsx"));
+    expect(row).toMatch(/×/);
+    expect(row).toMatch(/%/);
+    // The round card's pair is one message (GHO-118), so the rule is held
+    // there: a rewrite of the copy that dropped the percentage would fail here.
+    expect(code(join(SRC, "components/RoundCard.tsx"))).toContain('t("pays"');
+    expect(messages.roundCard.pays).toMatch(/\{percent\}%/);
+    expect(messages.roundCard.pays).toMatch(/\{multiple\}×/);
   });
 });

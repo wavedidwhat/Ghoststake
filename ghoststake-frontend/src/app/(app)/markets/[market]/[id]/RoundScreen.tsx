@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { Page } from "@/components/Page";
 import { Card } from "@/components/ui/Card";
@@ -8,7 +9,7 @@ import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
 import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
-import { winnerLabel } from "@/lib/question";
+import { winnerKey } from "@/lib/question";
 import type { PositionRound } from "@/lib/positions";
 import { fetchRounds, type RoundsResponse } from "@/lib/roundsApi";
 import { activeChain } from "@/lib/wagmi";
@@ -25,6 +26,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * delisted. A receipt that expires is not a receipt.
  */
 export function RoundScreen({ market, id }: { market: string; id: string }) {
+  const t = useTranslations("roundPage");
   const decimals = useActivityDecimals();
 
   const query = useQuery<RoundsResponse>({
@@ -40,18 +42,18 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
   const round = query.data?.rounds.find((r) => String(r.id) === id);
 
   return (
-    <Page title={`Round ${id}`} subtitle="What was staked, what settled it, and who won">
+    <Page title={t("title", { id })} subtitle={t("subtitle")}>
       <div className="flex flex-col gap-4">
         <Link
           href={`/markets/${market}`}
           className="text-xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
         >
-          ← This market
+          {t("back")}
         </Link>
 
         {query.isError ? (
           <Card>
-            <p className="text-sm text-ink">Could not read this round.</p>
+            <p className="text-sm text-ink">{t("unreadable")}</p>
             <p className="mt-2 text-xs text-ink-faint">{String(query.error)}</p>
           </Card>
         ) : query.isLoading ? (
@@ -60,14 +62,11 @@ export function RoundScreen({ market, id }: { market: string; id: string }) {
           </Card>
         ) : !round ? (
           <Card>
-            <p className="text-sm text-ink">No round {id} on this market.</p>
+            <p className="text-sm text-ink">{t("missing", { id })}</p>
             <p className="mt-2 text-xs text-ink-faint">
-              Round ids restart at 1 in every market, so a round 7 exists in each of them and this
-              is not the one you meant — or the indexer has not reached it yet
               {query.data
-                ? ` (it has read to block ${formatInteger(query.data.indexedBlock)})`
-                : ""}
-              .
+                ? t("missingDetailIndexed", { block: formatInteger(query.data.indexedBlock) })
+                : t("missingDetail")}
             </p>
           </Card>
         ) : (
@@ -97,6 +96,8 @@ function Detail({
   symbol: string;
   indexedBlock?: number;
 }) {
+  const t = useTranslations("roundPage");
+  const sides = useTranslations("round.sides");
   const fmt = (v: string) => (decimals === undefined ? "…" : formatAmount(BigInt(v), decimals, 2));
 
   return (
@@ -115,7 +116,7 @@ function Detail({
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <Eyebrow>Outcome</Eyebrow>
+            <Eyebrow>{t("outcome")}</Eyebrow>
             <p className="mt-1 text-lg font-medium text-ink">
               <Outcome round={round} />
             </p>
@@ -123,35 +124,35 @@ function Detail({
           <p className="text-right text-xs text-ink-faint">
             <span className="font-mono">{shortHash(market, 6, 4)}</span>
             <br />
-            {indexedBlock ? `Indexed to block ${formatInteger(indexedBlock)}.` : ""}
+            {indexedBlock ? t("indexedTo", { block: formatInteger(indexedBlock) }) : ""}
           </p>
         </div>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
-          <Eyebrow>The pool</Eyebrow>
+          <Eyebrow>{t("pool")}</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
-            <Line label="Yes" value={`${fmt(round.upPool)} ${symbol}`} />
-            <Line label="No" value={`${fmt(round.downPool)} ${symbol}`} />
-            <Line label="Total" value={`${fmt(round.totalPool)} ${symbol}`} />
+            <Line label={sides("yes")} value={`${fmt(round.upPool)} ${symbol}`} />
+            <Line label={sides("no")} value={`${fmt(round.downPool)} ${symbol}`} />
+            <Line label={t("total")} value={`${fmt(round.totalPool)} ${symbol}`} />
             {round.rakeTaken && (
-              <Line label="Rake taken" value={`${fmt(round.rakeTaken)} ${symbol}`} />
+              <Line label={t("rakeTaken")} value={`${fmt(round.rakeTaken)} ${symbol}`} />
             )}
           </dl>
         </Card>
 
         <Card>
-          <Eyebrow>The clock</Eyebrow>
+          <Eyebrow>{t("clock")}</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
-            <Line label="Opened" value={formatDateTime(round.openTime)} />
-            <Line label="Locked" value={formatDateTime(round.lockTime)} />
-            <Line label="Closed" value={formatDateTime(round.closeTime)} />
+            <Line label={t("opened")} value={formatDateTime(round.openTime)} />
+            <Line label={t("locked")} value={formatDateTime(round.lockTime)} />
+            <Line label={t("closed")} value={formatDateTime(round.closeTime)} />
           </dl>
         </Card>
 
         <Card>
-          <Eyebrow>The price</Eyebrow>
+          <Eyebrow>{t("price")}</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
             {/* The two reads the settlement is pinned to. Shown because they
                 are the whole basis of the result — a round page that states an
@@ -163,18 +164,18 @@ function Detail({
                 decimals, so a price is WAD here whatever the aggregator
                 underneath reports. */}
             <Line
-              label="Strike"
+              label={t("strike")}
               value={
                 round.lockPrice === null
-                  ? "not set"
+                  ? t("strikeNotSet")
                   : formatAmount(BigInt(round.lockPrice), 18, 2)
               }
             />
             <Line
-              label="Close"
+              label={t("close")}
               value={
                 round.closePrice === null
-                  ? "not settled yet"
+                  ? t("closeNotSettled")
                   : formatAmount(BigInt(round.closePrice), 18, 2)
               }
             />
@@ -182,11 +183,11 @@ function Detail({
         </Card>
 
         <Card>
-          <Eyebrow>Terms</Eyebrow>
+          <Eyebrow>{t("terms")}</Eyebrow>
           <dl className="mt-3 space-y-2 text-sm">
-            <Line label="Status" value={round.status} />
-            <Line label="Phase" value={round.phase} />
-            <Line label="Last touched" value={`block ${formatInteger(round.lastBlock)}`} />
+            <Line label={t("status")} value={round.status} />
+            <Line label={t("phase")} value={round.phase} />
+            <Line label={t("lastTouched")} value={t("block", { block: formatInteger(round.lastBlock) })} />
           </dl>
         </Card>
       </div>
@@ -195,22 +196,23 @@ function Detail({
 }
 
 function Outcome({ round }: { round: PositionRound }) {
+  const t = useTranslations("roundPage");
   if (round.status === "resolved") {
-    return (
-      <span className="text-positive">{winnerLabel(round.winner) === "Yes" ? "Yes" : "No"} won</span>
-    );
+    // Anything but a Yes reads as No, as it always has: the API's winner is
+    // "up" or "down" on a resolved round.
+    return <span className="text-positive">{t("won", { winner: winnerKey(round.winner) ?? "no" })}</span>;
   }
   if (round.status === "void") {
     return (
       <span className="text-ink-muted">
-        Voided — every stake refunded
+        {t("voided")}
         {round.voidReason && (
           <span className="ml-2 text-xs text-ink-faint">{round.voidReason}</span>
         )}
       </span>
     );
   }
-  return <span className="text-ink">Still running · {round.phase}</span>;
+  return <span className="text-ink">{t("running", { phase: round.phase })}</span>;
 }
 
 function Line({ label, value }: { label: string; value: string }) {

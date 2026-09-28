@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { useState, type ReactNode } from "react";
 import { erc20Abi } from "viem";
 import { useReadContract } from "wagmi";
 import { AmountField, TxStatus } from "@/components/AmountField";
 import { parseAmount } from "@/lib/amount";
-import { sideLabel } from "@/lib/question";
+import { sideKey } from "@/lib/question";
 import { Card } from "@/components/ui/Card";
 import { ConnectButton } from "@/components/ConnectButton";
 import { RoundCard } from "@/components/RoundCard";
@@ -80,19 +81,14 @@ export function MarketBlock({
   // Not an error state: the rounds themselves are fine and come from the
   // indexer. What is unavailable is the rake and the entry cutoff, and without
   // those the odds and the phase would be guesses.
+  const t = useTranslations("marketBlock");
   if (!params) {
     return (
       <section className="flex flex-col gap-4">
         <MarketHeader market={market} feed={feed} />
         <Card>
-          <p className="text-sm text-ink-muted">
-            This market&rsquo;s terms could not be read, so its odds and countdown are not
-            shown. Nothing about your position has changed.
-          </p>
-          <p className="mt-2 text-xs text-ink-faint">
-            The rake and entry cutoff are read from the contract, and that read is failing.
-            This usually clears on its own.
-          </p>
+          <p className="text-sm text-ink-muted">{t("termsUnreadable")}</p>
+          <p className="mt-2 text-xs text-ink-faint">{t("termsUnreadableDetail")}</p>
         </Card>
       </section>
     );
@@ -179,17 +175,14 @@ export function MarketBlock({
 
       {rounds.length === 0 ? (
         <Card>
-          <p className="text-sm text-ink-muted">
-            No rounds have been opened on this market yet. Rounds are scheduled by the keeper
-            (GHO-24); until it runs, the owner opens them by hand.
-          </p>
+          <p className="text-sm text-ink-muted">{t("noRounds")}</p>
         </Card>
       ) : (
         <>
-          <Section title="Live" empty="Nothing open right now.">
+          <Section title={t("live")} empty={t("liveEmpty")}>
             {live.map((r) => card(r, false))}
           </Section>
-          <Section title="Settled" empty="Nothing has settled yet.">
+          <Section title={t("settled")} empty={t("settledEmpty")}>
             {done.map((r) => card(r, true))}
           </Section>
         </>
@@ -199,6 +192,8 @@ export function MarketBlock({
 }
 
 export function MarketHeader({ market, feed }: { market: Market; feed: MarketFeed | undefined }) {
+  const t = useTranslations("marketBlock");
+  const feedT = useTranslations("feed");
   // Either source saying "demo" is enough. The chain is the authority, but
   // until it has answered the configured slot is the safer guess: erring
   // towards the demo label costs a Chainlink market a badge for a second,
@@ -213,7 +208,7 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
   // The feed's own description — "ETH / USD" on a Chainlink aggregator. There
   // is no fallback label to fall back to: the registry deliberately stores
   // none, so an unread feed is "reading", not a guess.
-  const label = feed ? (feed.description.split(" - ").pop() ?? "Market") : "Reading feed…";
+  const label = feed ? (feed.description.split(" - ").pop() ?? t("marketFallback")) : feedT("reading");
 
   return (
     <div
@@ -225,55 +220,42 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
         <MarketMark feed={feed} size="lg" />
         <h2 className="display text-lg text-ink">{label}</h2>
         {demo ? (
-          <Badge>
-            Demo feed
-          </Badge>
+          <Badge>{feedT("demo")}</Badge>
         ) : knownFeed ? (
           <span className="rounded-sm bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
-            Chainlink
+            {feedT("chainlink")}
           </span>
         ) : (
           <span className="rounded-sm bg-raised px-2.5 py-0.5 text-xs text-ink-faint">
-            reading feed…
+            {t("readingBadge")}
           </span>
         )}
       </div>
       <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-        {demo ? (
-          <>
-            <span className="font-medium text-warning">
-              The price on this market is set by hand by the operator.
-            </span>{" "}
-            The contracts, the staking and the settlement are the real ones — only the feed is
-            not. It exists because a round cannot resolve until its feed publishes after the
-            close, and a real feed&rsquo;s heartbeat runs to tens of minutes; here a round can be
-            watched all the way through.
-          </>
-        ) : knownFeed ? (
-          <>
-            Settlement is pinned to a Chainlink feed nobody here controls: the price is the last
-            one the feed published at or before the close, and the round after it proves that.
-          </>
-        ) : (
-          <>Reading this market&rsquo;s price feed from the chain.</>
-        )}
+        {demo
+          ? t.rich("demoExplainer", {
+              lead: (chunks: ReactNode) => <span className="font-medium text-warning">{chunks}</span>,
+            })
+          : knownFeed
+            ? t("chainlinkExplainer")
+            : t("readingExplainer")}
       </p>
 
       {/* The two contracts that decide this market, so each claim above can
           be checked against the chain rather than taken from us (GHO-103). */}
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-faint">
         <span>
-          Market <ExplorerLink address={market.address} />
+          {t("contractMarket")} <ExplorerLink address={market.address} />
         </span>
         {feed?.isQuestion
           ? feed.oracle && (
               <span>
-                Oracle <ExplorerLink address={feed.oracle} />
+                {t("contractOracle")} <ExplorerLink address={feed.oracle} />
               </span>
             )
           : feed?.feed && (
               <span>
-                Price feed <ExplorerLink address={feed.feed} />
+                {t("contractFeed")} <ExplorerLink address={feed.feed} />
               </span>
             )}
       </p>
@@ -288,7 +270,7 @@ function Section({
 }: {
   title: string;
   empty: string;
-  children: React.ReactNode[];
+  children: ReactNode[];
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -332,6 +314,8 @@ function PositionForm({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const t = useTranslations("marketBlock");
+  const amounts = useTranslations("amount");
   const [own, setOwn] = useState("");
   const [borrow, setBorrow] = useState("");
   const tx = useTransaction();
@@ -422,7 +406,8 @@ function PositionForm({
     if (ok) onDone();
   }
 
-  const answer = sideLabel(side);
+  const answer = sideKey(side);
+  const round = roundId.toString();
 
   /*
    * The ticket is a sheet, not an inline block (GHO-59).
@@ -437,7 +422,7 @@ function PositionForm({
    * been chosen; closing it is the parent dropping it.
    */
   return (
-    <Sheet open onClose={onClose} title={`${answer} · round ${roundId.toString()}`}>
+    <Sheet open onClose={onClose} title={t("sheetTitle", { side: answer, round })}>
       <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-sm text-ink">
         {/* The side is named with its arrow and its colour here too, so the
@@ -448,32 +433,32 @@ function PositionForm({
           }`}
         >
           <SideArrow up={side === Side.Up} className="size-3" />
-          {answer}
+          {t("side", { side: answer })}
         </span>
-        <span className="text-ink-muted">on round {roundId.toString()}</span>
+        <span className="text-ink-muted">{t("onRound", { round })}</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <AmountField
-          label="From your wallet"
+          label={t("fromWallet")}
           value={own}
           onChange={setOwn}
           max={wallet.data}
           decimals={decimals}
           symbol={position.symbol}
-          maxLabel="Wallet"
+          maxLabel={t("walletMax")}
           disabled={busy}
         />
         <AmountField
-          label="Borrowed against your stake"
+          label={t("borrowed")}
           value={borrow}
           onChange={setBorrow}
           max={position.maxBorrowable}
           decimals={decimals}
           symbol={position.symbol}
-          maxLabel="Capacity"
+          maxLabel={t("capacityMax")}
           disabled={busy}
-          hint="Goes straight from your stake into the market. It never reaches your wallet, and your stake keeps earning."
+          hint={t("borrowedHint")}
         />
       </div>
 
@@ -487,12 +472,8 @@ function PositionForm({
         />
       )}
 
-      {overWallet && <p className="text-xs text-negative">More than your wallet holds.</p>}
-      {overCapacity && (
-        <p className="text-xs text-negative">
-          Above your borrowing capacity. The vault would refuse this at the LTV ceiling.
-        </p>
-      )}
+      {overWallet && <p className="text-xs text-negative">{amounts("overWallet")}</p>}
+      {overCapacity && <p className="text-xs text-negative">{t("overCapacity")}</p>}
 
       {/*
        * The commit button takes the colour of the side being taken, never the
@@ -508,12 +489,12 @@ function PositionForm({
         }`}
       >
         {busy
-          ? "Working…"
+          ? t("working")
           : invalid
-            ? `Take ${answer}`
+            ? t("take", { side: answer })
             : needsTokenApproval || needsDelegation
-            ? `Approve and take ${answer}`
-            : `Take ${answer} · ${formatAmount(total, decimals, 2)} ${position.symbol}`}
+            ? t("approveAndTake", { side: answer })
+            : t("takeAmount", { side: answer, amount: formatAmount(total, decimals, 2), symbol: position.symbol })}
       </button>
 
       <TxStatus tx={tx} />
@@ -557,6 +538,7 @@ function HealthPreview({
   borrowAmount: bigint;
   symbol: string;
 }) {
+  const t = useTranslations("marketBlock");
   const band = healthBand(after);
   const tone =
     band === "danger" ? "text-negative" : band === "caution" ? "text-warning" : "text-positive";
@@ -564,7 +546,7 @@ function HealthPreview({
   return (
     <div className="flex flex-col gap-2 rounded-sm border border-border bg-surface p-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-xs text-ink-muted">Health factor after borrowing</span>
+        <span className="text-xs text-ink-muted">{t("healthAfter")}</span>
         <span className="flex items-baseline gap-2">
           {before !== undefined && (
             <span className="tabular text-xs text-ink-faint">
@@ -577,15 +559,9 @@ function HealthPreview({
         </span>
       </div>
       <p className="text-xs text-ink-muted">
-        Borrowing {formatAmount(borrowAmount, decimals, 2)} {symbol} against your stake, which
-        keeps earning throughout. If the round loses, the debt stands and is settled from your
-        stake.
+        {t("borrowingNote", { amount: formatAmount(borrowAmount, decimals, 2), symbol })}
       </p>
-      {band === "danger" && (
-        <p className="text-xs text-negative">
-          This leaves you close to the liquidation line before the round has even started.
-        </p>
-      )}
+      {band === "danger" && <p className="text-xs text-negative">{t("healthDanger")}</p>}
     </div>
   );
 }
@@ -606,19 +582,13 @@ function HealthPreview({
  * that makes this protocol unusual.
  */
 function ConnectToTake({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("marketBlock");
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-raised/40 px-4 py-3">
-      <p className="text-xs leading-relaxed text-ink-muted">
-        Taking a side needs a wallet. Your stake keeps earning while the position is open — it
-        is borrowed against, not sold.
-      </p>
+      <p className="text-xs leading-relaxed text-ink-muted">{t("connectToTake")}</p>
       <div className="flex items-center gap-2">
         <ConnectButton />
-        <TextButton
-          onClick={onClose}
-        >
-          Not now
-        </TextButton>
+        <TextButton onClick={onClose}>{t("notNow")}</TextButton>
       </div>
     </div>
   );
@@ -645,20 +615,24 @@ function ClaimRow({
   address: `0x${string}`;
   onDone: () => void;
 }) {
+  const t = useTranslations("marketBlock");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
 
   if (positionSize === 0n) return null;
 
   if (claimed) {
-    return <p className="mt-3 text-xs text-ink-muted">Claimed.</p>;
+    return <p className="mt-3 text-xs text-ink-muted">{t("claimed")}</p>;
   }
 
   if (claimable === undefined || claimable === 0n) {
     return (
       <p className="mt-3 text-xs text-ink-muted">
-        Your position on this round was{" "}
-        <span className="tabular">{formatAmount(positionSize, decimals, 2)}</span> {symbol}.
+        {t.rich("yourPosition", {
+          amount: formatAmount(positionSize, decimals, 2),
+          symbol,
+          figure: (chunks) => <span className="tabular">{chunks}</span>,
+        })}
       </p>
     );
   }
@@ -666,10 +640,11 @@ function ClaimRow({
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
       <p className="text-xs text-ink">
-        <span className="tabular font-medium text-positive">
-          {formatAmount(claimable, decimals, 2)} {symbol}
-        </span>{" "}
-        to claim. Debt is settled first; the rest reaches your wallet.
+        {t.rich("toClaim", {
+          amount: formatAmount(claimable, decimals, 2),
+          symbol,
+          figure: (chunks) => <span className="tabular font-medium text-positive">{chunks}</span>,
+        })}
       </p>
       <div className="flex items-center gap-3">
         <TxStatus tx={tx} />
@@ -686,7 +661,7 @@ function ClaimRow({
             if (ok) onDone();
           }}
         >
-          {busy ? "Claiming…" : "Claim"}
+          {busy ? t("claiming") : t("claim")}
         </Button>
       </div>
     </div>

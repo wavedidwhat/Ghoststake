@@ -130,23 +130,24 @@ export function formatApr(ratePerSecond: bigint, fractionDigits = 2): string {
  * spelling them in `en.json` would be copying data `Intl` already has.
  */
 export function formatDuration(seconds: bigint): string {
-  if (seconds === 0n) return unit("second", 0n);
+  if (seconds === 0n) return formatUnit("second", 0n);
 
   const hours = seconds / 3600n;
   const minutes = (seconds % 3600n) / 60n;
   const rest = seconds % 60n;
 
   const parts: string[] = [];
-  if (hours > 0n) parts.push(unit("hour", hours));
-  if (minutes > 0n) parts.push(unit("minute", minutes));
+  if (hours > 0n) parts.push(formatUnit("hour", hours));
+  if (minutes > 0n) parts.push(formatUnit("minute", minutes));
   // Seconds are dropped once there is an hour on the front: "1h 0m 3s" is
   // precision nobody asked for on a deadline measured in hours.
-  if (rest > 0n && hours === 0n) parts.push(unit("second", rest));
+  if (rest > 0n && hours === 0n) parts.push(formatUnit("second", rest));
 
   return parts.join(" ");
 }
 
-function unit(name: "hour" | "minute" | "second", value: bigint): string {
+/** One quantity in the locale's narrow unit: "5m", "1h", "90s". */
+export function formatUnit(name: "hour" | "minute" | "second", value: bigint): string {
   return new Intl.NumberFormat(locale, { style: "unit", unit: name, unitDisplay: "narrow" }).format(value);
 }
 

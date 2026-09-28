@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import { formatAmount, formatClock } from "./format";
 import { Side, type SideValue } from "./rounds";
 
@@ -14,15 +15,18 @@ import { Side, type SideValue } from "./rounds";
  * keyed by. This is the display layer: nothing below it changes.
  */
 
-/** What a side is called on screen. */
-export function sideLabel(side: SideValue): "Yes" | "No" {
-  return side === Side.Up ? "Yes" : "No";
+/**
+ * Which answer a side is, as the key its word lives under:
+ * `round.sides.<key>` ("Yes" / "No") in the catalog (GHO-118).
+ */
+export function sideKey(side: SideValue): "yes" | "no" {
+  return side === Side.Up ? "yes" : "no";
 }
 
 /** The same, for the winner strings the API serves ("up" / "down"). */
-export function winnerLabel(winner: string | null | undefined): "Yes" | "No" | null {
-  if (winner === "up") return "Yes";
-  if (winner === "down") return "No";
+export function winnerKey(winner: string | null | undefined): "yes" | "no" | null {
+  if (winner === "up") return "yes";
+  if (winner === "down") return "no";
   return null;
 }
 
@@ -50,27 +54,33 @@ export function questionFor(input: {
    * "Brazil win the World Cup" as "Brazil above $1.00 at 14:30".
    */
   isQuestion?: boolean;
-}): string {
+}): Message {
   if (input.isQuestion) {
     // The contract's own words, or nothing. An event market with no readable
     // question is a market nobody should be shown a made-up sentence for.
-    return input.feed?.trim() || "An outcome somebody has to report";
+    // The contract's words are passed through as they are: they are the
+    // market's data, not the app's copy.
+    const own = input.feed?.trim();
+    return own ? message("question.asked", { text: own }) : message("question.unnamed");
   }
 
+  // No feed yet: the sentence names "the price" in place of an asset.
   const asset = assetOf(input.feed);
   const at = input.closeTime === undefined ? null : timeOf(input.closeTime);
 
   if (input.strike === null || input.strike === undefined || input.strike === 0n) {
-    return at ? `${asset} higher at ${at}` : `${asset} higher at the close`;
+    if (!asset) return at ? message("question.priceHigherAt", { at }) : message("question.priceHigherAtClose");
+    return at ? message("question.higherAt", { asset, at }) : message("question.higherAtClose", { asset });
   }
 
   const level = `$${formatAmount(input.strike, 18, strikeDigits(input.strike))}`;
-  return at ? `${asset} above ${level} at ${at}` : `${asset} above ${level}`;
+  if (!asset) return at ? message("question.priceAboveAt", { level, at }) : message("question.priceAbove", { level });
+  return at ? message("question.aboveAt", { asset, level, at }) : message("question.above", { asset, level });
 }
 
-/** "ETH / USD" is about ETH. A feed with no pair is used as it is. */
-function assetOf(feed: string | undefined): string {
-  if (!feed) return "The price";
+/** "ETH / USD" is about ETH. A feed with no pair is used as it is. Null with no feed. */
+function assetOf(feed: string | undefined): string | null {
+  if (!feed) return null;
   const [base] = feed.split("/");
   return base.trim() || feed;
 }
@@ -95,13 +105,14 @@ function strikeDigits(strike: bigint): number {
 }
 
 /**
- * How a position's side reads in a list: "yes", "no", "both" or "none".
+ * How a position's side reads in a list: the key under `round.taken`
+ * ("yes", "no", "both", "none").
  *
  * Takes the ledger's own words rather than the contract enum, because that is
  * what the API serves — and keeps the two list views (cards on a phone, a
  * table on a desktop) from drifting into different vocabularies.
  */
-export function takenLabel(taken: "up" | "down" | "both" | "none"): string {
+export function takenKey(taken: "up" | "down" | "both" | "none"): "yes" | "no" | "both" | "none" {
   switch (taken) {
     case "up":
       return "yes";

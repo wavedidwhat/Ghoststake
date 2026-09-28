@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { type ReactNode } from "react";
 import { useConnection } from "wagmi";
@@ -15,7 +16,7 @@ import { roundKey, useClaimConfirmation, usePositions } from "@/hooks/usePositio
 import { useTransaction } from "@/hooks/useTransaction";
 import { parimutuelRoundAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
-import { takenLabel } from "@/lib/question";
+import { takenKey } from "@/lib/question";
 import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
 import {
   byRecency,
@@ -455,6 +456,7 @@ function PositionsTable({
   decimals?: number;
   symbol: string;
 }) {
+  const taken = useTranslations("round.taken");
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
 
   return (
@@ -489,7 +491,7 @@ function PositionsTable({
               <RowField label="Side">
                 {side === "both"
                   ? `yes ${fmt(BigInt(position.upStake))} · no ${fmt(BigInt(position.downStake))}`
-                  : takenLabel(side)}
+                  : taken(takenKey(side))}
               </RowField>
               <RowField label="Staked">
                 <span className="tabular font-mono text-ink">
@@ -561,6 +563,7 @@ function Row({
   decimals?: number;
   symbol: string;
 }) {
+  const taken = useTranslations("round.taken");
   const outcome = outcomeOf(position);
   const net = netOf(position);
   const side = sideTaken(position);
@@ -617,7 +620,7 @@ function Row({
             yes {fmt(BigInt(position.upStake))} · no {fmt(BigInt(position.downStake))}
           </span>
         ) : (
-          takenLabel(side)
+          taken(takenKey(side))
         )}
       </td>
 

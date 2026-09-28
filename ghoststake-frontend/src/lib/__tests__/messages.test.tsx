@@ -52,6 +52,30 @@ describe("messages/en.json", () => {
     // Guards the check above: a catalog walk that found nothing would pass.
     expect(all.length).toBeGreaterThan(10);
   });
+
+  /**
+   * In ICU the ASCII apostrophe is the escape character (GHO-118). Placed
+   * before a `{` or `#` it quotes what follows, and the text renders without
+   * the apostrophe and with the braces as literal characters. Nothing errors.
+   * Copy is full of apostrophes ("didn't", "the protocol's cut"), so every
+   * message is rendered and compared: a plain one must come out exactly as
+   * written, and any one must keep every apostrophe it had.
+   */
+  it("renders as written, apostrophes included", () => {
+    const t = createTranslator({ locale: "en", messages, onError: () => {} }) as unknown as (
+      key: string,
+      values?: Record<string, string>,
+    ) => string;
+    const changed: string[] = [];
+    for (const [key, text] of all) {
+      const plain = !/[{}<]/.test(text);
+      const names = [...text.matchAll(/\{\s*(\w+)/g)].map((m) => m[1]);
+      const rendered = t(key, Object.fromEntries(names.map((n) => [n, "X"])));
+      const apostrophes = (s: string) => s.split("'").length - 1;
+      if (plain ? rendered !== text : apostrophes(rendered) < apostrophes(text)) changed.push(key);
+    }
+    expect(changed).toEqual([]);
+  });
 });
 
 /** Migrated screens render their copy from the catalog, not their keys. */

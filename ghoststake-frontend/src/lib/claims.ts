@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 /**
  * What a wallet can collect, across every market (GHO-69).
  *
@@ -49,9 +50,9 @@ export type ClaimOutcome =
   | { state: "pending"; claim: Claimable }
   | { state: "claimed"; claim: Claimable; hash: `0x${string}` }
   /** Simulated and would revert — not sent, and not the user's fault. */
-  | { state: "skipped"; claim: Claimable; reason: string }
+  | { state: "skipped"; claim: Claimable; reason: string | null }
   | { state: "cancelled"; claim: Claimable }
-  | { state: "failed"; claim: Claimable; reason: string };
+  | { state: "failed"; claim: Claimable; reason: string | null; reverted?: boolean };
 
 export function claimKey(claim: Claimable): string {
   return `${claim.market.toLowerCase()}:${claim.roundId}`;
@@ -117,9 +118,8 @@ export function summarise(outcomes: ClaimOutcome[]): RunSummary {
  * chain. If a batch entry point is ever added, this is the first thing that
  * changes.
  */
-export function signaturesNeeded(count: number): string {
-  if (count === 1) return "One signature.";
-  return `${count} signatures, one per round — there is no batch claim on chain.`;
+export function signaturesNeeded(count: number): Message {
+  return message("claimAll.signatures", { count });
 }
 
 /**
@@ -129,8 +129,12 @@ export function signaturesNeeded(count: number): string {
  * part in the middle. A custom error name is the useful part: `AlreadyClaimed`
  * says the money is already collected, which is a completely different thing
  * from a failure, and the user should be told which they hit.
+ *
+ * The chain's own words, passed through as they are: an error name is data,
+ * not copy. Null when there are none, and the component says so in the app's
+ * voice (GHO-118).
  */
-export function revertReason(cause: unknown): string {
+export function revertReason(cause: unknown): string | null {
   const message = cause instanceof Error ? cause.message : String(cause);
 
   const custom = /(?:reverted with the following reason:|Error:)\s*([A-Za-z0-9_]+)\(/.exec(message);
@@ -140,5 +144,5 @@ export function revertReason(cause: unknown): string {
   if (named?.[1]) return named[1].replace(/\(\)$/, "");
 
   const line = message.split("\n")[0]?.trim();
-  return line && line.length > 0 ? line : "the chain refused it";
+  return line && line.length > 0 ? line : null;
 }
