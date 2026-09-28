@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useConnection } from "wagmi";
 import { Page, NotConfigured } from "@/components/Page";
@@ -24,15 +25,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * ideas of what a market looks like.
  */
 export function MarketScreen({ market }: { market: string }) {
+  const t = useTranslations("market");
+  const markets = useTranslations("markets");
   const connection = useConnection();
 
   return (
-    <Page
-      title="Market"
-      subtitle="Take a view with borrowed capital — your stake keeps earning"
-    >
+    <Page title={t("title")} subtitle={markets("subtitle")}>
       {!anyMarketConfigured() ? (
-        <NotConfigured what="No market is configured for this network." />
+        <NotConfigured what={markets("notConfigured")} />
       ) : (
         // No wallet gate. GHO-41 made a market's address its URL precisely so
         // it could be shared, and a shared link that answers with "connect a
@@ -46,6 +46,7 @@ export function MarketScreen({ market }: { market: string }) {
 }
 
 function Body({ market, address }: { market: string; address: `0x${string}` | undefined }) {
+  const t = useTranslations("market");
   const now = useNow();
   const { markets, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);
@@ -66,10 +67,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
   if (isError || marketsError) {
     return (
       <Card>
-        <p className="text-sm text-ink-muted">
-          This market could not be read. The chain is unreachable right now — nothing about your
-          positions has changed.
-        </p>
+        <p className="text-sm text-ink-muted">{t("unreadable")}</p>
       </Card>
     );
   }
@@ -85,17 +83,13 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
   if (!found) {
     return (
       <Card>
-        <p className="text-sm text-ink">This address is not a market on this network.</p>
-        <p className="mt-2 text-xs text-ink-faint">
-          The registry does not list it and it is not configured here. A market delisted since the
-          link was shared still appears for anyone holding a position in it — so an empty answer
-          here means the address is wrong, not that it was hidden from you.
-        </p>
+        <p className="text-sm text-ink">{t("notAMarket")}</p>
+        <p className="mt-2 text-xs text-ink-faint">{t("notAMarketDetail")}</p>
         <Link
           href="/markets"
           className="mt-3 inline-block text-sm text-ink-muted underline-offset-2 hover:text-ink hover:underline"
         >
-          Back to markets
+          {t("back")}
         </Link>
       </Card>
     );
@@ -107,7 +101,7 @@ function Body({ market, address }: { market: string; address: `0x${string}` | un
         href="/markets"
         className="text-xs text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
       >
-        ← All markets
+        {t("allMarkets")}
       </Link>
 
       <MarketBlock

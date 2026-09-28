@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import {
   claimKey,
   collected,
@@ -90,9 +91,9 @@ describe("what the button promises", () => {
     // There is no batch claim on ParimutuelRound: a payout is pull-based, per
     // round, per market. A user expecting one prompt and getting five was
     // misled by the button, not by the chain.
-    expect(signaturesNeeded(1)).toBe("One signature.");
-    expect(signaturesNeeded(5)).toContain("5 signatures");
-    expect(signaturesNeeded(5)).toContain("no batch claim");
+    expect(translate(signaturesNeeded(1))).toBe("One signature.");
+    expect(translate(signaturesNeeded(5))).toContain("5 signatures");
+    expect(translate(signaturesNeeded(5))).toContain("no batch claim");
   });
 });
 

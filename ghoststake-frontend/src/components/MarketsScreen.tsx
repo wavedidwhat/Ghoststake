@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { SideArrow } from "@/components/ui/icons";
 import { Page, NotConfigured } from "@/components/Page";
@@ -12,7 +13,7 @@ import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } f
 import { useMarkets } from "@/hooks/useMarkets";
 import { useMarketParams, useRounds } from "@/hooks/useRounds";
 import { MoneyStrip } from "@/components/MoneyStrip";
-import { questionFor, sideLabel } from "@/lib/question";
+import { questionFor, sideKey } from "@/lib/question";
 import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
@@ -29,7 +30,7 @@ import {
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { CATEGORIES, categoryOf, type Category } from "@/lib/marketCategory";
+import { categoryOf, type Category } from "@/lib/marketCategory";
 import { CategoryTabs } from "@/components/CategoryTabs";
 import { MarketMark } from "@/components/MarketMark";
 
@@ -50,10 +51,11 @@ import { MarketMark } from "@/components/MarketMark";
  * an address. See GHO-44.
  */
 export function MarketsScreen({ category }: { category?: Category }) {
+  const t = useTranslations("markets");
   return (
-    <Page title="Markets" subtitle="Take a view with borrowed capital — your stake keeps earning">
+    <Page title={t("title")} subtitle={t("subtitle")}>
       {!anyMarketConfigured() ? (
-        <NotConfigured what="No market is configured for this network." />
+        <NotConfigured what={t("notConfigured")} />
       ) : (
         <RoundsScreen category={category} />
       )}
@@ -70,6 +72,7 @@ export function MarketsScreen({ category }: { category?: Category }) {
  * already know what you want.
  */
 function RoundsScreen({ category }: { category?: Category }) {
+  const t = useTranslations("markets");
   const now = useNow();
   const { markets, listed, isLoading: marketsLoading, isError: marketsError } = useMarkets();
   const params = useMarketParams(markets);
@@ -81,10 +84,7 @@ function RoundsScreen({ category }: { category?: Category }) {
   if (isError || marketsError) {
     return (
       <Card>
-        <p className="text-sm text-ink-muted">
-          Markets could not be read. The chain is unreachable right now — nothing about your
-          positions has changed.
-        </p>
+        <p className="text-sm text-ink-muted">{t("unreadable")}</p>
       </Card>
     );
   }
@@ -103,9 +103,7 @@ function RoundsScreen({ category }: { category?: Category }) {
   if (markets.length === 0) {
     return (
       <Card>
-        <p className="text-sm text-ink-muted">
-          The registry lists no markets yet. Adding one is a transaction, not a redeploy.
-        </p>
+        <p className="text-sm text-ink-muted">{t("empty")}</p>
       </Card>
     );
   }
@@ -144,11 +142,11 @@ function RoundsScreen({ category }: { category?: Category }) {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
-          <Eyebrow as="h2">Markets</Eyebrow>
+          <Eyebrow as="h2">{t("heading")}</Eyebrow>
           <span className="h-px flex-1 bg-border" />
           {listed.length !== visible.length && (
             <span className="text-[11px] text-ink-faint">
-              includes {visible.length - listed.length} delisted you hold
+              {t("includesDelisted", { count: visible.length - listed.length })}
             </span>
           )}
         </div>
@@ -158,10 +156,14 @@ function RoundsScreen({ category }: { category?: Category }) {
         {summaries.length === 0 && category && (
           <Card>
             <p className="text-sm text-ink-muted">
-              Nothing under {CATEGORIES.find((c) => c.value === category)?.label} right now.{" "}
-              <Link href="/" className="text-ink underline-offset-2 hover:underline">
-                See all markets
-              </Link>
+              {t.rich("emptyCategory", {
+                category: t(`categories.${category}`),
+                link: (chunks) => (
+                  <Link href="/" className="text-ink underline-offset-2 hover:underline">
+                    {chunks}
+                  </Link>
+                ),
+              })}
             </p>
           </Card>
         )}
@@ -210,6 +212,9 @@ function MarketRow({
   symbol: string;
   now: bigint | undefined;
 }) {
+  const t = useTranslations("markets");
+  const feedT = useTranslations("feed");
+  const root = useTranslations();
   const { market, params, live } = summary;
   const demo = market.kindHint === "demo" || feed?.isDemo === true;
   // The instrument behind the question. A price feed names itself
@@ -217,22 +222,23 @@ function MarketRow({
   // part worth showing. A question's own words are not a feed label and must
   // not be split on a dash it may well contain.
   const label = !feed
-    ? "Reading feed…"
+    ? feedT("reading")
     : feed.isQuestion
-      ? "Settled by a claim"
-      : (feed.description.split(" - ").pop() ?? "Market");
+      ? t("settledByClaim")
+      : (feed.description.split(" - ").pop() ?? t("marketFallback"));
 
   // What this market is asking. Without a live round there is no strike and
   // no close, so it falls back to naming the instrument rather than inventing
   // a question nobody can answer.
-  const question = live
+  const asked = live
     ? questionFor({
         feed: feed?.description,
         strike: live.round.lockPrice,
         closeTime: live.round.closeTime,
         isQuestion: feed?.isQuestion,
       })
-    : label;
+    : undefined;
+  const question = asked ? root(asked.key, asked.values) : label;
 
   const upMultiple = live && params ? multipleFor(live.round, Side.Up, params.rake) : null;
   const downMultiple = live && params ? multipleFor(live.round, Side.Down, params.rake) : null;
@@ -261,26 +267,26 @@ function MarketRow({
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-xs text-ink-faint">{label}</span>
           {demo && (
-            <Badge size="sm">
-              Demo feed
-            </Badge>
+            <Badge size="sm">{feedT("demo")}</Badge>
           )}
           {!market.enabled && (
             <span className="rounded-sm bg-raised px-2 py-0.5 text-[11px] text-ink-faint">
-              delisted — you hold a position
+              {t("delistedHeld")}
             </span>
           )}
           {market.horizon !== undefined && (
             <span className="text-[11px] text-ink-faint">
-              {formatHorizon(market.horizon)} rounds
+              {t("horizon", { horizon: formatHorizon(market.horizon) })}
             </span>
           )}
         </div>
 
         {closesIn !== undefined && (
           <span className="text-[11px] text-ink-faint">
-            entry closes in{" "}
-            <span className="tabular text-ink">{formatCountdown(closesIn)}</span>
+            {t.rich("entryClosesIn", {
+              countdown: formatCountdown(closesIn),
+              time: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+            })}
           </span>
         )}
       </div>
@@ -294,7 +300,7 @@ function MarketRow({
           <OddsSplit round={live.round} />
           <div className="mt-2 grid grid-cols-2 gap-3">
             <SideSummary
-              name="Yes"
+              name={root("round.sides.yes")}
               up
               pool={live.round.upPool}
               percent={sharePercent(live.round, true)}
@@ -303,7 +309,7 @@ function MarketRow({
               symbol={symbol}
             />
             <SideSummary
-              name="No"
+              name={root("round.sides.no")}
               up={false}
               pool={live.round.downPool}
               percent={sharePercent(live.round, false)}
@@ -314,7 +320,7 @@ function MarketRow({
           </div>
         </>
       ) : (
-        <p className="mt-3 text-xs text-ink-faint">No round open right now.</p>
+        <p className="mt-3 text-xs text-ink-faint">{t("noRound")}</p>
       )}
     </Link>
   );
@@ -326,9 +332,10 @@ function MarketRow({
  * exact amounts are one tap away on the market itself.
  */
 function OddsSplit({ round }: { round: Round }) {
+  const t = useTranslations("markets");
   const share = upShare(round);
   if (share === null) {
-    return <p className="mt-3 text-xs text-ink-faint">Nothing staked yet.</p>;
+    return <p className="mt-3 text-xs text-ink-faint">{t("nothingStaked")}</p>;
   }
 
   const yes = Math.round(share);
@@ -338,13 +345,13 @@ function OddsSplit({ round }: { round: Round }) {
           card, so a market reads the same in the list and on its own page. */}
       <div className="flex items-baseline gap-1.5">
         <span className="tabular text-2xl text-ink">{yes}%</span>
-        <span className="text-xs text-ink-muted">say yes</span>
+        <span className="text-xs text-ink-muted">{t("sayYes")}</span>
       </div>
 
       <div
         className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-down"
         role="img"
-        aria-label={`${yes}% of the pool says yes, ${100 - yes}% says no`}
+        aria-label={t("splitLabel", { yes, no: 100 - yes })}
       >
         <div className="h-full bg-up" style={{ width: `${share}%` }} />
       </div>
@@ -422,6 +429,8 @@ function SpotSummary({
   spot: Spot | undefined;
   now: bigint | undefined;
 }) {
+  const t = useTranslations("markets.spot");
+  const root = useTranslations();
   if (!spot) return null;
 
   const age = priceAge(spot.updatedAt, now);
@@ -431,15 +440,21 @@ function SpotSummary({
   return (
     <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
       <span>
-        {stale ? "Last price" : "Now"}{" "}
-        <span className="tabular text-ink">{formatAmount(spot.price, 18, 2)}</span>
+        {t.rich(stale ? "lastPrice" : "now", {
+          price: formatAmount(spot.price, 18, 2),
+          figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+        })}
       </span>
-      {age !== null && <span className="text-[11px] text-ink-faint">printed {formatAge(age)}</span>}
+      {age !== null && (
+        <span className="text-[11px] text-ink-faint">
+          {t("printed", { age: root(formatAge(age).key, formatAge(age).values) })}
+        </span>
+      )}
       {bps !== null && leading !== null && (
         <span className="tabular">
           {formatMove(bps)}{" "}
           <span className="tabular-none">
-            {isNarrow(bps) ? "— too close to call" : `— ${sideLabel(leading)} ahead`}
+            {isNarrow(bps) ? t("tooClose") : t("ahead", { side: sideKey(leading) })}
           </span>
         </span>
       )}

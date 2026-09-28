@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { formatAmount, formatUtcTime } from "@/lib/format";
-import { questionFor, sideLabel } from "@/lib/question";
+import { questionFor, sideKey } from "@/lib/question";
 import { MarketMark } from "@/components/MarketMark";
 import type { Spot } from "@/hooks/useSpot";
 import { formatAge, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "@/lib/spot";
@@ -17,7 +19,7 @@ import {
   entryOpen,
   formatCountdown,
   multipleFor,
-  phaseLabel,
+  phaseKey,
   upShare,
   willVoidOnLock,
   type PhaseValue,
@@ -80,8 +82,10 @@ export function RoundCard({
   spot?: Spot;
   /** Where this round lives on its own (GHO-41). Omitted on the round's own page. */
   href?: string;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
+  const t = useTranslations("roundCard");
+  const root = useTranslations();
   const canEnter = now !== undefined && entryOpen(round, entryCutoff, now);
   const closesAt = entryClosesAt(round, entryCutoff);
 
@@ -97,12 +101,13 @@ export function RoundCard({
   // The question this round is asking (GHO-78). A market used to be an asset
   // and a direction — "ETH / USD", answered Up or Down — which is not a
   // question anybody outside this codebase thinks in.
-  const question = questionFor({
+  const asked = questionFor({
     feed,
     strike: round.lockPrice,
     closeTime: round.closeTime,
     isQuestion,
   });
+  const question = root(asked.key, asked.values);
 
   return (
     <article className="rounded-card border border-border bg-surface p-4">
@@ -124,15 +129,15 @@ export function RoundCard({
               href={href}
               className="text-xs text-ink-faint underline-offset-4 hover:text-ink-muted hover:underline"
             >
-              Round {id.toString()}
+              {t("round", { id: id.toString() })}
             </Link>
           ) : (
-            <span className="text-xs text-ink-faint">Round {id.toString()}</span>
+            <span className="text-xs text-ink-faint">{t("round", { id: id.toString() })}</span>
           )}
           <PhaseChip phase={phase} />
           {youAreIn && (
             <span className="display rounded-control bg-brand-soft px-2 py-0.5 text-xs text-brand uppercase">
-              You&rsquo;re in
+              {t("youreIn")}
             </span>
           )}
         </div>
@@ -152,10 +157,10 @@ export function RoundCard({
             }`}
             title={
               phase === Phase.Open
-                ? "until entry closes"
+                ? t("untilEntryCloses")
                 : phase === Phase.Cutoff
-                  ? "until the start price is taken"
-                  : "until it settles"
+                  ? t("untilStartPrice")
+                  : t("untilSettles")
             }
           >
             {formatCountdown(remaining)}
@@ -173,14 +178,16 @@ export function RoundCard({
        */}
       {round.lockPrice > 0n && (
         <p className="mt-3 text-xs text-ink-muted">
-          Strike{" "}
-          <span className="tabular text-ink">{formatAmount(round.lockPrice, 18, 2)}</span>
-          {round.closePrice > 0n && (
-            <>
-              {" → close "}
-              <span className="tabular text-ink">{formatAmount(round.closePrice, 18, 2)}</span>
-            </>
-          )}
+          {round.closePrice > 0n
+            ? t.rich("strikeToClose", {
+                strike: formatAmount(round.lockPrice, 18, 2),
+                close: formatAmount(round.closePrice, 18, 2),
+                figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+              })
+            : t.rich("strike", {
+                strike: formatAmount(round.lockPrice, 18, 2),
+                figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+              })}
         </p>
       )}
 
@@ -225,17 +232,11 @@ export function RoundCard({
           voids refunds everyone, so this is a "nothing will happen" warning
           rather than a risk warning. */}
       {thin && round.status === Status.Open && (
-        <p className="mt-3 text-xs text-warning">
-          One side is still under the minimum. If it stays that way the round voids at lock and
-          every position is refunded in full.
-        </p>
+        <p className="mt-3 text-xs text-warning">{t("thin")}</p>
       )}
 
       {phase === Phase.Cutoff && (
-        <p className="mt-3 text-xs text-ink-muted">
-          Entry closed {entryCutoff.toString()}s before the lock, so nobody can react to the
-          strike being taken.
-        </p>
+        <p className="mt-3 text-xs text-ink-muted">{t("entryClosed", { seconds: entryCutoff.toString() })}</p>
       )}
 
       {children}
@@ -244,6 +245,7 @@ export function RoundCard({
 }
 
 function PhaseChip({ phase }: { phase: PhaseValue }) {
+  const phases = useTranslations("round.phases");
   const style =
     phase === Phase.Open
       ? "bg-positive-soft text-positive"
@@ -257,7 +259,7 @@ function PhaseChip({ phase }: { phase: PhaseValue }) {
 
   return (
     <span className={`rounded-sm px-2.5 py-0.5 text-xs font-medium ${style}`}>
-      {phaseLabel(phase)}
+      {phases(phaseKey(phase))}
     </span>
   );
 }
@@ -275,13 +277,11 @@ function PhaseChip({ phase }: { phase: PhaseValue }) {
  * half-and-half bar would invent a crowd.
  */
 function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; symbol: string }) {
+  const t = useTranslations("roundCard");
+  const markets = useTranslations("markets");
   const share = upShare(round);
   if (share === null) {
-    return (
-      <p className="mt-3 text-xs text-ink-faint">
-        Nothing staked yet — the first side in sets the odds.
-      </p>
-    );
+    return <p className="mt-3 text-xs text-ink-faint">{t("nothingStaked")}</p>;
   }
 
   const yes = Math.round(share);
@@ -295,25 +295,21 @@ function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; 
       <div className="flex items-center gap-3">
         <div className="flex items-baseline gap-1.5">
           <span className="tabular text-2xl text-ink">{yes}%</span>
-          <span className="text-xs text-ink-muted">say yes</span>
+          <span className="text-xs text-ink-muted">{markets("sayYes")}</span>
         </div>
 
         <div
           className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-down"
           role="img"
-          aria-label={`${yes}% of the pool says yes, ${100 - yes}% says no`}
+          aria-label={markets("splitLabel", { yes, no: 100 - yes })}
         >
           <div className="h-full bg-up" style={{ width: `${share}%` }} />
         </div>
       </div>
 
       <div className="tabular mt-2 flex justify-between text-xs text-ink-faint">
-        <span>
-          {formatAmount(round.upPool, decimals, 2)} {symbol} on yes
-        </span>
-        <span>
-          {formatAmount(round.downPool, decimals, 2)} {symbol} on no
-        </span>
+        <span>{t("onYes", { amount: formatAmount(round.upPool, decimals, 2), symbol })}</span>
+        <span>{t("onNo", { amount: formatAmount(round.downPool, decimals, 2), symbol })}</span>
       </div>
     </div>
   );
@@ -348,6 +344,8 @@ function SideButton({
   disabled: boolean;
   onStake?: (side: SideValue) => void;
 }) {
+  const t = useTranslations("roundCard");
+  const sides = useTranslations("round.sides");
   const isUp = side === Side.Up;
   const multiple = multipleFor(round, side, rake);
   const mine = yours !== undefined && yours > 0n;
@@ -383,12 +381,12 @@ function SideButton({
           {/* The arrow stays: colour is never the only signal (DESIGN.md), and
               Yes/No have to survive greyscale as much as Up/Down did. */}
           <SideArrow up={isUp} className="size-3" />
-          {sideLabel(side)}
+          {sides(sideKey(side))}
         </span>
         <span className="tabular text-xs font-normal normal-case opacity-80">
           {multiple === null
-            ? "no odds yet"
-            : `${percent}% · pays ${formatAmount(multiple, 18, 2)}×`}
+            ? t("noOdds")
+            : t("pays", { percent: percent ?? 0, multiple: formatAmount(multiple, 18, 2) })}
         </span>
       </button>
 
@@ -396,12 +394,13 @@ function SideButton({
           it. A settled winner says so here too, so the result is attached to
           the side rather than only to the round. */}
       <p className="text-center text-xs text-ink-faint">
-        {won && <span className="text-positive">Won · </span>}
+        {won && <span className="text-positive">{t("won")}</span>}
         {mine ? (
-          <>
-            yours <span className="tabular text-ink">{formatAmount(yours!, decimals, 2)}</span>{" "}
-            {symbol}
-          </>
+          t.rich("yours", {
+            amount: formatAmount(yours!, decimals, 2),
+            symbol,
+            figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+          })
         ) : (
           <span className="opacity-0">—</span>
         )}
@@ -436,6 +435,9 @@ function SpotLine({
   now?: bigint;
   isQuestion?: boolean;
 }) {
+  const t = useTranslations("roundCard");
+  const root = useTranslations();
+  const printed = (m: ReturnType<typeof formatAge>) => root(m.key, m.values);
   const settled = round.status === Status.Resolved || round.status === Status.Void;
   // A settled round has a close price on the line above, which is the number
   // that decided it. Showing today's price beside it would invite reading the
@@ -466,8 +468,10 @@ function SpotLine({
     {awaitingStrike && <AwaitingStrike phase={phase} />}
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
       <span>
-        {stale ? "Last price" : "Now"}{" "}
-        <span className="tabular text-ink">{formatAmount(spot.price, 18, 2)}</span>
+        {t.rich(stale ? "lastPrice" : "now", {
+          price: formatAmount(spot.price, 18, 2),
+          figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+        })}
       </span>
 
       {/*
@@ -476,7 +480,9 @@ function SpotLine({
        * word "Now" could be fifty-nine minutes old on the one screen where
        * that difference decides a bet.
        */}
-      {age !== null && <span className="text-ink-faint">printed {formatAge(age)}</span>}
+      {age !== null && (
+        <span className="text-ink-faint">{t("printed", { age: printed(formatAge(age)) })}</span>
+      )}
 
       {bps !== null && leading !== null && (
         <>
@@ -487,9 +493,7 @@ function SpotLine({
            * crosses a tenth of a percent several times an hour — so stating
            * both the same way would be misleading in one of the two cases.
            */}
-          <span>
-            {isNarrow(bps) ? "too close to call" : `${sideLabel(leading)} is ahead`}
-          </span>
+          <span>{isNarrow(bps) ? t("tooClose") : t("ahead", { side: sideKey(leading) })}</span>
         </>
       )}
 
@@ -499,9 +503,7 @@ function SpotLine({
        * not settle on must not be shown as if it would.
        */}
       {!spot.usable && (
-        <span className="text-ink-faint">
-          (the feed is stale — this is not a price the round could settle on)
-        </span>
+        <span className="text-ink-faint">{t("unusable")}</span>
       )}
     </p>
     </>
@@ -522,12 +524,12 @@ function AwaitingStrike({ phase }: { phase: PhaseValue }) {
   // closed, and the level is being captured rather than waiting on a
   // deadline. Two sentences rather than one, because a card that tells you
   // something you can see is wrong is worse than one that says nothing.
-  const text =
-    phase === Phase.Open
-      ? "Start price is set when entry closes — this round measures the move from there."
-      : "Start price is being set now. This round measures the move from there.";
-
-  return <p className="mt-3 text-xs text-ink-muted">{text}</p>;
+  const t = useTranslations("roundCard");
+  return (
+    <p className="mt-3 text-xs text-ink-muted">
+      {phase === Phase.Open ? t("awaitingStrike") : t("settingStrike")}
+    </p>
+  );
 }
 
 /**
@@ -558,6 +560,7 @@ function SettlementNote({
   // A question is settled by a named arbiter against written criteria, not by
   // a feed. Saying "settles on the price" there would be plainly false, and
   // the resolution panel already explains the real path (GHO-91).
+  const t = useTranslations("roundCard");
   if (isQuestion) return null;
 
   // A void round was not settled on the price — it was cancelled and the
@@ -568,7 +571,7 @@ function SettlementNote({
 
   const at = formatUtcTime(Number(round.closeTime) * 1000);
 
-  const name = feed?.split(" - ").pop() ?? "the price feed";
+  const name = feed?.split(" - ").pop() ?? t("thePriceFeed");
 
   // Tense matters here more than it looks. This sentence exists to be
   // checked, and a resolved round that still says "settles" reads as a
@@ -578,14 +581,19 @@ function SettlementNote({
 
   return (
     <p className="mt-3 border-t border-border pt-3 text-[11px] text-ink-faint">
-      {done ? "Settled" : "Settles"} on the {feedAddress ? (
-        <ExplorerLink address={feedAddress} className="underline hover:text-ink-muted">
-          Chainlink {name}
-        </ExplorerLink>
-      ) : (
-        <>Chainlink {name}</>
-      )}{" "}
-      price at {at} UTC. Anyone can check it.
+      {t.rich("settlement", {
+        state: done ? "done" : "pending",
+        name,
+        at,
+        feed: (chunks) =>
+          feedAddress ? (
+            <ExplorerLink address={feedAddress} className="underline hover:text-ink-muted">
+              {chunks}
+            </ExplorerLink>
+          ) : (
+            chunks
+          ),
+      })}
     </p>
   );
 }

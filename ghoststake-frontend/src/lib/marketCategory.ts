@@ -19,13 +19,8 @@
 
 export type Category = "crypto" | "stocks" | "questions" | "other";
 
-/** Tab order, and the words on them. */
-export const CATEGORIES: readonly { value: Category; label: string }[] = [
-  { value: "crypto", label: "Crypto" },
-  { value: "stocks", label: "Stocks" },
-  { value: "questions", label: "Questions" },
-  { value: "other", label: "Other" },
-];
+/** Tab order. The words on them are `markets.categories.<category>` (GHO-118). */
+export const CATEGORIES: readonly Category[] = ["crypto", "stocks", "questions", "other"];
 
 /**
  * Crypto bases. Wrapped forms are listed because a feed may name the token
@@ -81,7 +76,7 @@ export function categoryOf(feed: { description: string; isQuestion: boolean }): 
  * hand-typed link should still show markets.
  */
 export function parseCategory(value: string | undefined): Category | undefined {
-  return CATEGORIES.find((c) => c.value === value)?.value;
+  return CATEGORIES.find((c) => c === value);
 }
 
 /**

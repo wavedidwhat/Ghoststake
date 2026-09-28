@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { usePublicClient, useReadContract } from "wagmi";
 import { useWallet } from "@/hooks/useWallet";
@@ -34,7 +35,7 @@ import {
   warningsFor,
   type ActionValue,
 } from "@/lib/operator";
-import { Phase, Status, formatCountdown, phaseLabel, type PhaseValue } from "@/lib/rounds";
+import { Phase, Status, formatCountdown, phaseKey, type PhaseValue } from "@/lib/rounds";
 import { activeChain } from "@/lib/wagmi";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { Button } from "@/components/ui/Button";
@@ -412,6 +413,7 @@ function RoundRow({
   symbol: string;
   onDone: () => void;
 }) {
+  const phases = useTranslations("round.phases");
   const phase = (round.phase ?? Phase.None) as PhaseValue;
   const action = now === undefined ? Action.None : actionFor(round.round, phase, params, now);
   const warnings =
@@ -432,7 +434,7 @@ function RoundRow({
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-ink">Round {round.id.toString()}</span>
           <span className="rounded-sm bg-raised px-2 py-0.5 text-xs text-ink-muted">
-            {phaseLabel(phase)}
+            {phases(phaseKey(phase))}
           </span>
           {decimals !== undefined && (
             <span className="tabular text-xs text-ink-faint">

@@ -1,8 +1,10 @@
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import { formatAmount, formatDuration, shortenAddress } from "@/lib/format";
 import type { RoundQuestion } from "@/lib/positions";
 import {
   challengeWindow,
-  outcomeLabel,
+  outcomeKey,
   proposerInterest,
   questionHeadline,
 } from "@/lib/resolution";
@@ -34,25 +36,27 @@ export function ResolutionPanel({
   /** Passed in so the countdown ticks where the caller ticks. */
   now?: Date;
 }) {
+  const t = useTranslations("resolution");
+  const sides = useTranslations("round.sides");
+  const root = useTranslations();
   const window = challengeWindow(question, now);
   const interest = proposerInterest(question);
-  const answer = outcomeLabel(question.outcome);
+  const answer = outcomeKey(question.outcome);
+  const headline = questionHeadline(question);
 
   return (
     <section className="rounded-card border border-border bg-surface p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <Eyebrow as="h3">
-          How this gets answered
-        </Eyebrow>
+        <Eyebrow as="h3">{t("heading")}</Eyebrow>
         {answer && question.state === "final" && (
           <span className="display rounded-control bg-brand-soft px-2 py-0.5 text-xs text-brand uppercase">
-            {answer}
+            {sides(answer)}
           </span>
         )}
       </div>
 
       <p className="display mt-2 text-base leading-snug text-ink">
-        {questionHeadline(question)}
+        {root(headline.key, headline.values)}
       </p>
 
       {/*
@@ -62,23 +66,18 @@ export function ResolutionPanel({
        */}
       {window.open && (
         <p className="mt-2 text-sm text-ink-muted">
-          {window.secondsLeft === null ? (
-            <>Anyone can still argue with this.</>
-          ) : (
-            <>
-              Anyone can argue with this for another{" "}
-              <span className="tabular text-ink">
-                {formatDuration(BigInt(window.secondsLeft))}
-              </span>
-              . It costs a bond, and being right pays the liar&rsquo;s.
-            </>
-          )}
+          {window.secondsLeft === null
+            ? t("canArgue")
+            : t.rich("canArgueFor", {
+                left: formatDuration(BigInt(window.secondsLeft)),
+                figure: (chunks) => <span className="tabular text-ink">{chunks}</span>,
+              })}
         </p>
       )}
 
       <dl className="mt-4 space-y-2 text-sm">
         {question.proposer && (
-          <Row label="Claimed by">
+          <Row label={t("claimedBy")}>
             <span className="tabular">{shortenAddress(question.proposer)}</span>
           </Row>
         )}
@@ -89,11 +88,11 @@ export function ResolutionPanel({
          * row would read as not having looked.
          */}
         {question.proposer && (
-          <Row label="Their stake here">
+          <Row label={t("theirStake")}>
             {interest === "unknown" ? (
-              <span className="text-ink-faint">could not be read</span>
+              <span className="text-ink-faint">{t("stakeUnreadable")}</span>
             ) : interest === "none" ? (
-              <span className="text-ink-muted">nothing</span>
+              <span className="text-ink-muted">{t("stakeNothing")}</span>
             ) : (
               <span className="tabular text-ink">
                 {decimals === undefined || question.proposerStake === undefined
@@ -105,7 +104,7 @@ export function ResolutionPanel({
         )}
 
         {question.evidenceUri && (
-          <Row label="Evidence">
+          <Row label={t("evidence")}>
             {/*
              * `noreferrer` as well as `noopener`: an evidence URI is a link to
              * somewhere nobody here controls, and it should not learn which
@@ -123,7 +122,7 @@ export function ResolutionPanel({
         )}
 
         {question.evidenceDigest && (
-          <Row label="Digest">
+          <Row label={t("digest")}>
             {/*
              * The only thing that makes the URI worth anything, since a
              * document at a URL can be rewritten after a claim is made.
@@ -137,19 +136,19 @@ export function ResolutionPanel({
         )}
 
         {question.challenger && (
-          <Row label="Argued by">
+          <Row label={t("arguedBy")}>
             <span className="tabular">{shortenAddress(question.challenger)}</span>
           </Row>
         )}
 
         {question.arbiter && (
-          <Row label="Ruled by">
+          <Row label={t("ruledBy")}>
             <span className="tabular">{shortenAddress(question.arbiter)}</span>
           </Row>
         )}
 
         {question.reasonUri && (
-          <Row label="Reasoning">
+          <Row label={t("reasoning")}>
             <a
               href={question.reasonUri}
               target="_blank"
@@ -163,17 +162,13 @@ export function ResolutionPanel({
       </dl>
 
       {question.state === "abandoned" && (
-        <p className="mt-4 text-sm leading-relaxed text-ink-muted">
-          A question the process could not answer pays nobody. Both bonds went
-          back and every stake in this round is refunded — nobody wins by
-          staying quiet.
-        </p>
+        <p className="mt-4 text-sm leading-relaxed text-ink-muted">{t("abandoned")}</p>
       )}
     </section>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
       <dt className="text-ink-muted">{label}</dt>

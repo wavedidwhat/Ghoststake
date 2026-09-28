@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { translate } from "@/test/intl";
 import type { RoundQuestion } from "../positions";
 import {
   challengeWindow,
   claimFavoursProposer,
-  outcomeLabel,
+  outcomeKey,
   proposerInterest,
-  questionHeadline,
+  questionHeadline as headlineOf,
 } from "../resolution";
 
 const base: RoundQuestion = { state: "open" };
+
+const questionHeadline = (q: Parameters<typeof headlineOf>[0]) => translate(headlineOf(q));
 
 describe("questionHeadline", () => {
   it("does not claim an answer before anyone has given one", () => {
@@ -96,11 +99,11 @@ describe("claimFavoursProposer", () => {
   });
 });
 
-describe("outcomeLabel", () => {
+describe("outcomeKey", () => {
   it("has no answer for a question nobody has answered", () => {
-    expect(outcomeLabel("none")).toBeNull();
-    expect(outcomeLabel(undefined)).toBeNull();
-    expect(outcomeLabel("yes")).toBe("Yes");
-    expect(outcomeLabel("no")).toBe("No");
+    expect(outcomeKey("none")).toBeNull();
+    expect(outcomeKey(undefined)).toBeNull();
+    expect(outcomeKey("yes")).toBe("yes");
+    expect(outcomeKey("no")).toBe("no");
   });
 });

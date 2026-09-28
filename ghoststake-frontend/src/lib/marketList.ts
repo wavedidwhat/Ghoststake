@@ -1,5 +1,6 @@
 import type { MarketParams, MarketRound } from "@/hooks/useRounds";
 import type { Market } from "./markets";
+import { formatUnit } from "./format";
 import { Phase } from "./rounds";
 
 /**
@@ -49,7 +50,7 @@ export function byActivity(a: Summary, b: Summary): number {
 
 /** Seconds as an operator would say them: "5m", "1h", "24h". */
 export function formatHorizon(seconds: bigint): string {
-  if (seconds % 3600n === 0n) return `${seconds / 3600n}h`;
-  if (seconds % 60n === 0n) return `${seconds / 60n}m`;
-  return `${seconds}s`;
+  if (seconds % 3600n === 0n) return formatUnit("hour", seconds / 3600n);
+  if (seconds % 60n === 0n) return formatUnit("minute", seconds / 60n);
+  return formatUnit("second", seconds);
 }

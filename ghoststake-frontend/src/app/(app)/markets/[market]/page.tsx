@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { isAddress } from "viem";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { fetchRounds } from "@/lib/roundsApi";
 import { feedLabel, pool, shortAddress } from "@/lib/marketMeta";
 import { MarketScreen } from "./MarketScreen";
@@ -33,7 +34,8 @@ type Props = { params: Promise<{ market: string }> };
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { market } = await params;
-  if (!isAddress(market)) return { title: "Market · GhostStake" };
+  const t = await getTranslations("marketMeta");
+  if (!isAddress(market)) return { title: t("fallbackTitle") };
 
   const [label, rounds] = await Promise.all([
     feedLabel(market),
@@ -45,14 +47,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = label ?? shortAddress(market);
   const latest = rounds?.rounds[0];
   const description = latest
-    ? `Round ${latest.id} is ${latest.phase}. ${pool(latest.upPool)} up against ${pool(latest.downPool)} down.`
-    : `A parimutuel market on ${name}. Stake a side with borrowed capital while your collateral keeps earning.`;
+    ? t("live", { id: latest.id, phase: latest.phase, up: pool(latest.upPool), down: pool(latest.downPool) })
+    : t("idle", { name });
+  const title = t("title", { name });
 
-  return {
-    title: `${name} · GhostStake`,
-    description,
-    openGraph: { title: `${name} · GhostStake`, description },
-  };
+  return { title, description, openGraph: { title, description } };
 }
 
 export default async function MarketPage({ params }: Props) {

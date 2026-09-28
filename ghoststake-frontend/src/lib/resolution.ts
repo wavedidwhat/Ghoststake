@@ -1,3 +1,4 @@
+import { message, type Message } from "@/i18n/message";
 import type { QuestionOutcome, RoundQuestion } from "./positions";
 
 /**
@@ -13,32 +14,35 @@ import type { QuestionOutcome, RoundQuestion } from "./positions";
  * the states that matter rather than through a DOM.
  */
 
-/** What an outcome is called on screen. Yes/No, matching the answers. */
-export function outcomeLabel(outcome: QuestionOutcome | undefined): "Yes" | "No" | null {
-  if (outcome === "yes") return "Yes";
-  if (outcome === "no") return "No";
+/**
+ * Which answer an outcome is, as its key under `round.sides` ("Yes" / "No"),
+ * matching the answers.
+ */
+export function outcomeKey(outcome: QuestionOutcome | undefined): "yes" | "no" | null {
+  if (outcome === "yes") return "yes";
+  if (outcome === "no") return "no";
   return null;
 }
 
 /** Where a question stands, in one sentence a person would say. */
-export function questionHeadline(q: RoundQuestion): string {
-  const answer = outcomeLabel(q.outcome);
+export function questionHeadline(q: RoundQuestion): Message {
+  const answer = outcomeKey(q.outcome);
   switch (q.state) {
     case "open":
-      return "Nobody has said what happened yet";
+      return message("resolution.headline.open");
     case "proposed":
-      return answer ? `Someone says the answer is ${answer}` : "Someone has claimed an outcome";
+      return answer ? message("resolution.headline.proposedAnswer", { answer }) : message("resolution.headline.proposed");
     case "challenged":
-      return "That claim is being argued";
+      return message("resolution.headline.challenged");
     case "final":
-      return answer ? `The answer is ${answer}` : "The question is settled";
+      return answer ? message("resolution.headline.finalAnswer", { answer }) : message("resolution.headline.final");
     case "abandoned":
       // Not "unresolved", which sounds like it is still coming. Nobody ruled,
       // the bonds went back, and the round now refunds everyone — so the
       // sentence has to say that the waiting is over.
-      return "Nobody ruled in time, so every stake is refunded";
+      return message("resolution.headline.abandoned");
     default:
-      return "This round is settled by a question";
+      return message("resolution.headline.unknown");
   }
 }
 
@@ -101,5 +105,5 @@ export function claimFavoursProposer(
   proposerSide: "yes" | "no" | undefined,
 ): boolean {
   if (proposerSide === undefined) return false;
-  return outcomeLabel(q.outcome)?.toLowerCase() === proposerSide;
+  return outcomeKey(q.outcome) === proposerSide;
 }

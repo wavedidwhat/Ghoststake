@@ -93,7 +93,7 @@ export function useClaimAll(address: `0x${string}` | undefined) {
           if (receipt.status === "reverted") {
             // Mined and reverted: the user paid for this one, so it is a
             // failure rather than a skip, and saying otherwise hides a cost.
-            settle(index, { state: "failed", claim, reason: "reverted on chain" });
+            settle(index, { state: "failed", claim, reason: null, reverted: true });
             continue;
           }
 

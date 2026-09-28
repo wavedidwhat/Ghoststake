@@ -29,7 +29,9 @@ const noInlineCopy = (level) => ({
   "no-restricted-syntax": [
     level,
     {
-      selector: `JSXAttribute[name.name=/^(${COPY_PROPS})$/] > Literal[value=/[A-Za-z]/]`,
+      // A word, not a format hint: "0x…" and "0.00" are placeholders that
+      // show a shape, and every language writes them the same way.
+      selector: `JSXAttribute[name.name=/^(${COPY_PROPS})$/] > Literal[value=/[A-Za-z]{2,}/]`,
       message: "User-facing text belongs in messages/en.json; read it with t().",
     },
     {
@@ -59,6 +61,16 @@ const MIGRATED = [
   "src/components/ui/LoadFailed.tsx",
   "src/components/ui/Notice.tsx",
   "src/components/ui/Sheet.tsx",
+  "src/app/(app)/markets/[market]/MarketScreen.tsx",
+  "src/app/(app)/markets/[market]/[id]/RoundScreen.tsx",
+  "src/components/CategoryTabs.tsx",
+  "src/components/ClaimAllPanel.tsx",
+  "src/components/FeesPanel.tsx",
+  "src/components/MarketBlock.tsx",
+  "src/components/MarketsScreen.tsx",
+  "src/components/ResolutionPanel.tsx",
+  "src/components/RoundCard.tsx",
+  "src/components/Terms.tsx",
 ];
 
 const eslintConfig = defineConfig([

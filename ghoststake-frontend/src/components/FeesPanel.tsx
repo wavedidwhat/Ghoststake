@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useReadContracts } from "wagmi";
 import { AmountField, TxStatus } from "@/components/AmountField";
@@ -47,11 +48,12 @@ export function FeesPanel({
   decimals: number | undefined;
   symbol: string;
 }) {
+  const t = useTranslations("fees");
   return (
     <section aria-labelledby="fees-heading" className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <Eyebrow as="h2" id="fees-heading">
-          Protocol earnings
+          {t("heading")}
         </Eyebrow>
         <span className="h-px flex-1 bg-border" />
       </div>
@@ -90,14 +92,15 @@ function MarketFees({
     ],
     query: { refetchInterval: 12_000 },
   });
+  const t = useTranslations("fees");
   const [fees, treasury, owner] = query.data ?? [];
 
   return (
     <Balance
-      title={`Round rake — ${shortenAddress(market.address)}`}
+      title={t("rakeTitle", { market: shortenAddress(market.address) })}
       predatesTreasury={treasury?.status === "failure"}
-      note="Taken from the losing pool at settlement. A voided round takes none at all — rake is only recorded on the resolve path — so a market on a slow feed earns nothing while it is voiding."
-      bound="Capped by the rake collected, not by the token balance, so this cannot reach stakes still owed to users — including a resolved round's unclaimed winnings."
+      note={t("rakeNote")}
+      bound={t("rakeBound")}
       balance={fees?.result as bigint | undefined}
       treasury={treasury?.result as `0x${string}` | undefined}
       owner={owner?.result as `0x${string}` | undefined}
@@ -129,14 +132,15 @@ function PoolReserves({
     ],
     query: { refetchInterval: 12_000 },
   });
+  const t = useTranslations("fees");
   const [reserves, treasury, owner] = query.data ?? [];
 
   return (
     <Balance
-      title="Lending reserves"
+      title={t("reservesTitle")}
       predatesTreasury={treasury?.status === "failure"}
-      note="The protocol's cut of borrower interest, credited when interest accrues into the index rather than when a borrower pays."
-      bound="Subordinated to suppliers: a withdrawal is refused unless the pool still holds enough cash to meet every supplier claim afterwards. Credited interest that nobody has paid is not withdrawable."
+      note={t("reservesNote")}
+      bound={t("reservesBound")}
       balance={reserves?.result as bigint | undefined}
       treasury={treasury?.result as `0x${string}` | undefined}
       owner={owner?.result as `0x${string}` | undefined}
@@ -195,6 +199,7 @@ function Balance({
   withdrawFn: "withdrawFees" | "withdrawReserves";
   onDone: () => void;
 }) {
+  const t = useTranslations("fees");
   const withdraw = useTransaction();
   const repoint = useTransaction();
   const [amount, setAmount] = useState("");
@@ -235,17 +240,14 @@ function Balance({
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-sm border border-border bg-raised/40 px-4 py-3">
         {predatesTreasury ? (
           <span className="text-xs text-warning">
-            This contract was deployed before the stored treasury and has no{" "}
-            <code>treasury()</code>. Its withdrawal still takes a destination, so it can only be
-            called from a terminal — that is the state GHO-40 is about, and it clears on the next
-            deploy.
+            {t.rich("predatesTreasury", { code: (chunks) => <code>{chunks}</code> })}
           </span>
         ) : (
           <>
             <span className="text-xs text-ink-muted">
-              Goes to{" "}
+              {t("goesTo")}{" "}
               {treasury === undefined ? (
-                <span className="text-ink-faint">reading…</span>
+                <span className="text-ink-faint">{t("reading")}</span>
               ) : (
                 <code className="text-ink">{treasury}</code>
               )}
@@ -254,7 +256,7 @@ function Balance({
               <TextButton
                 onClick={() => setRepointing((v) => !v)}
               >
-                {repointing ? "Cancel" : "Change"}
+                {repointing ? t("cancel") : t("change")}
               </TextButton>
             )}
           </>
@@ -288,7 +290,7 @@ function Balance({
               }
             }}
           >
-            Set destination
+            {t("setDestination")}
           </Button>
           <TxStatus tx={repoint} />
         </div>
@@ -297,7 +299,7 @@ function Balance({
       {balance !== undefined && balance > 0n && decimals !== undefined && !predatesTreasury && (
         <div className="mt-4 flex flex-col gap-2">
           <AmountField
-            label="Withdraw"
+            label={t("withdraw")}
             value={amount}
             onChange={setAmount}
             decimals={decimals}
@@ -305,9 +307,7 @@ function Balance({
             max={balance}
           />
           {overBalance && (
-            <p className="text-xs text-negative">
-              More than has accrued. The contract would refuse this.
-            </p>
+            <p className="text-xs text-negative">{t("overAccrued")}</p>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -326,14 +326,14 @@ function Balance({
                 }
               }}
             >
-              {busy ? "Working…" : "Withdraw"}
+              {busy ? t("working") : t("withdraw")}
             </Button>
             <span className="text-xs text-ink-faint">
               {isOwner
-                ? "Owner-only, and that is you."
+                ? t("ownerYou")
                 : owner === undefined
-                  ? "Reading the owner…"
-                  : `Owner-only. This contract's owner is ${shortenAddress(owner)}.`}
+                  ? t("ownerReading")
+                  : t("ownerOther", { owner: shortenAddress(owner) })}
             </span>
             <TxStatus tx={withdraw} />
           </div>
