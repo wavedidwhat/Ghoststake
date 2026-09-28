@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { buttonClass } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 
-export const metadata: Metadata = { title: "Not found · GhostStake" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("notFound");
+  return { title: t("metaTitle") };
+}
 
 /**
  * Any URL that names nothing (GHO-85): an unmatched path, or a market or round
@@ -15,20 +20,20 @@ export const metadata: Metadata = { title: "Not found · GhostStake" };
  * registry does not list it") than a generic 404 can.
  */
 export default function NotFound() {
+  const t = useTranslations("notFound");
+  const actions = useTranslations("actions");
+
   return (
     <Notice
-      eyebrow="404"
-      title="Nothing here"
+      eyebrow={t("eyebrow")}
+      title={t("title")}
       actions={
         <Link href="/" className={buttonClass({ variant: "outline", size: "lg" })}>
-          Go to markets
+          {actions("goToMarkets")}
         </Link>
       }
     >
-      <p>
-        This link does not point at a market, a round or a page. If someone shared it, the address in
-        it may have been cut short.
-      </p>
+      <p>{t("body")}</p>
     </Notice>
   );
 }

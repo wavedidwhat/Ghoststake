@@ -2,4 +2,9 @@ ignoredBuiltDependencies:
   # Its postinstall is only `scripts/appkit-version-check.js`; nothing to build.
   - '@reown/appkit'
   - sharp
+  # Both arrive with next-intl (GHO-116) for its message extractor, which is
+  # not used here, and each ships prebuilt binaries as optional dependencies.
+  # Their scripts only check for or compile a fallback binary.
+  - '@parcel/watcher'
+  - '@swc/core'
   - unrs-resolver

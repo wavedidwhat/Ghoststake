@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
+import { NextIntlClientProvider } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import "./globals.css";
 import { Misconfigured } from "@/components/Misconfigured";
 import { Providers } from "@/components/providers";
 import { configProblems } from "@/lib/config";
+import { locale } from "@/i18n/request";
 import { env } from "@/lib/env";
 import { THEME_COLOR } from "@/lib/theme";
 
@@ -49,11 +52,14 @@ const tabular = localFont({
   fallback: ["ui-monospace", "monospace"],
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(env.appUrl),
-  title: "GhostStake",
-  description: "Stake, borrow against it, and take a position — without unwinding.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("app");
+  return {
+    metadataBase: new URL(env.appUrl),
+    title: t("title"),
+    description: t("description"),
+  };
+}
 
 /**
  * `viewportFit: "cover"` lets the app paint into the rounded corners and the
@@ -81,10 +87,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 
   return (
     <html
-      lang="en"
+      lang={locale}
       className={`${nippo.variable} ${technor.variable} ${tabular.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        {/* Outside the config check so `Misconfigured` can use the catalog
+            too: messages are a static import, so they cannot be what a bad
+            deployment variable broke. Server components read them through
+            src/i18n/request.ts; this is what hands them to client ones. */}
+        <NextIntlClientProvider>
         {/* Instead of the app, not around it (GHO-85): with a bad address or
             chain id, the providers would be built against a placeholder, and
             every figure on every page would be a plausible wrong one. */}
@@ -93,6 +104,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         ) : (
           <Providers>{children}</Providers>
         )}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

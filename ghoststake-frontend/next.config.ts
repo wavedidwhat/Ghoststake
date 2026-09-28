@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import createNextIntlPlugin from "next-intl/plugin";
 import { configProblems } from "./src/lib/config";
 import { appUrlMissing } from "./src/lib/env";
 import { STATIC_SECURITY_HEADERS } from "./src/lib/csp";
@@ -18,6 +19,11 @@ const nextConfig: NextConfig = {
   },
 };
 
+// Points `next-intl` at src/i18n/request.ts, where the messages come from
+// (GHO-116). Named explicitly although it is the default, so the next reader
+// does not have to know that.
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 /**
  * A production build refuses to finish with a variable it cannot use (GHO-85).
  *
@@ -32,7 +38,7 @@ const nextConfig: NextConfig = {
  * Every problem at once, rather than the first a module happened to evaluate.
  */
 export default function config(phase: string): NextConfig {
-  if (phase !== PHASE_PRODUCTION_BUILD) return nextConfig;
+  if (phase !== PHASE_PRODUCTION_BUILD) return withNextIntl(nextConfig);
 
   if (configProblems.length > 0) {
     const list = configProblems.map((p) => `  ${p.variable}=${JSON.stringify(p.value)} ${p.reason}`);
@@ -58,5 +64,5 @@ export default function config(phase: string): NextConfig {
     );
   }
 
-  return nextConfig;
+  return withNextIntl(nextConfig);
 }
