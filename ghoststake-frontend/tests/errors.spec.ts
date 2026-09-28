@@ -16,7 +16,7 @@ test("a component that throws renders the error screen, with a way out", async (
   await page.goto("/e2e/throw");
 
   await expect(page.getByRole("heading", { name: "This page could not be shown" })).toBeVisible();
-  await expect(page.getByText(/Nothing about your positions has changed/)).toBeVisible();
+  await expect(page.getByText(/Nothing about your money has changed/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 
   // The way out works, and lands on the app rather than another error.

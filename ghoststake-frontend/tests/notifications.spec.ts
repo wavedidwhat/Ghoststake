@@ -52,7 +52,7 @@ test.describe("the bell", () => {
     await expect(page.getByRole("dialog").getByText(/Nothing needs you right now/)).toBeVisible();
   });
 
-  test("warns when safety falls below 1.5, and links to the fix", async ({ page, chain }) => {
+  test("warns when loan health falls below 1.5, and links to the fix", async ({ page, chain }) => {
     // 1.30: inside the caution band, above danger.
     chain.set("0x00000000000000000000000000000000000e2e01", "healthFactor", 13n * 10n ** 17n);
     chain.set("0x00000000000000000000000000000000000e2e01", "lienOf", 100_000_000n);
@@ -61,13 +61,13 @@ test.describe("the bell", () => {
 
     await page.getByRole("button", { name: /Notifications, 1/ }).click({ timeout: 20_000 });
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("Safety 1.30")).toBeVisible();
-    await expect(sheet.getByRole("link", { name: "Add stake or repay" })).toHaveAttribute("href", "/borrow");
+    await expect(sheet.getByText("Loan health 1.30")).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "Deposit more or repay" })).toHaveAttribute("href", "/borrow");
   });
 
   test("is not there without a wallet", async ({ page }) => {
     await page.goto("/stake");
-    await expect(page.getByRole("heading", { level: 1, name: "Stake" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Deposit" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Notifications/ })).toHaveCount(0);
   });
 });

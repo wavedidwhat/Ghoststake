@@ -47,8 +47,8 @@ test.describe("taking a position", () => {
 
     await expect(dialog.getByText("This token has 6 decimal places; that amount has 7.")).toBeVisible();
     // Before GHO-86 the refusal was coerced to zero: the button read
-    // "Take Yes · 0.00" beside a field showing 1.1234567.
-    const commit = dialog.getByRole("button", { name: /^Take Yes/ });
+    // "Back Yes · 0.00" beside a field showing 1.1234567.
+    const commit = dialog.getByRole("button", { name: /^Back Yes/ });
     await expect(commit).toBeDisabled();
     await expect(commit).not.toContainText("0.00");
   });
@@ -61,7 +61,7 @@ test.describe("taking a position", () => {
 
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("From your wallet").fill("10");
-    await dialog.getByRole("button", { name: /take yes/i }).click();
+    await dialog.getByRole("button", { name: /back yes/i }).click();
 
     await expect(dialog.getByText(ESCAPE)).toBeVisible({ timeout: 30_000 });
   });

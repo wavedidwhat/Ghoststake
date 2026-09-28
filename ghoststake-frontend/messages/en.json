@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "GhostStake",
-    "description": "Stake, borrow against it, and take a position — without unwinding."
+    "description": "Deposit, borrow against it, and back your call — without unwinding."
   },
   "actions": {
     "goToMarkets": "Go to markets",
@@ -22,13 +22,13 @@
   "routeError": {
     "eyebrow": "Something broke",
     "title": "This page could not be shown",
-    "body": "The app hit an error drawing this screen. Nothing about your positions has changed — a page failing to render cannot move funds."
+    "body": "The app hit an error drawing this screen. Nothing about your money has changed — a page failing to render cannot move funds."
   },
   "globalError": {
     "metaTitle": "Something broke · GhostStake",
     "eyebrow": "Something broke",
     "title": "The app could not start",
-    "body": "Nothing about your positions has changed — a page failing to render cannot move funds."
+    "body": "Nothing about your money has changed — a page failing to render cannot move funds."
   },
   "page": {
     "needsWallet": "Connect a wallet",
@@ -50,7 +50,7 @@
     "links": {
       "markets": "Markets",
       "portfolio": "Portfolio",
-      "stake": "Stake",
+      "stake": "Deposit",
       "borrow": "Borrow",
       "stocks": "Stock loans",
       "activity": "Activity",
@@ -62,7 +62,7 @@
     "tabs": {
       "markets": "Markets",
       "portfolio": "Bets",
-      "stake": "Stake",
+      "stake": "Deposit",
       "lend": "Lend"
     }
   },
@@ -76,7 +76,7 @@
     "otherWallets": "Other wallets",
     "mobileWallet": "Connect a mobile wallet",
     "disconnect": "Disconnect",
-    "appDescription": "Stake, borrow against it, and take a position."
+    "appDescription": "Deposit, borrow against it, and back your call."
   },
   "network": {
     "wrong": "<lead>Wrong network.</lead> GhostStake is deployed on {expected}.",
@@ -149,9 +149,9 @@
   },
   "markets": {
     "title": "Markets",
-    "subtitle": "Take a view with borrowed capital — your stake keeps earning",
+    "subtitle": "Back your call with borrowed money — your deposit keeps earning",
     "notConfigured": "No market is configured for this network.",
-    "unreadable": "Markets could not be read. The chain is unreachable right now — nothing about your positions has changed.",
+    "unreadable": "Markets could not be read. The chain is unreachable right now — nothing about your money has changed.",
     "empty": "The registry lists no markets yet. Adding one is a transaction, not a redeploy.",
     "heading": "Markets",
     "includesDelisted": "includes {count} delisted you hold",
@@ -170,7 +170,7 @@
     "horizon": "{horizon} rounds",
     "entryClosesIn": "entry closes in <time>{countdown}</time>",
     "noRound": "No round open right now.",
-    "nothingStaked": "Nothing staked yet.",
+    "nothingStaked": "No positions yet.",
     "sayYes": "say yes",
     "splitLabel": "{yes}% of the pool says yes, {no}% says no",
     "spot": {
@@ -183,7 +183,7 @@
   },
   "market": {
     "title": "Market",
-    "unreadable": "This market could not be read. The chain is unreachable right now — nothing about your positions has changed.",
+    "unreadable": "This market could not be read. The chain is unreachable right now — nothing about your money has changed.",
     "notAMarket": "This address is not a market on this network.",
     "notAMarketDetail": "The registry does not list it and it is not configured here. A market delisted since the link was shared still appears for anyone holding a position in it — so an empty answer here means the address is wrong, not that it was hidden from you.",
     "back": "Back to markets",
@@ -193,7 +193,7 @@
     "fallbackTitle": "Market · GhostStake",
     "title": "{name} · GhostStake",
     "live": "Round {id} is {phase}. {up} up against {down} down.",
-    "idle": "A parimutuel market on {name}. Stake a side with borrowed capital while your collateral keeps earning."
+    "idle": "A parimutuel market on {name}. Back a side with borrowed money while your deposit keeps earning."
   },
   "roundMeta": {
     "fallbackTitle": "Round · GhostStake",
@@ -201,13 +201,13 @@
     "title": "{name} · round {id} · GhostStake",
     "wonOnClaim": "{winner, select, yes {Yes} other {No}} won, on a claim nobody argued with inside the window.",
     "won": "{winner, select, yes {Yes} other {No}} won. Struck at {strike}, closed at {close}.",
-    "voided": "Voided. Every stake was refunded.",
-    "voidedBecause": "Voided — {reason}. Every stake was refunded.",
+    "voided": "Voided. Every position was refunded.",
+    "voidedBecause": "Voided — {reason}. Every position was refunded.",
     "live": "{phase}. {up} up against {down} down."
   },
   "roundPage": {
     "title": "Round {id}",
-    "subtitle": "What was staked, what settled it, and who won",
+    "subtitle": "Who backed what, what settled it, and who won",
     "back": "← This market",
     "unreadable": "Could not read this round.",
     "missing": "No round {id} on this market.",
@@ -233,11 +233,11 @@
     "lastTouched": "Last touched",
     "block": "block {block}",
     "won": "{winner, select, yes {Yes} other {No}} won",
-    "voided": "Voided — every stake refunded",
+    "voided": "Voided — every position refunded",
     "running": "Still running · {phase}"
   },
   "marketBlock": {
-    "termsUnreadable": "This market’s terms could not be read, so its odds and countdown are not shown. Nothing about your position has changed.",
+    "termsUnreadable": "This market’s terms could not be read, so its odds and countdown are not shown. Nothing about your money has changed.",
     "termsUnreadableDetail": "The rake and entry cutoff are read from the contract, and that read is failing. This usually clears on its own.",
     "noRounds": "No rounds have been opened on this market yet. Rounds are scheduled by the keeper (GHO-24); until it runs, the owner opens them by hand.",
     "live": "Live",
@@ -246,7 +246,7 @@
     "settledEmpty": "Nothing has settled yet.",
     "marketFallback": "Market",
     "readingBadge": "reading feed…",
-    "demoExplainer": "<lead>The price on this market is set by hand by the operator.</lead> The contracts, the staking and the settlement are the real ones — only the feed is not. It exists because a round cannot resolve until its feed publishes after the close, and a real feed’s heartbeat runs to tens of minutes; here a round can be watched all the way through.",
+    "demoExplainer": "<lead>The price on this market is set by hand by the operator.</lead> The contracts, the deposits and the settlement are the real ones — only the feed is not. It exists because a round cannot resolve until its feed publishes after the close, and a real feed’s heartbeat runs to tens of minutes; here a round can be watched all the way through.",
     "chainlinkExplainer": "Settlement is pinned to a Chainlink feed nobody here controls: the price is the last one the feed published at or before the close, and the round after it proves that.",
     "readingExplainer": "Reading this market’s price feed from the chain.",
     "contractMarket": "Market",
@@ -257,18 +257,18 @@
     "onRound": "on round {round}",
     "fromWallet": "From your wallet",
     "walletMax": "Wallet",
-    "borrowed": "Borrowed against your stake",
-    "capacityMax": "Capacity",
-    "borrowedHint": "Goes straight from your stake into the market. It never reaches your wallet, and your stake keeps earning.",
-    "overCapacity": "Above your borrowing capacity. The vault would refuse this at the LTV ceiling.",
+    "borrowed": "Borrowed against your deposit",
+    "capacityMax": "Limit",
+    "borrowedHint": "Goes straight from your deposit into the market. It never reaches your wallet, and your deposit keeps earning.",
+    "overCapacity": "Over your borrow limit. The vault would refuse this.",
     "working": "Working…",
-    "take": "Take {side, select, yes {Yes} other {No}}",
-    "approveAndTake": "Approve and take {side, select, yes {Yes} other {No}}",
-    "takeAmount": "Take {side, select, yes {Yes} other {No}} · {amount} {symbol}",
-    "healthAfter": "Health factor after borrowing",
-    "borrowingNote": "Borrowing {amount} {symbol} against your stake, which keeps earning throughout. If the round loses, the debt stands and is settled from your stake.",
+    "take": "Back {side, select, yes {Yes} other {No}}",
+    "approveAndTake": "Approve and back {side, select, yes {Yes} other {No}}",
+    "takeAmount": "Back {side, select, yes {Yes} other {No}} · {amount} {symbol}",
+    "healthAfter": "Loan health after borrowing",
+    "borrowingNote": "Borrowing {amount} {symbol} against your deposit, which keeps earning throughout. If the round loses, the debt stands and is repaid from your deposit.",
     "healthDanger": "This leaves you close to the liquidation line before the round has even started.",
-    "connectToTake": "Taking a side needs a wallet. Your stake keeps earning while the position is open — it is borrowed against, not sold.",
+    "connectToTake": "Backing a side needs a wallet. Your deposit keeps earning while the position is open — it is borrowed against, not sold.",
     "notNow": "Not now",
     "claimed": "Claimed.",
     "yourPosition": "Your position on this round was <figure>{amount}</figure> {symbol}.",
@@ -286,7 +286,7 @@
     "strikeToClose": "Strike <figure>{strike}</figure> → close <figure>{close}</figure>",
     "thin": "One side is still under the minimum. If it stays that way the round voids at lock and every position is refunded in full.",
     "entryClosed": "Entry closed {seconds}s before the lock, so nobody can react to the strike being taken.",
-    "nothingStaked": "Nothing staked yet — the first side in sets the odds.",
+    "nothingStaked": "No positions yet — the first side in sets the odds.",
     "onYes": "{amount} {symbol} on yes",
     "onNo": "{amount} {symbol} on no",
     "noOdds": "no odds yet",
@@ -309,7 +309,7 @@
     "canArgue": "Anyone can still argue with this.",
     "canArgueFor": "Anyone can argue with this for another <figure>{left}</figure>. It costs a bond, and being right pays the liar’s.",
     "claimedBy": "Claimed by",
-    "theirStake": "Their stake here",
+    "theirStake": "Their position here",
     "stakeUnreadable": "could not be read",
     "stakeNothing": "nothing",
     "evidence": "Evidence",
@@ -317,7 +317,7 @@
     "arguedBy": "Argued by",
     "ruledBy": "Ruled by",
     "reasoning": "Reasoning",
-    "abandoned": "A question the process could not answer pays nobody. Both bonds went back and every stake in this round is refunded — nobody wins by staying quiet.",
+    "abandoned": "A question the process could not answer pays nobody. Both bonds went back and every position in this round is refunded — nobody wins by staying quiet.",
     "headline": {
       "open": "Nobody has said what happened yet",
       "proposed": "Someone has claimed an outcome",
@@ -325,7 +325,7 @@
       "challenged": "That claim is being argued",
       "final": "The question is settled",
       "finalAnswer": "The answer is {answer, select, yes {Yes} other {No}}",
-      "abandoned": "Nobody ruled in time, so every stake is refunded",
+      "abandoned": "Nobody ruled in time, so every position is refunded",
       "unknown": "This round is settled by a question"
     }
   },
@@ -334,34 +334,34 @@
     "source": "read from the contracts",
     "unavailable": "The contract terms are unavailable right now.",
     "staking": {
-      "title": "Staking",
+      "title": "Deposits",
       "yieldRate": "Yield rate",
-      "yieldRateNote": "Simple, not compounding — yield never folds back into the earning base, so what you earn is a function of stake and time and nothing else.",
+      "yieldRateNote": "Simple, not compounding — yield never folds back into the earning base, so what you earn is a function of your deposit and time and nothing else.",
       "withdrawals": "Withdrawals",
       "withdrawalsValue": "anytime",
-      "withdrawalsNote": "Staking is not locked. A withdrawal is limited only by what your debt allows: enough collateral has to stay to keep the position above the liquidation threshold."
+      "withdrawalsNote": "Deposits are not locked. A withdrawal is limited only by what your debt allows: enough has to stay to keep your loan health above the liquidation line."
     },
     "borrowing": {
       "title": "Borrowing",
       "maxLtv": "Max LTV",
-      "maxLtvNote": "The most you may borrow against your stake. A borrow that would cross this is refused rather than allowed and then liquidated.",
-      "threshold": "Liquidation threshold",
-      "thresholdNote": "Where the health factor reaches 1.00 and liquidation becomes possible.",
-      "thresholdNoteGap": "Where the health factor reaches 1.00 and liquidation becomes possible. The <figure>{gap}</figure> gap above the LTV ceiling is deliberate: it is the room a position has to accrue interest before anyone can touch it.",
+      "maxLtvNote": "Your borrow limit, as a share of your deposit. A borrow that would cross it is refused rather than allowed and then liquidated.",
+      "threshold": "Liquidation line",
+      "thresholdNote": "Where loan health reaches 1.00 and liquidation becomes possible.",
+      "thresholdNoteGap": "Where loan health reaches 1.00 and liquidation becomes possible. The <figure>{gap}</figure> gap above your borrow limit is deliberate: it is the room a loan has to accrue interest before anyone can touch it.",
       "kink": "Utilization kink",
       "kinkNote": "Where the borrow rate stops rising gently and starts rising steeply, so lenders are paid to refill a pool that is running dry."
     },
     "liquidated": {
       "title": "If you are liquidated",
       "closeFactor": "Close factor",
-      "closeFactorNote": "The most of your debt one liquidation may clear. It caps what a single price dip costs you — the rest of the position survives it.",
+      "closeFactorNote": "The most of your debt one liquidation may clear. It caps what a single price dip costs you — the rest of your deposit survives it.",
       "bonus": "Liquidator bonus",
-      "bonusNote": "The discount a liquidator takes on the collateral they seize, paid out of your position. It is what makes anyone show up to close an underwater loan, which is what keeps the pool solvent.",
+      "bonusNote": "The discount a liquidator takes on the collateral they seize, paid out of your deposit. It is what makes anyone show up to close an underwater loan, which is what keeps the pool solvent.",
       "full": "Full liquidation below",
-      "fullNote": "Below this health factor the close-factor cap is lifted and the whole lien may be cleared at once. It is derived on chain from the threshold and the bonus, not configured — it is precisely the point where a capped liquidation stops making a position healthier."
+      "fullNote": "Below this loan health the close-factor cap is lifted and the whole loan may be cleared at once. It is derived on chain from the liquidation line and the bonus, not configured — it is precisely the point where a capped liquidation stops making a loan healthier."
     },
     "rounds": {
-      "title": "Taking a position",
+      "title": "Backing a side",
       "intro": "Odds come from how the pool splits, so the protocol never takes the other side of your view.",
       "market": "Market",
       "rake": "Rake",
@@ -370,16 +370,16 @@
       "beforeLock": "{duration} before lock",
       "rakeNote": "Taken from the losing pool at settlement, so it is already inside the odds you were shown rather than deducted from a win afterwards.",
       "entryCutoff": "Entry cutoff",
-      "entryCutoffNote": "Entry closes before the round locks so nobody can take a side in the last second against a price they can already see moving.",
+      "entryCutoffNote": "Entry closes before the round locks so nobody can back a side in the last second against a price they can already see moving.",
       "minimumPerSide": "Minimum per side",
-      "minimumPerSideNote": "A round whose losing side never reaches this is voided and every stake is refunded in full — a one-sided pool has nothing to pay a winner from."
+      "minimumPerSideNote": "A round whose losing side never reaches this is voided and every position is refunded in full — a one-sided pool has nothing to pay a winner from."
     }
   },
   "fees": {
     "heading": "Protocol earnings",
     "rakeTitle": "Round rake — {market}",
     "rakeNote": "Taken from the losing pool at settlement. A voided round takes none at all — rake is only recorded on the resolve path — so a market on a slow feed earns nothing while it is voiding.",
-    "rakeBound": "Capped by the rake collected, not by the token balance, so this cannot reach stakes still owed to users — including a resolved round's unclaimed winnings.",
+    "rakeBound": "Capped by the rake collected, not by the token balance, so this cannot reach money still owed to users — including a resolved round's unclaimed winnings.",
     "reservesTitle": "Lending reserves",
     "reservesNote": "The protocol's cut of borrower interest, credited when interest accrues into the index rather than when a borrower pays.",
     "reservesBound": "Subordinated to suppliers: a withdrawal is refused unless the pool still holds enough cash to meet every supplier claim afterwards. Credited interest that nobody has paid is not withdrawable.",
@@ -404,7 +404,7 @@
     "claiming": "Claiming {current} of {total}…",
     "claimOne": "Claim",
     "claimAll": "Claim all",
-    "pullBased": "Winnings wait in the contract until they are collected. Any debt on the position is settled first; the rest reaches your wallet.",
+    "pullBased": "Winnings wait in the contract until they are collected. Any debt against your deposit is repaid first; the rest reaches your wallet.",
     "round": "Round {id}",
     "claimed": "Claimed",
     "waiting": "Waiting…",
@@ -439,7 +439,7 @@
     }
   },
   "health": {
-    "label": "Health factor",
+    "label": "Loan health",
     "scaleLine": "1.00 liquidation",
     "none": {
       "label": "No debt",
@@ -447,7 +447,7 @@
     },
     "safe": {
       "label": "Healthy",
-      "detail": "Comfortably above the liquidation threshold."
+      "detail": "Comfortably above the liquidation line."
     },
     "caution": {
       "label": "Watch",
@@ -455,19 +455,19 @@
     },
     "danger": {
       "label": "At risk",
-      "detail": "Close to the liquidation threshold. Below 1.00 anyone may liquidate part of this position for a bonus."
+      "detail": "Close to the liquidation line. Below 1.00 anyone may liquidate part of this loan for a bonus."
     },
     "liquidatable": {
       "label": "Liquidatable",
-      "detail": "This position is below the liquidation threshold now. Anyone may repay part of the debt and claim collateral at a bonus until it is healthy again."
+      "detail": "This loan is below the liquidation line now. Anyone may repay part of the debt and claim collateral at a bonus until it is healthy again."
     }
   },
   "alerts": {
     "health": {
-      "title": "Safety {health}",
-      "danger": "Close to 1.00, where anyone may liquidate you. Add stake or repay now.",
-      "caution": "Below 1.5. Interest alone moves it down, so add stake or repay while it is cheap to.",
-      "action": "Add stake or repay"
+      "title": "Loan health {health}",
+      "danger": "Close to 1.00, where anyone may liquidate you. Deposit more or repay now.",
+      "caution": "Below 1.5. Interest alone moves it down, so deposit more or repay while it is cheap to.",
+      "action": "Deposit more or repay"
     },
     "claim": {
       "title": "{amount} {symbol} to claim",
@@ -477,51 +477,51 @@
     "bell": {
       "label": "{count, plural, =0 {Notifications, none} other {Notifications, #}}",
       "title": "Notifications",
-      "empty": "Nothing needs you right now. Winnings to claim and a falling safety factor show up here.",
+      "empty": "Nothing needs you right now. Winnings to claim and falling loan health show up here.",
       "browserBlocked": "Browser notifications are blocked for this site. They can be allowed in the browser's site settings.",
       "browserOffer": "Get these as browser notifications while this tab is in the background.",
       "browserTurnOn": "Turn on browser notifications"
     }
   },
   "moneyStrip": {
-    "pitch": "Stake once and it keeps earning — including while it is riding on a question. That is the difference here: you are not choosing between a yield and a bet.",
+    "pitch": "Deposit once and it keeps earning — including while it is backing a question. That is the difference here: you are not choosing between a yield and a bet.",
     "howItWorks": "How that works",
-    "staked": "{symbol} staked",
-    "reading": "Reading your position…",
-    "nothingRiding": "Nothing riding on a question yet. It is earning either way.",
-    "riding": "<figure>{amount}</figure> of your stake is riding on <figure>{count}</figure> {count, plural, one {question} other {questions}}. All of it is still earning.",
-    "ridingEarning": "<figure>{amount}</figure> of your stake is riding on <figure>{count}</figure> {count, plural, one {question} other {questions}}. All of it is still earning <figure>{rate}</figure>.",
-    "safety": "Safety",
+    "staked": "{symbol} deposited",
+    "reading": "Reading your account…",
+    "nothingRiding": "Nothing backing a question yet. It is earning either way.",
+    "riding": "<figure>{amount}</figure> of your deposit is backing <figure>{count}</figure> {count, plural, one {question} other {questions}}. All of it is still earning.",
+    "ridingEarning": "<figure>{amount}</figure> of your deposit is backing <figure>{count}</figure> {count, plural, one {question} other {questions}}. All of it is still earning <figure>{rate}</figure>.",
+    "safety": "Loan health",
     "liquidatedBelow": "· liquidated below 1.00"
   },
   "pipeline": {
     "heading": "Your pipeline",
-    "earns": "stake earns <figure>{rate}</figure> while it works",
-    "staked": "Staked",
+    "earns": "your deposit earns <figure>{rate}</figure> while it works",
+    "staked": "Deposited",
     "captionEarning": "earning, and still yours",
     "captionCredited": "+{amount} credited, not redeemable",
     "captionEarned": "+{amount} earned",
     "borrowed": "Borrowed against it",
-    "borrowedCaption": "a lien, not a withdrawal",
+    "borrowedCaption": "a loan, not a withdrawal",
     "borrowedNone": "nothing drawn yet",
     "working": "Working in markets",
     "openPositions": "{count, plural, =0 {no open positions} one {# open position} other {# open positions}}",
     "unbacked": "Your ledger credits <figure>{credited} {symbol}</figure> of yield. Nothing funds it yet, so it is not withdrawable and does not count as collateral — the <figure>{redeemable} {symbol}</figure> above is what the vault can actually redeem today.",
     "unbackedAt": "Your ledger credits <figure>{credited} {symbol}</figure> of yield at {rate}. Nothing funds it yet, so it is not withdrawable and does not count as collateral — the <figure>{redeemable} {symbol}</figure> above is what the vault can actually redeem today.",
-    "ifTheyLose": "If these positions lose, the <figure>{amount} {symbol}</figure> still stands and is settled from your stake.",
-    "interestAccrues": "Interest accrues every second. Repay or add to your stake to build room.",
-    "healthFactor": "health factor"
+    "ifTheyLose": "If these positions lose, the <figure>{amount} {symbol}</figure> still stands and is repaid from your deposit.",
+    "interestAccrues": "Interest accrues every second. Repay or deposit more to build room.",
+    "healthFactor": "loan health"
   },
   "vault": {
     "stillBorrowable": "Still borrowable",
-    "stillBorrowableHint": "to the LTV ceiling",
-    "healthAfter": "Health factor after"
+    "stillBorrowableHint": "up to your borrow limit",
+    "healthAfter": "Loan health after"
   },
   "stake": {
-    "title": "Stake",
-    "subtitle": "Earns while it sits, and backs everything you borrow",
-    "needsWallet": "Your stake, what it earns, and what you can borrow against it all live at your address.",
-    "notConfigured": "No stake vault is configured for this network.",
+    "title": "Deposit",
+    "subtitle": "Earns while it sits, and secures everything you borrow",
+    "needsWallet": "Your deposit, what it earns, and what you can borrow against it all live at your address.",
+    "notConfigured": "No deposit vault is configured for this network.",
     "inWallet": "In your wallet",
     "inWalletHint": "available to deposit",
     "modeLabel": "Deposit or withdraw",
@@ -533,28 +533,28 @@
     "depositedMax": "Deposited",
     "approveAnd": "{mode, select, deposit {Approve and deposit} other {Approve and withdraw}}",
     "overMax": "{mode, select, deposit {That is more than your wallet holds.} other {That is more than you have deposited.}}",
-    "partialExitBlocked": "You have debt open against this position, so it can only be withdrawn in full. The lien is settled from the proceeds and the rest comes back to you.",
-    "staked": "Staked",
+    "partialExitBlocked": "You have debt open against this deposit, so it can only be withdrawn in full. The loan is repaid from the proceeds and the rest comes back to you.",
+    "staked": "Deposited",
     "shares": "Shares",
     "borrowed": "Borrowed against it",
-    "neverLeaves": "Your stake never leaves to back a loan — borrowing places a lien against it and the funds come from the lending pool. It keeps earning the whole time, which is the point: you take a view without unwinding your savings."
+    "neverLeaves": "Your deposit never leaves to secure a loan — borrowing puts a claim on it and the money comes from the lending pool. It keeps earning the whole time, which is the point: you back your call without unwinding your deposit."
   },
   "borrow": {
     "title": "Borrow",
-    "subtitle": "Draw against your collateral, or repay what you owe",
-    "needsWallet": "Borrowing capacity is a property of your deposited collateral.",
+    "subtitle": "Borrow against your deposit, or repay what you owe",
+    "needsWallet": "Your borrow limit comes from what you have deposited.",
     "notConfigured": "No vault is configured for this network.",
     "modeLabel": "Borrow or repay",
     "borrow": "Borrow",
     "repay": "Repay",
     "amountToBorrow": "Amount to borrow",
     "amountToRepay": "Amount to repay",
-    "capacityMax": "Capacity",
+    "capacityMax": "Limit",
     "owedMax": "Owed",
     "approveAndRepay": "Approve and repay",
-    "overCapacity": "Above your borrowing capacity.",
+    "overCapacity": "Over your borrow limit.",
     "overDebt": "More than you owe. Repaying is capped at the debt.",
-    "interestNote": "Interest accrues every second at the pool’s current rate, so the debt grows on its own between transactions. Borrowing stops at the LTV ceiling, which sits well below the liquidation line."
+    "interestNote": "Interest accrues every second at the pool’s current rate, so the debt grows on its own between transactions. Borrowing stops at your borrow limit, which sits well below the liquidation line."
   },
   "lend": {
     "title": "Lend",
@@ -604,22 +604,22 @@
   },
   "liquidate": {
     "title": "Liquidate",
-    "subtitle": "Positions past the line, and what closing them pays",
+    "subtitle": "Loans past the line, and what closing them pays",
     "notConfigured": "No vault is configured for this network.",
     "unreadable": "Could not read the borrower list",
     "reading": "Reading borrowers…",
     "empty": "Nobody is carrying debt right now.",
     "emptyDetail": "Every borrower the indexer has seen is listed here, healthy or not — an empty list means there are none, not that none are at risk.",
     "scanned": "{count, plural, one {# borrower scanned} other {# borrowers scanned}}",
-    "sources": "Names come from the indexer, which has every borrow and repayment. Figures are read from the chain at the head, so a health factor here is current.",
+    "sources": "Names come from the indexer, which has every borrow and repayment. Figures are read from the chain at the head, so loan health here is current.",
     "figuresAt": "Figures at block {block}.",
     "blockUnknown": "Block unknown.",
     "indexedTo": "Borrowers indexed to {block}.",
-    "indexerUnknown": "Indexer position unknown.",
+    "indexerUnknown": "Indexer progress unknown.",
     "truncated": "The scan cap was reached, so there may be more borrowers than these. The ones shown are those with the largest debt — a truncated list is missing the trivia, not the risk.",
-    "healthSuffix": "health",
+    "healthSuffix": "loan health",
     "borrower": "Borrower",
-    "health": "Health",
+    "health": "Loan health",
     "collateral": "Collateral",
     "debt": "Debt",
     "youRepay": "You repay",
@@ -631,9 +631,9 @@
     "connectToWriteOff": "Connect a wallet to write off",
     "writingOff": "Writing off…",
     "writeOff": "Write off",
-    "writeOffNote": "Owes more than it holds, so no liquidation closes it. Pays you nothing; it ends the position and charges the loss to reserves, then to suppliers.",
+    "writeOffNote": "Owes more than it holds, so no liquidation closes it. Pays you nothing; it ends the loan and charges the loss to reserves, then to suppliers.",
     "connectToLiquidate": "Connect a wallet to liquidate",
-    "clearsWhole": "Clears the whole lien",
+    "clearsWhole": "Clears the whole loan",
     "capped": "Capped at the close factor",
     "liquidating": "Liquidating…",
     "liquidate": "Liquidate",
@@ -641,10 +641,10 @@
   },
   "portfolio": {
     "title": "Portfolio",
-    "subtitle": "What you have staked, borrowed and riding on a market",
-    "unreadable": "Could not read your position",
-    "unreadableDetail": "The RPC call failed. Your position is unchanged — this screen just cannot see it right now.",
-    "collateralValue": "Collateral value",
+    "subtitle": "What you have deposited, borrowed and backed",
+    "unreadable": "Could not read your account",
+    "unreadableDetail": "The RPC call failed. Your money is unchanged — this screen just cannot see it right now.",
+    "collateralValue": "Deposit value",
     "collateralValueHint": "capped at redeemable",
     "accruedYield": "Accrued yield",
     "accruedCredited": "credited, not redeemable",
@@ -666,8 +666,8 @@
       "supplyRate": "Supply rate",
       "supplyRateHint": "what lenders earn"
     },
-    "connect": "Connect to see your position",
-    "connectDetail": "A portfolio is tied to an address: what you have staked, what you have borrowed against it, and what is riding on a market. Markets themselves are public — you can read every round without connecting.",
+    "connect": "Connect to see your account",
+    "connectDetail": "A portfolio is tied to an address: what you have deposited, what you have borrowed against it, and what you have backed. Markets themselves are public — you can read every round without connecting.",
     "browseMarkets": "Browse markets",
     "howItWorks": "How it works",
     "notDeployed": "Contracts not configured",
@@ -719,7 +719,7 @@
     "repay": "Repay",
     "amountToReceive": "Amount to receive",
     "amountToRepay": "Amount to repay",
-    "capacityMax": "Capacity",
+    "capacityMax": "Limit",
     "owedMax": "Owed",
     "feeAdded": "Fee, added to your loan",
     "loanAfter": "Loan after",
@@ -753,7 +753,7 @@
     "intro": "Every contract this app uses on {chain}, and what it does. Each links to the chain’s explorer, where the code and every transaction are public.",
     "vault": {
       "name": "Collateral vault",
-      "role": "Holds your stake, pays its yield, and records what is borrowed against it."
+      "role": "Holds your deposit, pays its yield, and records what is borrowed against it."
     },
     "pool": {
       "name": "Lending pool",
@@ -765,7 +765,7 @@
     },
     "router": {
       "name": "Router",
-      "role": "Borrows against your stake and takes a side in one transaction."
+      "role": "Borrows against your deposit and backs a side in one transaction."
     },
     "market": {
       "name": "Market",
@@ -783,46 +783,46 @@
   },
   "howItWorks": {
     "title": "How it works",
-    "subtitle": "Stake earns. Borrow against it. Take a view."
+    "subtitle": "Your deposit earns. Borrow against it. Back your call."
   },
   "landing": {
-    "headline": "Take a view without unwinding your savings.",
-    "lede": "Most ways of backing an opinion make you sell something first. Here your stake stays deposited and keeps earning, and the position is funded by borrowing against it.",
+    "headline": "Back your call without unwinding your deposit.",
+    "lede": "Most ways of backing an opinion make you sell something first. Here your deposit stays put and keeps earning, and the position is funded by borrowing against it.",
     "browseFirst": "Browse markets first →",
     "readOnly": "Nothing here needs a wallet to read. Connecting is read-only — no transaction is proposed.",
     "stake": {
-      "title": "Stake",
+      "title": "Deposit",
       "figureLabel": "simple APR",
       "body": "Deposit into the vault. It earns from the moment it lands, and it does not stop earning for anything that follows."
     },
     "borrow": {
       "title": "Borrow against it",
       "figureLabel": "max LTV",
-      "body": "Draw against the stake rather than withdrawing it. What you borrow is a lien on the position, so the collateral never leaves and never stops working."
+      "body": "Draw against the deposit rather than withdrawing it. What you borrow is secured by it, so the deposit never leaves and never stops working."
     },
     "view": {
-      "title": "Take a view",
+      "title": "Back your call",
       "figure": "parimutuel",
       "figureLabel": "no order book",
-      "body": "Stake a side of a market. Odds come from how the pool splits, so the protocol never takes the other side of your position."
+      "body": "Back a side of a market. Odds come from how the pool splits, so the protocol never takes the other side of your position."
     },
     "risks": {
       "heading": "What happens when it goes against you",
-      "debtStands": "<lead>A losing round does not clear the debt.</lead> The position was funded by a lien, and the lien stands whether the view was right or wrong. It is settled from your stake.",
-      "interest": "<lead>Interest accrues every second.</lead> A position left open moves your health factor down on its own, with no price needing to move.",
-      "liquidation": "<lead>Below a health factor of 1.00 anyone may liquidate you.</lead> That is what keeps the pool solvent, and it is paid out of your position.",
-      "liquidationBonus": "<lead>Below a health factor of 1.00 anyone may liquidate you and take {bonus} of the collateral they seize.</lead> That is what keeps the pool solvent, and it is paid out of your position.",
+      "debtStands": "<lead>A losing round does not clear the debt.</lead> The position was funded by a loan, and the loan stands whether the call was right or wrong. It is repaid from your deposit.",
+      "interest": "<lead>Interest accrues every second.</lead> A loan left open moves your loan health down on its own, with no price needing to move.",
+      "liquidation": "<lead>Below a loan health of 1.00 anyone may liquidate you.</lead> That is what keeps the pool solvent, and it is paid out of your deposit.",
+      "liquidationBonus": "<lead>Below a loan health of 1.00 anyone may liquidate you and take {bonus} of the collateral they seize.</lead> That is what keeps the pool solvent, and it is paid out of your deposit.",
       "voided": "<lead>A round can be voided.</lead> If one side never fills, or the price feed cannot be read at settlement, the round refunds everybody in full rather than picking a winner."
     },
     "testnet": "Testnet. The asset is a mock token you can mint for free, and every rule above is enforced on chain — the exact figures are on the overview once you connect."
   },
   "og": {
-    "alt": "GhostStake — stake, borrow against it, and take a position",
-    "headline": "Your stake keeps earning",
+    "alt": "GhostStake — deposit, borrow against it, and back your call",
+    "headline": "Your deposit keeps earning",
     "headlineAccent": "while it backs your call",
-    "stepStake": "Stake earns",
+    "stepStake": "Deposit earns",
     "stepBorrow": "Borrow against it",
-    "stepSide": "Take a side — without unwinding"
+    "stepSide": "Back a side — without unwinding"
   },
   "activity": {
     "title": "Activity",
@@ -835,7 +835,7 @@
     "address": "Address",
     "someoneElse": "Not your connected wallet — this is a public read.",
     "indexedTo": "Indexed to block {block}. Anything newer is not here yet.",
-    "indexerUnknown": "Indexer position unknown.",
+    "indexerUnknown": "Indexer progress unknown.",
     "leveraged": "leveraged",
     "block": "Block {block}",
     "detail": "Detail",
@@ -847,27 +847,27 @@
     "round": "Round {id}",
     "empty": "Nothing indexed for this address yet.",
     "emptyIndexed": "The indexer has read to block {block}. A transaction sent in the last few blocks will not be here yet.",
-    "emptyUnindexed": "The indexer has not reported a position, so it may not have run against this deployment.",
+    "emptyUnindexed": "The indexer has not reported how far it has read, so it may not have run against this deployment.",
     "types": {
-      "deposit": "Staked",
-      "vault_withdraw": "Unstaked",
+      "deposit": "Deposited",
+      "vault_withdraw": "Withdrew deposit",
       "supply": "Supplied to pool",
       "pool_withdraw": "Withdrew from pool",
       "borrow": "Borrowed",
       "repay": "Repaid",
       "yield": "Yield settled",
-      "lien_settled": "Lien settled on exit",
+      "lien_settled": "Loan repaid on exit",
       "liquidation": "Liquidated",
       "share_transfer_in": "Shares received",
       "share_transfer_out": "Shares sent",
-      "position": "Took a position",
+      "position": "Backed a side",
       "claim": "Claimed",
       "unknown": "{name}"
     }
   },
   "positions": {
     "title": "Positions",
-    "subtitle": "Every view you have taken, and how it went",
+    "subtitle": "Every call you have backed, and how it went",
     "needsWallet": "Connect a wallet to see its positions, or open this page with ?address=0x…",
     "unreadable": "Could not read your positions",
     "reading": "Reading your positions…",
@@ -886,7 +886,7 @@
     "voidedCount": "{voided} voided",
     "winRate": "{rate}%",
     "winRateVoided": "{rate}%, {voided} voided",
-    "staked": "Staked",
+    "staked": "Backed",
     "net": "Net",
     "marketFallback": "Market",
     "marketRound": "{market} · round {id}",
@@ -904,7 +904,7 @@
     "empty": "No positions indexed for this address yet.",
     "emptyIndexed": "The indexer has read to block {block}. A position opened in the last few blocks will not be here yet.",
     "outcomes": {
-      "void": "Voided — stake refunded",
+      "void": "Voided — position refunded",
       "won": "Won",
       "lost": "Lost",
       "running": "Running"
@@ -922,7 +922,7 @@
     "warnings": {
       "thin-side": "A side is under the minimum, so locking this round will void it and refund everyone.",
       "lock-window-missed": "The lock window has passed. This round can no longer be locked — only voided.",
-      "lock-window-closing": "The lock window is about to close. Miss it and the round voids, whatever is staked.",
+      "lock-window-closing": "The lock window is about to close. Miss it and the round voids, whatever has been backed.",
       "resolve-deadline-closing": "The resolve deadline is approaching. Past it the round can be voided instead of settled."
     },
     "schedule": {

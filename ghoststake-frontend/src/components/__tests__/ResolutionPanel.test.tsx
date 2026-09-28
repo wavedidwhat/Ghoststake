@@ -49,7 +49,7 @@ describe("ResolutionPanel", () => {
     const html = renderWithMessages(
       <ResolutionPanel question={proposed} decimals={18} symbol="mUSDC" />,
     );
-    expect(html).toContain("Their stake here");
+    expect(html).toContain("Their position here");
     expect(html).toContain("nothing");
   });
 

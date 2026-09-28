@@ -306,9 +306,9 @@ test.describe("desktop", () => {
     await expect(aside).toBeVisible();
     await aside.evaluate((el) => el.setAttribute("data-probe", "kept"));
 
-    await aside.getByRole("link", { name: /^Stake/ }).click();
+    await aside.getByRole("link", { name: /^Deposit/ }).click();
     await expect(page).toHaveURL(/\/stake$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Stake" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Deposit" })).toBeVisible();
 
     await expect(page.locator("aside")).toHaveAttribute("data-probe", "kept");
   });

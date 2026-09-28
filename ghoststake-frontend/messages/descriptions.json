@@ -42,16 +42,16 @@
     "moreTitle": "Heading of the phone's More sheet.",
     "sections": {
       "bet": "Group heading in the phone's More sheet: markets and your positions.",
-      "yourMoney": "Group heading in the phone's More sheet: staking, borrowing and history.",
+      "yourMoney": "Group heading in the phone's More sheet: deposits, borrowing and history.",
       "fundIt": "Group heading in the phone's More sheet: lending to the pool.",
       "runIt": "Group heading in the phone's More sheet: liquidating and operating markets.",
       "learn": "Group heading in the phone's More sheet: the explainer."
     },
     "links": {
       "markets": "Nav item: the market list, the home page.",
-      "portfolio": "Nav item: your stake, debt, health and positions in one place.",
-      "stake": "Nav item: deposit into or withdraw from the vault.",
-      "borrow": "Nav item: borrow against your stake, or repay.",
+      "portfolio": "Nav item: your deposit, debt, loan health and positions in one place.",
+      "stake": "Nav item: put money into the vault, or take it out.",
+      "borrow": "Nav item: borrow against your deposit, or repay.",
       "stocks": "Nav item: loans against tokenized stock.",
       "activity": "Nav item: your transaction history.",
       "lend": "Nav item: supply the lending pool.",
@@ -62,7 +62,7 @@
     "tabs": {
       "markets": "Phone tab bar label for the market list. Max 8 characters; set in capitals.",
       "portfolio": "Phone tab bar label for the portfolio. Max 8 characters; set in capitals. Shorter than the sidebar's word on purpose.",
-      "stake": "Phone tab bar label for staking. Max 8 characters; set in capitals.",
+      "stake": "Phone tab bar label for deposits. Max 8 characters; set in capitals.",
       "lend": "Phone tab bar label for lending. Max 8 characters; set in capitals."
     }
   },
@@ -118,7 +118,7 @@
       "cutoff": "Phase chip: entry has closed and the round is about to lock.",
       "running": "Phase chip: locked, waiting for the closing price.",
       "settled": "Phase chip: the round has a winner.",
-      "voided": "Phase chip: the round was cancelled and every stake refunded.",
+      "voided": "Phase chip: the round was cancelled and every position refunded.",
       "unknown": "Phase chip when the contract reports a phase the app does not know."
     }
   },
@@ -257,17 +257,17 @@
     "onRound": "Beside the chosen answer. {round} is the round number.",
     "fromWallet": "Amount field label: money paid in from the wallet.",
     "walletMax": "Button that fills the field with the wallet balance.",
-    "borrowed": "Amount field label: money borrowed against the vault stake.",
-    "capacityMax": "Button that fills the field with the most that can be borrowed.",
+    "borrowed": "Amount field label: money borrowed against the deposit.",
+    "capacityMax": "Fill button: up to your borrow limit.",
     "borrowedHint": "Hint under the borrowed-amount field.",
-    "overCapacity": "Error when the borrowed amount exceeds what can be borrowed.",
+    "overCapacity": "Error when the borrowed amount is over the borrow limit.",
     "working": "Submit button while a transaction is being signed or mined.",
-    "take": "Submit button when the amount is invalid. {side} is yes or no.",
+    "take": "Submit button when the amount is invalid. {side} is yes or no. \"Back\" is the standard verb for putting money on a side.",
     "approveAndTake": "Submit button when an approval must be signed first. {side} is yes or no.",
     "takeAmount": "Submit button. {side} is yes or no; {amount} a figure; {symbol} a token symbol.",
-    "healthAfter": "Label of the before → after health factor preview.",
+    "healthAfter": "Label of the before → after loan health preview.",
     "borrowingNote": "Explains the borrow. {amount} is a figure; {symbol} a token symbol.",
-    "healthDanger": "Warning when the borrow leaves the health factor in the danger band.",
+    "healthDanger": "Warning when the borrow leaves loan health in the danger band.",
     "connectToTake": "Shown beside the connect button when a visitor presses a side.",
     "notNow": "Dismisses the connect prompt.",
     "claimed": "Under a settled round whose winnings you already collected.",
@@ -290,9 +290,9 @@
     "onYes": "Under the odds bar, left. {amount} is a figure; {symbol} a token symbol.",
     "onNo": "Under the odds bar, right. {amount} is a figure; {symbol} a token symbol.",
     "noOdds": "On a side button while that side is empty. Lowercase.",
-    "pays": "On a side button. {percent} is its share of the pool; {multiple} what 1 staked returns, like 1.84.",
+    "pays": "On a side button. {percent} is its share of the pool; {multiple} what 1 put in returns, like 1.84.",
     "won": "Before your amount under the winning side. Keep the trailing separator.",
-    "yours": "Your stake under a side button. {amount} is a figure; {symbol} a token symbol.",
+    "yours": "Your position under a side button. {amount} is a figure; {symbol} a token symbol.",
     "lastPrice": "The latest price when it is over 30 minutes old. {price} is a number.",
     "now": "The current price. {price} is a number.",
     "printed": "When the price was published. {age} is a phrase like '2 min ago'.",
@@ -309,9 +309,9 @@
     "canArgue": "While a claim can still be challenged and the deadline is unknown.",
     "canArgueFor": "While a claim can still be challenged. {left} is a duration like 1h 30m.",
     "claimedBy": "Row label: the address that proposed the outcome.",
-    "theirStake": "Row label: how much the proposer has in this round.",
-    "stakeUnreadable": "Value when the proposer's stake cannot be read.",
-    "stakeNothing": "Value when the proposer holds nothing in the round.",
+    "theirStake": "Row label: how much the proposer has backed in this round.",
+    "stakeUnreadable": "Value when the proposer's position cannot be read.",
+    "stakeNothing": "Value when the proposer holds no position in the round.",
     "evidence": "Row label: the link the claim cites.",
     "digest": "Row label: the hash of the evidence document.",
     "arguedBy": "Row label: the address that challenged the claim.",
@@ -334,7 +334,7 @@
     "source": "Beside the Terms heading. Lowercase.",
     "unavailable": "Shown when the lending terms cannot be read.",
     "staking": {
-      "title": "Group heading.",
+      "title": "Group heading: the terms for money in the vault.",
       "yieldRate": "Term name; its value is an annual percentage.",
       "yieldRateNote": "Explains the yield rate.",
       "withdrawals": "Term name.",
@@ -344,10 +344,10 @@
     "borrowing": {
       "title": "Group heading.",
       "maxLtv": "Term name: the maximum loan-to-value ratio.",
-      "maxLtvNote": "Explains max LTV.",
-      "threshold": "Term name.",
-      "thresholdNote": "Explains the liquidation threshold when the LTV is unknown.",
-      "thresholdNoteGap": "Explains the liquidation threshold. {gap} is a percentage.",
+      "maxLtvNote": "Explains max LTV in plain words: it is the borrow limit.",
+      "threshold": "Term name: where loan health reaches 1.00.",
+      "thresholdNote": "Explains the liquidation line when the LTV is unknown.",
+      "thresholdNoteGap": "Explains the liquidation line. {gap} is a percentage.",
       "kink": "Term name: where the borrow rate curve steepens.",
       "kinkNote": "Explains the kink."
     },
@@ -357,7 +357,7 @@
       "closeFactorNote": "Explains the close factor.",
       "bonus": "Term name.",
       "bonusNote": "Explains the liquidator bonus.",
-      "full": "Term name; its value is a health factor.",
+      "full": "Term name; its value is a loan health figure.",
       "fullNote": "Explains full liquidation."
     },
     "rounds": {
@@ -439,23 +439,23 @@
     }
   },
   "health": {
-    "label": "Card label. Collateral against debt; 1.00 is the liquidation line.",
+    "label": "Card label. How safe a loan is: collateral against debt. 1.00 is the liquidation line.",
     "scaleLine": "Marker on the health scale at 1.00.",
     "none": {
       "label": "Chip: nothing borrowed.",
-      "detail": "Under the health factor when nothing is borrowed."
+      "detail": "Under the loan health figure when nothing is borrowed."
     },
     "safe": {
-      "label": "Chip: health factor 1.5 or above.",
-      "detail": "Under a healthy health factor."
+      "label": "Chip: loan health 1.5 or above.",
+      "detail": "Under loan health in the safe band."
     },
     "caution": {
-      "label": "Chip: health factor between 1.2 and 1.5.",
-      "detail": "Under a health factor in the caution band."
+      "label": "Chip: loan health between 1.2 and 1.5.",
+      "detail": "Under loan health in the caution band."
     },
     "danger": {
-      "label": "Chip: health factor below 1.2.",
-      "detail": "Under a health factor in the danger band."
+      "label": "Chip: loan health below 1.2.",
+      "detail": "Under loan health in the danger band."
     },
     "liquidatable": {
       "label": "Chip: the contract reports the position can be liquidated now.",
@@ -464,7 +464,7 @@
   },
   "alerts": {
     "health": {
-      "title": "Alert title when the health factor is low. {health} is a number like 1.38. Shown in the bell, a toast and a browser notification.",
+      "title": "Alert title when loan health is low. {health} is a number like 1.38. Shown in the bell, a toast and a browser notification.",
       "danger": "Alert body in the danger band.",
       "caution": "Alert body in the caution band.",
       "action": "Alert button; goes to Borrow."
@@ -486,22 +486,22 @@
   "moneyStrip": {
     "pitch": "Shown to a visitor with no wallet, above the markets.",
     "howItWorks": "Link to How it works.",
-    "staked": "Beside the staked amount. {symbol} is a token symbol.",
-    "reading": "While the position loads.",
-    "nothingRiding": "When none of the stake is in a live round.",
-    "riding": "How much stake is in live rounds. {amount} is a figure; {count} how many rounds.",
-    "ridingEarning": "How much stake is in live rounds, with the yield rate. {amount} is a figure; {count} how many rounds; {rate} an annual percentage.",
-    "safety": "Label before the health factor. See the glossary: the same number is 'Health factor' elsewhere.",
-    "liquidatedBelow": "After the health factor figure."
+    "staked": "Beside the deposited amount. {symbol} is a token symbol.",
+    "reading": "While the account loads.",
+    "nothingRiding": "When none of the deposit is backing a live round.",
+    "riding": "How much of the deposit is backing live rounds. {amount} is a figure; {count} how many rounds.",
+    "ridingEarning": "How much of the deposit is backing live rounds, with the yield rate. {amount} is a figure; {count} how many rounds; {rate} an annual percentage.",
+    "safety": "Label before the loan health figure.",
+    "liquidatedBelow": "After the loan health figure."
   },
   "pipeline": {
-    "heading": "Heading of the stake → borrow → markets summary.",
+    "heading": "Heading of the deposit → borrow → markets summary.",
     "earns": "Beside the heading. {rate} is an annual percentage.",
-    "staked": "Step 1 label: the vault stake.",
-    "captionEarning": "Caption under the staked figure.",
+    "staked": "Step 1 label: the deposit.",
+    "captionEarning": "Caption under the deposited figure.",
     "captionCredited": "Caption when the ledger credits yield nothing funds. {amount} is a figure.",
     "captionEarned": "Caption when the yield is funded. {amount} is a figure.",
-    "borrowed": "Step 2 label: the debt against the stake.",
+    "borrowed": "Step 2 label: the debt against the deposit.",
     "borrowedCaption": "Caption under a nonzero borrowed figure.",
     "borrowedNone": "Caption when nothing is borrowed.",
     "working": "Step 3 label: money in live rounds.",
@@ -510,7 +510,7 @@
     "unbackedAt": "Warning when credited yield is unfunded, with the yield rate. {credited} and {redeemable} are figures; {symbol} a token symbol; {rate} an annual percentage.",
     "ifTheyLose": "When borrowed money is in live rounds. {amount} is the debt; {symbol} a token symbol.",
     "interestAccrues": "When there is debt but nothing in live rounds.",
-    "healthFactor": "Label before the figure. Lowercase."
+    "healthFactor": "Label before the loan health figure. Lowercase."
   },
   "vault": {
     "stillBorrowable": "Stat label: how much more can be borrowed.",
@@ -518,7 +518,7 @@
     "healthAfter": "Label of the before → after preview on a borrow or repay form."
   },
   "stake": {
-    "title": "Page title.",
+    "title": "Page title: putting money into the vault and taking it out.",
     "subtitle": "Page subtitle.",
     "needsWallet": "Body of the connect-a-wallet placeholder.",
     "notConfigured": "Body of the not-deployed placeholder.",
@@ -530,14 +530,14 @@
     "amountToDeposit": "Amount field label.",
     "amountToWithdraw": "Amount field label.",
     "walletMax": "Fill button: the wallet balance.",
-    "depositedMax": "Fill button: everything staked.",
+    "depositedMax": "Fill button: everything deposited.",
     "approveAnd": "Submit button when a token approval must be signed first. {mode} is deposit or withdraw.",
     "overMax": "Error when the amount is over the limit. {mode} is deposit or withdraw.",
     "partialExitBlocked": "Warning when a partial withdrawal is attempted with debt open.",
-    "staked": "Row label.",
+    "staked": "Row label: the deposit.",
     "shares": "Row label: vault shares, in gsCOL.",
-    "borrowed": "Row label: the debt against the stake.",
-    "neverLeaves": "Explains the stake beside the form."
+    "borrowed": "Row label: the debt against the deposit.",
+    "neverLeaves": "Explains the deposit beside the form."
   },
   "borrow": {
     "title": "Page title.",
@@ -549,7 +549,7 @@
     "repay": "Switch option and submit button.",
     "amountToBorrow": "Amount field label.",
     "amountToRepay": "Amount field label.",
-    "capacityMax": "Fill button: the most that can be borrowed.",
+    "capacityMax": "Fill button: up to your borrow limit.",
     "owedMax": "Fill button: the whole debt.",
     "approveAndRepay": "Submit button when a token approval must be signed first.",
     "overCapacity": "Error when borrowing more than allowed.",
@@ -617,9 +617,9 @@
     "indexedTo": "Small print. {block} is a block number.",
     "indexerUnknown": "Small print when the indexer's progress is unknown.",
     "truncated": "When the list hit its size limit.",
-    "healthSuffix": "After the health factor on a phone row. Lowercase.",
+    "healthSuffix": "After the loan health figure on a phone row. Lowercase.",
     "borrower": "Table column.",
-    "health": "Table column: health factor.",
+    "health": "Table column: loan health.",
     "collateral": "Table column and row label.",
     "debt": "Table column and row label.",
     "youRepay": "Table column and row label: what a liquidator pays in.",
@@ -637,14 +637,14 @@
     "capped": "Scope of a liquidation above the full-liquidation line.",
     "liquidating": "Liquidate button while in flight.",
     "liquidate": "Button that liquidates a position.",
-    "youNeed": "Under the liquidate button. {scope} is 'Clears the whole lien' or 'Capped at the close factor'; {amount} a figure; {symbol} a token symbol."
+    "youNeed": "Under the liquidate button. {scope} is 'Clears the whole loan' or 'Capped at the close factor'; {amount} a figure; {symbol} a token symbol."
   },
   "portfolio": {
     "title": "Page title.",
     "subtitle": "Page subtitle.",
     "unreadable": "Title when the position read fails.",
     "unreadableDetail": "Reassurance when the position read fails.",
-    "collateralValue": "Stat label.",
+    "collateralValue": "Stat label: what the deposit is worth now.",
     "collateralValueHint": "Hint under 'Collateral value'.",
     "accruedYield": "Stat label.",
     "accruedCredited": "Hint under accrued yield when nothing funds it.",
@@ -682,7 +682,7 @@
     "borrowed": "Stat label: the loan.",
     "borrowedHint": "Hint under 'Borrowed'.",
     "collateralValue": "Stat label.",
-    "borrowLimit": "Stat label. See the glossary: 'LTV ceiling' elsewhere.",
+    "borrowLimit": "Stat label: the most the loan may reach.",
     "borrowLimitHint": "Hint under 'Borrow limit'.",
     "liquidationLine": "Stat label.",
     "liquidationLineHint": "Hint under 'Liquidation line'.",
@@ -719,11 +719,11 @@
     "repay": "Switch option and submit button.",
     "amountToReceive": "Amount field label: what arrives in the wallet.",
     "amountToRepay": "Amount field label.",
-    "capacityMax": "Fill button: the most that can be borrowed.",
+    "capacityMax": "Fill button: up to your borrow limit.",
     "owedMax": "Fill button: the whole debt.",
     "feeAdded": "Row label.",
     "loanAfter": "Row label.",
-    "noLoan": "In place of the health factor when nothing would be owed.",
+    "noLoan": "In place of the loan health figure when nothing would be owed.",
     "approveAndRepay": "Submit button when a token approval must be signed first.",
     "borrowPaused": "Why borrowing is paused.",
     "overPool": "Error when borrowing more than the pool holds.",
@@ -849,18 +849,18 @@
     "emptyIndexed": "Under the empty message. {block} is a block number.",
     "emptyUnindexed": "Under the empty message when the indexer's progress is unknown.",
     "types": {
-      "deposit": "History event: a deposit into the vault.",
-      "vault_withdraw": "History event: a withdrawal from the vault. Must differ from pool_withdraw.",
+      "deposit": "History event: money put into the vault.",
+      "vault_withdraw": "History event: money taken out of the vault. Must differ from pool_withdraw.",
       "supply": "History event.",
       "pool_withdraw": "History event: a withdrawal from the lending pool. Must differ from vault_withdraw.",
       "borrow": "History event.",
       "repay": "History event.",
       "yield": "History event.",
-      "lien_settled": "History event: debt paid out of a full withdrawal.",
+      "lien_settled": "History event: the loan repaid out of a full withdrawal.",
       "liquidation": "History event.",
       "share_transfer_in": "History event.",
       "share_transfer_out": "History event.",
-      "position": "History event.",
+      "position": "History event: money put on a side of a round.",
       "claim": "History event.",
       "unknown": "An event type this build doesn't know. {name} is the server's own event name, shown as it is."
     }
@@ -886,7 +886,7 @@
     "voidedCount": "Hint: voided rounds. {voided} is a count.",
     "winRate": "Hint: win rate. {rate} is a whole percentage.",
     "winRateVoided": "Hint: win rate and voided rounds. {rate} is a whole percentage; {voided} a count.",
-    "staked": "Stat label, row label and table column.",
+    "staked": "Stat label, row label and table column: how much was put on a side.",
     "net": "Stat label, row label and table column.",
     "marketFallback": "In place of the market's feed name when it is unknown.",
     "marketRound": "Under the market name on a phone row. {market} is a short address; {id} a round number.",
