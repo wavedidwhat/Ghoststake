@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import { Script } from "forge-std/Script.sol";
 import { console2 } from "forge-std/console2.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 import { StockLoanVault, IStockLoanPool } from "../src/StockLoanVault.sol";
@@ -22,8 +23,14 @@ import { MockUSDC } from "./mocks/MockUSDC.sol";
 /// on testnet it is a mirrored `DemoPriceFeed` — and the vault reads its
 /// decimals from it.
 ///
-/// `STABLE_ADDRESS` names the borrowed asset; unset deploys a mintable
-/// six-decimal `MockUSDC`, which is only ever right on a testnet.
+/// The borrowed asset must be the one the markets take, or money borrowed
+/// against stock can't back a round. The first testnet deploy left
+/// `STABLE_ADDRESS` unset and got its own `MockUSDC`: two tokens both called
+/// mUSDC, and a borrower who saw 300 on /stocks and 0 on the market (GHO-125).
+/// So the stable comes from `COLLATERAL_VAULT` (the markets' deposit vault,
+/// whose asset is their stake asset); `STABLE_ADDRESS`, if also set, must
+/// match it. A fresh `MockUSDC` needs `NEW_STABLE=true`, which is only right
+/// on a chain with no markets yet.
 contract DeployStockLoans is Script {
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant WAD = 1e18;
@@ -33,7 +40,7 @@ contract DeployStockLoans is Script {
         uint256 key = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(key);
         address guardian = vm.envOr("PAUSE_GUARDIAN", deployer);
-        address existingStable = vm.envOr("STABLE_ADDRESS", address(0));
+        address existingStable = _stable();
 
         string[N] memory symbols = ["TSLA", "AMZN", "AMD", "PLTR", "NFLX"];
         StockLoanVault.CollateralConfig[] memory cfg = new StockLoanVault.CollateralConfig[](N);
@@ -90,6 +97,24 @@ contract DeployStockLoans is Script {
         console2.log("STOCK_POOL=%s", address(pool));
         console2.log("STOCK_VAULT=%s", address(vault));
         console2.log("STOCK_COLLATERALS=%s", count);
+    }
+
+    function _stable() internal view returns (address) {
+        address named = vm.envOr("STABLE_ADDRESS", address(0));
+        address marketsVault = vm.envOr("COLLATERAL_VAULT", address(0));
+        if (marketsVault != address(0)) {
+            address stakeAsset = IERC4626(marketsVault).asset();
+            require(
+                named == address(0) || named == stakeAsset,
+                "STABLE_ADDRESS is not the markets' stake asset (COLLATERAL_VAULT.asset())"
+            );
+            return stakeAsset;
+        }
+        require(
+            named != address(0) || vm.envOr("NEW_STABLE", false),
+            "set COLLATERAL_VAULT so loans pay out the markets' token; NEW_STABLE=true only on a chain with no markets"
+        );
+        return named;
     }
 
     function _perSecond(uint256 aprPercent) internal pure returns (uint256) {
