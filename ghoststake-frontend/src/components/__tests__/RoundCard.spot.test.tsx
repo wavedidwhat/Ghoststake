@@ -94,6 +94,28 @@ describe("the settlement line", () => {
     expect(html).not.toContain("Settles on the");
   });
 
+  /**
+   * The demo market is priced by a feed we publish, and every round on it said
+   * "Settles on the Chainlink ETH / USD price" (GHO-124): false, on the one line
+   * whose purpose is to be checked.
+   */
+  it("doesn't claim Chainlink on a feed we publish", () => {
+    const html = render({
+      round: round(),
+      phase: Phase.Open,
+      isDemo: true,
+      feed: "GHOSTSTAKE DEMO FEED (operator-set price) - ETH / USD",
+    });
+
+    expect(html).not.toContain("Chainlink");
+    expect(html).toContain("operator-set");
+    expect(html).toContain("ETH / USD");
+  });
+
+  it("still names Chainlink on a Chainlink feed", () => {
+    expect(render({ round: round(), phase: Phase.Open })).toContain("Chainlink");
+  });
+
   /** A question is decided by a named arbiter against written criteria. */
   it("is absent on a market settled by a claim rather than a price", () => {
     const html = render({ round: round(), phase: Phase.Open, isQuestion: true });

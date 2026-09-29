@@ -112,6 +112,7 @@ export function MarketBlock({
       symbol={position.symbol}
       feed={feed?.description}
       isQuestion={feed?.isQuestion}
+      isDemo={market.kindHint === "demo" || feed?.isDemo === true}
       feedAddress={feed?.feed}
       // A question is not settled by a price, so there is no "ahead" to show:
       // its oracle answers the sentinel strike and nothing else (GHO-91).
