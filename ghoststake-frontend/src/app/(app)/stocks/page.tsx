@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { HealthFactorCard } from "@/components/HealthFactor";
 import { useNow } from "@/hooks/useNow";
 import { useStockLoan } from "@/hooks/useStockLoan";
+import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useWallet } from "@/hooks/useWallet";
 import { borrowLiquidityPoolAbi, stockLoanVaultAbi } from "@/lib/abis";
@@ -86,9 +87,23 @@ function StockScreen({
   const stale = stalePrices(loan.collaterals, now);
   const debt = loan.debt ?? 0n;
   const hasDebt = debt > 0n;
+  // Money borrowed here is meant to back rounds, which only take the
+  // deposit vault's asset. The first deploy paid out a second token also
+  // called mUSDC, so a borrower saw 300 here and 0 on the market (GHO-125).
+  // The deploy now refuses that; this says so if it ever happens anyway.
+  const marketToken = useVaultAsset().address;
+  const otherToken =
+    marketToken !== undefined && loan.stable !== undefined && marketToken.toLowerCase() !== loan.stable.toLowerCase();
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {otherToken && (
+        <div className="lg:col-span-3">
+          <Card className="border-negative/40">
+            <p className="text-sm text-ink">{t("otherToken", { symbol: loan.stableSymbol })}</p>
+          </Card>
+        </div>
+      )}
       <div className="lg:col-span-2">
         <HealthFactorCard value={loan.healthFactor} liquidatable={loan.healthFactor !== undefined && loan.healthFactor < 10n ** 18n} />
       </div>

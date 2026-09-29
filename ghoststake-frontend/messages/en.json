@@ -689,6 +689,7 @@
     "liquidationLine": "Liquidation line",
     "liquidationLineHint": "loan above this is sold",
     "incomplete": "We couldn’t read the price of some stock you hold, so the figures above leave it out and undersell your collateral.",
+    "otherToken": "Loans here pay out a different {symbol} from the one markets take, so you can’t back a round with it. That’s a setup problem on our side, not something you did.",
     "incompleteDetail": "The vault uses its own price when you sign, so nothing is lent against these numbers. Repaying still works, and so does withdrawing when you have no loan.",
     "stale": "{symbols} {count, plural, one {has} other {have}} not traded for over {duration}, so new borrowing{debt, select, yes { and withdrawing} other {}} is paused until the price updates.",
     "staleDetail": "That’s normal when the stock market is closed, overnight and at weekends. Repaying always works{debt, select, yes {} other {, and so does withdrawing, since you owe nothing}}.",

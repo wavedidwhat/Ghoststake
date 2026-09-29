@@ -689,6 +689,7 @@
     "liquidationLine": "Stat label.",
     "liquidationLineHint": "Hint under 'Liquidation line'.",
     "incomplete": "When a price read fails.",
+    "otherToken": "Stock loans page, shown only if the stock-loan vault pays out a different token from the markets' deposit vault (a deployment mistake, GHO-125). {symbol} is the token's symbol.",
     "incompleteDetail": "Under the price-read failure.",
     "stale": "When a stock price is stale. {symbols} is a list of tickers; {count} how many; {duration} a short duration; {debt} is yes if a loan is open.",
     "staleDetail": "Under the stale-price warning. {debt} is yes if a loan is open.",
