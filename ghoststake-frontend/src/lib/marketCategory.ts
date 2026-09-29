@@ -93,5 +93,49 @@ export function logoSymbolFor(feed: { description: string; isQuestion: boolean }
   return /^RH[A-Z]{1,5}$/.test(base) ? base.slice(2) : base;
 }
 
+/**
+ * Company names for the stock tickers the app has a mark for (GHO-114).
+ * Proper nouns, so they live here as data rather than in the catalog.
+ */
+const COMPANIES: Record<string, string> = {
+  TSLA: "Tesla",
+  AMD: "AMD",
+  AMZN: "Amazon",
+  NFLX: "Netflix",
+  PLTR: "Palantir",
+};
+
+/**
+ * What a question is about, the way a person says it (GHO-114): "Tesla" for
+ * the RHTSLA feed, "ETH" for ETH / USD. The feed's own label read "GHOSTSTAKE
+ * DEMO FEED (operator-set price) - ETH" into every round title, because the
+ * demo marker sits before the last " - " and nothing stripped it.
+ */
+export function subjectOf(description: string): string {
+  const base = baseAsset(description);
+  if (/^RH[A-Z]{1,5}$/.test(base)) {
+    const ticker = base.slice(2);
+    return COMPANIES[ticker] ?? ticker;
+  }
+  return base;
+}
+
+/**
+ * A market's heading (GHO-114): "Tesla (TSLA)" for a stock, "ETH / USD" for a
+ * pair. Undefined for a question, whose own words are its heading. The raw
+ * feed label stays in the small print beside it.
+ */
+export function displayName(feed: { description: string; isQuestion: boolean }): string | undefined {
+  if (feed.isQuestion) return undefined;
+  const base = baseAsset(feed.description);
+  if (/^RH[A-Z]{1,5}$/.test(base)) {
+    const ticker = base.slice(2);
+    return COMPANIES[ticker] ? `${COMPANIES[ticker]} (${ticker})` : ticker;
+  }
+  // The pair without the demo marker or a trailing note: "ETH / USD".
+  const pair = (feed.description.split(" - ").pop() ?? feed.description).replace(/\s*\(.*\)\s*$/, "").trim();
+  return pair || base;
+}
+
 /** The crypto bases, for the test that holds them to `AssetLogo`'s marks. */
 export const CRYPTO_BASES: readonly string[] = [...CRYPTO];

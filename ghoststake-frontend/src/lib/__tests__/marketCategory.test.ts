@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRYPTO_BASES, baseAsset, categoryOf, logoSymbolFor, parseCategory } from "../marketCategory";
+import { CRYPTO_BASES, baseAsset, categoryOf, displayName, logoSymbolFor, parseCategory, subjectOf } from "../marketCategory";
 import { hasLogo } from "@/components/ui/AssetLogo";
 
 // The strings are the real ones: the Chainlink descriptions, the label
@@ -84,5 +84,36 @@ describe("logoSymbolFor (GHO-102)", () => {
 
   it("has a real mark for every stock the stock-loan vault lists", () => {
     for (const ticker of ["TSLA", "AMZN", "AMD", "PLTR", "NFLX"]) expect(hasLogo(ticker)).toBe(true);
+  });
+});
+
+/**
+ * What people call a market (GHO-114). Checked on the real labels the dev
+ * stack serves, because the bug was a label nobody had put through the
+ * function: every demo round was titled "GHOSTSTAKE DEMO FEED (operator-set
+ * price) - ETH above $1,990".
+ */
+describe("displayName and subjectOf (GHO-114)", () => {
+  const DEMO_ETH = "GHOSTSTAKE DEMO FEED (operator-set price) - ETH / USD";
+
+  it("names a Robinhood stock by its company, not its token", () => {
+    expect(displayName({ description: MIRRORED, isQuestion: false })).toBe("Tesla (TSLA)");
+    expect(subjectOf(MIRRORED)).toBe("Tesla");
+    expect(subjectOf("RHAMZN / USD")).toBe("Amazon");
+  });
+
+  it("keeps a stock it has no name for as its ticker, without the RH", () => {
+    expect(displayName({ description: "RHXYZ / USD", isQuestion: false })).toBe("XYZ");
+    expect(subjectOf("RHXYZ / USD")).toBe("XYZ");
+  });
+
+  it("strips the demo marker from a crypto pair", () => {
+    expect(displayName({ description: DEMO_ETH, isQuestion: false })).toBe("ETH / USD");
+    expect(subjectOf(DEMO_ETH)).toBe("ETH");
+    expect(displayName({ description: "ETH / USD", isQuestion: false })).toBe("ETH / USD");
+  });
+
+  it("gives a question no name of its own: its words are the heading", () => {
+    expect(displayName({ description: "Will it rain?", isQuestion: true })).toBeUndefined();
   });
 });

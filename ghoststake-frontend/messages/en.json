@@ -302,7 +302,9 @@
     "awaitingStrike": "The start price is set when entry closes. This round measures the move from there.",
     "settingStrike": "The start price is being set now. This round measures the move from there.",
     "thePriceFeed": "the price feed",
-    "settlement": "{state, select, done {Settled} other {Settles}} on the <feed>Chainlink {name}</feed> price at {at} UTC. Anyone can check it."
+    "settlement": "{state, select, done {Settled} other {Settles}} on the <feed>Chainlink {name}</feed> price at {at} UTC. Anyone can check it.",
+    "nobodyBacked": "Nobody backed this round.",
+    "noEntries": "no entries"
   },
   "resolution": {
     "heading": "How this gets answered",

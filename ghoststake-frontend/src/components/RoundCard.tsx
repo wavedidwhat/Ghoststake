@@ -281,7 +281,9 @@ function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; 
   const markets = useTranslations("markets");
   const share = upShare(round);
   if (share === null) {
-    return <p className="mt-3 text-xs text-ink-faint">{t("nothingStaked")}</p>;
+    // A closed round nobody entered is over, not waiting for its first side.
+    const closed = round.status === Status.Void || round.status === Status.Resolved;
+    return <p className="mt-3 text-xs text-ink-faint">{t(closed ? "nobodyBacked" : "nothingStaked")}</p>;
   }
 
   const yes = Math.round(share);
@@ -385,7 +387,7 @@ function SideButton({
         </span>
         <span className="tabular text-xs font-normal normal-case opacity-80">
           {multiple === null
-            ? t("noOdds")
+            ? t(round.status === Status.Void || round.status === Status.Resolved ? "noEntries" : "noOdds")
             : t("pays", { percent: percent ?? 0, multiple: formatAmount(multiple, 18, 2) })}
         </span>
       </button>

@@ -32,6 +32,13 @@ describe("a market as a question", () => {
     expect(questionFor({ feed: "LINK / USD", strike: 12_34n * 10n ** 16n, closeTime })).toContain("$12.34 ");
   });
 
+  it("names the asset, not the feed's label (GHO-114)", () => {
+    const demo = "GHOSTSTAKE DEMO FEED (operator-set price) - ETH / USD";
+    const mirrored = "GHOSTSTAKE DEMO FEED (operator-set price) - RHTSLA / USD (mirrored from Robinhood Chain mainnet)";
+    expect(questionFor({ feed: demo, strike: wad("1990"), closeTime })).toBe(`ETH above $1,990 at ${at}`);
+    expect(questionFor({ feed: mirrored, strike: wad("371"), closeTime })).toBe(`Tesla above $371 at ${at}`);
+  });
+
   it("falls back rather than rendering a blank question", () => {
     expect(questionFor({ feed: undefined, strike: wad("2690"), closeTime })).toContain("The price above");
     expect(questionFor({ feed: "ETH / USD", strike: wad("2690"), closeTime: undefined })).toBe(
