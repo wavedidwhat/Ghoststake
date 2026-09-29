@@ -90,6 +90,11 @@ export function useVaultPosition() {
       // the UI believes and the contract does not is the same bug as a
       // hardcoded entry cutoff.
       { ...vault, functionName: "yieldRatePerSecond" },
+      // The share token's own decimals and symbol. They differ from the
+      // asset's (an ERC-4626 decimals offset), and a hard-coded 18 showed a
+      // 1,000 deposit as 0.0010 shares on the live site (GHO-126).
+      { ...vault, functionName: "decimals" },
+      { address: vault.address, abi: erc20Abi, functionName: "symbol", chainId: vault.chainId },
     ],
     query: {
       enabled,
@@ -110,6 +115,8 @@ export function useVaultPosition() {
     shares,
     threshold,
     yieldRate,
+    shareDecimals,
+    shareSymbol,
   ] = query.data ?? [];
 
   return {
@@ -130,6 +137,8 @@ export function useVaultPosition() {
     maxBorrowable: maxBorrowable?.result as bigint | undefined,
     isLiquidatable: liquidatable?.result as boolean | undefined,
     shares: shares?.result as bigint | undefined,
+    shareDecimals: shareDecimals?.result as number | undefined,
+    shareSymbol: shareSymbol?.result as string | undefined,
     liquidationThreshold: threshold?.result as bigint | undefined,
     yieldRatePerSecond: yieldRate?.result as bigint | undefined,
   };

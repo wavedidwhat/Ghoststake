@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRYPTO_BASES, baseAsset, categoryOf, displayName, logoSymbolFor, parseCategory, subjectOf } from "../marketCategory";
+import { CRYPTO_BASES, baseAsset, categoryOf, companyOf, displayName, logoSymbolFor, parseCategory, subjectOf } from "../marketCategory";
 import { hasLogo } from "@/components/ui/AssetLogo";
 
 // The strings are the real ones: the Chainlink descriptions, the label
@@ -115,5 +115,17 @@ describe("displayName and subjectOf (GHO-114)", () => {
 
   it("gives a question no name of its own: its words are the heading", () => {
     expect(displayName({ description: "Will it rain?", isQuestion: true })).toBeUndefined();
+  });
+});
+
+/** The stock-loan page named Palantir by its token's name() (GHO-126). */
+describe("companyOf", () => {
+  it("names the company for a ticker the app knows", () => {
+    expect(companyOf("PLTR")).toBe("Palantir");
+    expect(companyOf("tsla")).toBe("Tesla");
+  });
+
+  it("is undefined for a ticker it doesn't, so the token's own name is used", () => {
+    expect(companyOf("SPY")).toBeUndefined();
   });
 });

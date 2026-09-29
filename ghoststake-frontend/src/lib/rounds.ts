@@ -142,3 +142,17 @@ export function upShare(round: Round): number | null {
   // looking like it has real money behind it.
   return Number((round.upPool * 1000n) / total) / 10;
 }
+
+/**
+ * Each side's share of the pool as the whole percentages a reader sees, or
+ * null when nothing is staked. Yes is rounded once and No is the rest, so the
+ * two always add up to 100 and Yes matches the "say yes" figure beside it.
+ * Rounding each side on its own (after bigint division had already cut the
+ * decimals) showed 81% say yes over a Yes button reading 80% (GHO-126).
+ */
+export function sidePercents(round: Round): { up: number; down: number } | null {
+  const share = upShare(round);
+  if (share === null) return null;
+  const up = Math.round(share);
+  return { up, down: 100 - up };
+}

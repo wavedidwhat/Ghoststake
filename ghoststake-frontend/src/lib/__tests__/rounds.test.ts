@@ -7,6 +7,7 @@ import {
   entryOpen,
   formatCountdown,
   multipleFor,
+  sidePercents,
   upShare,
   willVoidOnLock,
   type Round,
@@ -155,3 +156,34 @@ describe("upShare", () => {
     expect(upShare(round(huge, huge))).toBe(50);
   });
 });
+
+/**
+ * Round 30 on the live demo market (GHO-126): 183 on Yes, 43 on No. The header
+ * said "81% say yes" while the Yes button said 80%, because the button rounded
+ * after bigint division had already truncated 80.97 to 80.
+ */
+describe("sidePercents", () => {
+  const round = (up: bigint, down: bigint) =>
+    ({ upPool: up, downPool: down }) as Parameters<typeof sidePercents>[0];
+  const mUSDC = (n: number) => BigInt(n) * 10n ** 6n;
+
+  it("rounds, rather than truncating, and matches the header's figure", () => {
+    const split = sidePercents(round(mUSDC(183), mUSDC(43)));
+    expect(split).toEqual({ up: 81, down: 19 });
+    expect(split!.up).toBe(Math.round(upShare(round(mUSDC(183), mUSDC(43)))!));
+  });
+
+  it("always adds up to 100", () => {
+    // 43 / 288 is 14.93% and 245 / 288 is 85.07%: rounded separately they are
+    // 15 and 85, but truncated they were 14 and 85.
+    for (const [up, down] of [[43, 245], [1, 2], [1, 1], [2, 1], [333, 667], [1, 999]]) {
+      const s = sidePercents(round(mUSDC(up), mUSDC(down)))!;
+      expect(s.up + s.down).toBe(100);
+    }
+  });
+
+  it("is null when nothing is staked", () => {
+    expect(sidePercents(round(0n, 0n))).toBeNull();
+  });
+});
+

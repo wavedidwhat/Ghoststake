@@ -106,6 +106,15 @@ const COMPANIES: Record<string, string> = {
 };
 
 /**
+ * The company name for a stock ticker ("PLTR" → "Palantir"), or undefined when
+ * the app doesn't know it. The stock-loan page used the token's on-chain
+ * name ("Palantir Technologies") beside "Palantir" everywhere else (GHO-126).
+ */
+export function companyOf(ticker: string): string | undefined {
+  return COMPANIES[ticker.toUpperCase()];
+}
+
+/**
  * What a question is about, the way a person says it (GHO-114): "Tesla" for
  * the RHTSLA feed, "ETH" for ETH / USD. The feed's own label read "GHOSTSTAKE
  * DEMO FEED (operator-set price) - ETH" into every round title, because the
