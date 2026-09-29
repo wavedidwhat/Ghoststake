@@ -30,7 +30,7 @@ import {
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { categoryOf, type Category } from "@/lib/marketCategory";
+import { categoryOf, displayName, type Category } from "@/lib/marketCategory";
 import { CategoryTabs } from "@/components/CategoryTabs";
 import { MarketMark } from "@/components/MarketMark";
 
@@ -238,7 +238,8 @@ function MarketRow({
         isQuestion: feed?.isQuestion,
       })
     : undefined;
-  const question = asked ? root(asked.key, asked.values) : label;
+  // No live round: the market's name, not its raw feed label (GHO-114).
+  const question = asked ? root(asked.key, asked.values) : (feed && displayName(feed)) || label;
 
   const upMultiple = live && params ? multipleFor(live.round, Side.Up, params.rake) : null;
   const downMultiple = live && params ? multipleFor(live.round, Side.Down, params.rake) : null;

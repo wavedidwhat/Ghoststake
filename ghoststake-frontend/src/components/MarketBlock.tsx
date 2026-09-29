@@ -27,6 +27,7 @@ import { Button, TextButton } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Badge } from "@/components/ui/Badge";
 import { MarketMark } from "@/components/MarketMark";
+import { displayName } from "@/lib/marketCategory";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 
 /**
@@ -209,6 +210,9 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
   // is no fallback label to fall back to: the registry deliberately stores
   // none, so an unread feed is "reading", not a guess.
   const label = feed ? (feed.description.split(" - ").pop() ?? t("marketFallback")) : feedT("reading");
+  // "Tesla (TSLA)" as the heading, with the feed's own label kept beneath it
+  // when it says something the heading doesn't (GHO-114).
+  const heading = (feed && displayName(feed)) || label;
 
   return (
     <div
@@ -218,7 +222,10 @@ export function MarketHeader({ market, feed }: { market: Market; feed: MarketFee
     >
       <div className="flex flex-wrap items-center gap-3">
         <MarketMark feed={feed} size="lg" />
-        <h2 className="display text-lg text-ink">{label}</h2>
+        <div className="min-w-0">
+          <h2 className="display text-lg text-ink">{heading}</h2>
+          {heading !== label && <p className="text-xs text-ink-faint">{label}</p>}
+        </div>
         {demo ? (
           <Badge>{feedT("demo")}</Badge>
         ) : knownFeed ? (

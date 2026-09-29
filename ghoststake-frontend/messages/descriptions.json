@@ -302,7 +302,9 @@
     "awaitingStrike": "On an older market with no strike yet, while entry is open.",
     "settingStrike": "On an older market with no strike yet, after entry closes.",
     "thePriceFeed": "Stands in for the feed's name in the settlement line when it is unknown.",
-    "settlement": "How the round is decided. {state} is done or pending; {name} the feed name; {at} a 24-hour UTC time; <feed> links to the feed on the explorer."
+    "settlement": "How the round is decided. {state} is done or pending; {name} the feed name; {at} a 24-hour UTC time; <feed> links to the feed on the explorer.",
+    "nobodyBacked": "In place of the odds bar on a closed round that nobody entered.",
+    "noEntries": "On a side button of a closed round that nobody entered. Lowercase."
   },
   "resolution": {
     "heading": "Heading of the panel explaining a question round's claimed outcome.",

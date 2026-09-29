@@ -1,5 +1,6 @@
 import { message, type Message } from "@/i18n/message";
 import { formatAmount, formatClock } from "./format";
+import { subjectOf } from "./marketCategory";
 import { Side, type SideValue } from "./rounds";
 
 /**
@@ -78,11 +79,13 @@ export function questionFor(input: {
   return at ? message("question.aboveAt", { asset, level, at }) : message("question.above", { asset, level });
 }
 
-/** "ETH / USD" is about ETH. A feed with no pair is used as it is. Null with no feed. */
+/**
+ * "ETH / USD" is about ETH; the RHTSLA feed is about Tesla (GHO-114). Null
+ * with no feed.
+ */
 function assetOf(feed: string | undefined): string | null {
   if (!feed) return null;
-  const [base] = feed.split("/");
-  return base.trim() || feed;
+  return subjectOf(feed) || feed;
 }
 
 /** Local time, because the person reading it is deciding whether to wait. */

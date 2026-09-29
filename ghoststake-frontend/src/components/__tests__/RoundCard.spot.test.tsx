@@ -140,3 +140,22 @@ describe("a round whose strike is not set yet", () => {
     expect(html).not.toContain("Start price is");
   });
 });
+
+/**
+ * A closed round nobody entered (GHO-114). It used to say "No positions yet.
+ * The first side in sets the odds", an invitation into a round that's over.
+ * The demo market filled its Settled list with these while nobody was seeding.
+ */
+describe("a closed round nobody entered", () => {
+  it("says nobody backed it, rather than inviting a first side", () => {
+    const html = render({ round: round({ status: Status.Void }), phase: Phase.Void });
+    expect(html).toContain("Nobody backed this round.");
+    expect(html).not.toContain("first side in sets the odds");
+    expect(html).toContain("no entries");
+  });
+
+  it("still invites a first side while the round is open", () => {
+    const html = render({ round: round(), phase: Phase.Open });
+    expect(html).toContain("first side in sets the odds");
+  });
+});
