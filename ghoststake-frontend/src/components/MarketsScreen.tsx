@@ -24,6 +24,7 @@ import {
   entryClosesAt,
   formatCountdown,
   multipleFor,
+  sidePercents,
   upShare,
   type Round,
 } from "@/lib/rounds";
@@ -400,10 +401,8 @@ function SideSummary({
 
 /** A side's share of the pool, rounded, or null when nothing is staked. */
 function sharePercent(round: Round, up: boolean): number | null {
-  const total = round.upPool + round.downPool;
-  if (total === 0n) return null;
-  const side = up ? round.upPool : round.downPool;
-  return Math.round(Number((side * 100n) / total));
+  const split = sidePercents(round);
+  return split === null ? null : up ? split.up : split.down;
 }
 
 /**

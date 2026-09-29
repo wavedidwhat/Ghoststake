@@ -20,6 +20,7 @@ import {
   formatCountdown,
   multipleFor,
   phaseKey,
+  sidePercents,
   upShare,
   willVoidOnLock,
   type PhaseValue,
@@ -354,9 +355,8 @@ function SideButton({
 
   // This side's share of the pool: what the crowd thinks of *this* answer,
   // beside what it pays. No surface shows a bare multiple (GHO-78).
-  const total = round.upPool + round.downPool;
-  const sidePool = isUp ? round.upPool : round.downPool;
-  const percent = total === 0n ? null : Math.round(Number((sidePool * 100n) / total));
+  const split = sidePercents(round);
+  const percent = split === null ? null : isUp ? split.up : split.down;
 
   // Tinted, not filled. Eight saturated slabs a screen fight the figures that
   // matter, and a filled side stopped tracking its own probability — a 7% Yes

@@ -4,6 +4,7 @@ import { erc20Abi, maxUint256, type ContractFunctionParameters } from "viem";
 import { useConnection, useReadContracts } from "wagmi";
 import { aggregatorV3InterfaceAbi, borrowLiquidityPoolAbi, stockLoanVaultAbi } from "@/lib/abis";
 import { env } from "@/lib/env";
+import { companyOf } from "@/lib/marketCategory";
 import { summarise, type StockCollateral } from "@/lib/stockLoan";
 import { activeChain } from "@/lib/wagmi";
 
@@ -62,11 +63,13 @@ function useStockVaultConfig() {
     stableDecimals: stableDecimals?.result as number | undefined,
     stableSymbol: (stableSymbol?.result as string | undefined) ?? "",
     originationFee: originationFee?.result as bigint | undefined,
-    collaterals: collaterals.map((c, i) => ({
-      ...c,
-      symbol: (names[i * 2]?.result as string | undefined) ?? "",
-      name: (names[i * 2 + 1]?.result as string | undefined) ?? "",
-    })),
+    collaterals: collaterals.map((c, i) => {
+      const symbol = (names[i * 2]?.result as string | undefined) ?? "";
+      // The name people know, where the app has one, so the page matches the
+      // markets; the token's own name() otherwise.
+      const name = companyOf(symbol) ?? (names[i * 2 + 1]?.result as string | undefined) ?? "";
+      return { ...c, symbol, name };
+    }),
     ready: labels.isSuccess && collaterals.length === n && n > 0,
     isError: head.isError || configs.isError || labels.isError,
   };

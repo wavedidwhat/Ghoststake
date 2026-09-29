@@ -633,9 +633,12 @@ function ClaimRow({
   }
 
   if (claimable === undefined || claimable === 0n) {
+    // Nothing to claim on a settled round means the other side won: a void
+    // always refunds something. The card used to say only "You had 200 on
+    // this round", which never told a loser they had lost (GHO-126).
     return (
       <p className="mt-3 text-xs text-ink-muted">
-        {t.rich("yourPosition", {
+        {t.rich(claimable === 0n ? "yourLoss" : "yourPosition", {
           amount: formatAmount(positionSize, decimals, 2),
           symbol,
           figure: (chunks) => <span className="tabular">{chunks}</span>,

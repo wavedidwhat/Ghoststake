@@ -100,6 +100,8 @@ function VaultScreen({
           walletBalance={walletBalance.data}
           deposited={position.collateralValue}
           shares={position.shares}
+          shareDecimals={position.shareDecimals}
+          shareSymbol={position.shareSymbol}
           lien={position.lien}
           onDone={() => {
             position.refetch();
@@ -119,6 +121,8 @@ function DepositWithdraw({
   walletBalance,
   deposited,
   shares,
+  shareDecimals,
+  shareSymbol,
   lien,
   onDone,
 }: {
@@ -129,6 +133,8 @@ function DepositWithdraw({
   walletBalance: bigint | undefined;
   deposited: bigint | undefined;
   shares: bigint | undefined;
+  shareDecimals: number | undefined;
+  shareSymbol: string | undefined;
   lien: bigint | undefined;
   onDone: () => void;
 }) {
@@ -159,8 +165,15 @@ function DepositWithdraw({
   const partialExitBlocked =
     mode === "withdraw" && hasLien && parsed !== null && deposited !== undefined && parsed < deposited;
 
+  // A full exit with a loan open is allowed: the vault repays the loan on the
+  // way out and sends the rest (GHO-26). Say what arrives, because the field
+  // holds the whole deposit and the wallet receives less (GHO-126). The vault
+  // refuses outright when the loan is more than the deposit.
+  const exitWithLoan = mode === "withdraw" && hasLien && parsed !== null && parsed > 0n && !partialExitBlocked;
+  const exitBelowLoan = exitWithLoan && parsed < lien!;
+
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
-  const disabled = busy || parsed === null || parsed === 0n || overMax || partialExitBlocked;
+  const disabled = busy || parsed === null || parsed === 0n || overMax || partialExitBlocked || exitBelowLoan;
 
   async function submit() {
     if (parsed === null) return;
@@ -249,12 +262,27 @@ function DepositWithdraw({
           {partialExitBlocked && (
             <p className="text-xs text-warning">{t("partialExitBlocked")}</p>
           )}
+          {exitWithLoan && !exitBelowLoan && (
+            <p className="text-xs text-warning">
+              {t("exitRepaysLoan", {
+                loan: formatAmount(lien!, decimals, 2),
+                receive: formatAmount(parsed! - lien!, decimals, 2),
+                symbol,
+              })}
+            </p>
+          )}
+          {exitBelowLoan && <p className="text-xs text-negative">{t("exitBelowLoan")}</p>}
           <TxStatus tx={tx} />
         </div>
 
         <div className="flex flex-col gap-3 rounded-sm border border-border bg-raised/40 p-4">
           <Line label={t("staked")} value={deposited} decimals={decimals} symbol={symbol} />
-          <Line label={t("shares")} value={shares} decimals={18} symbol="gsCOL" />
+          <Line
+            label={t("shares")}
+            value={shareDecimals === undefined ? undefined : shares}
+            decimals={shareDecimals ?? 0}
+            symbol={shareSymbol ?? ""}
+          />
           <Line label={t("borrowed")} value={lien} decimals={decimals} symbol={symbol} />
           <p className="mt-1 text-xs text-ink-muted">{t("neverLeaves")}</p>
         </div>
