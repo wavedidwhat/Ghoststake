@@ -49,6 +49,7 @@ export function RoundCard({
   onStake,
   feed,
   isQuestion,
+  isDemo,
   feedAddress,
   spot,
   href,
@@ -73,6 +74,10 @@ export function RoundCard({
   /** Set when this market settles a claimed outcome rather than a price
    *  (GHO-91). `feed` is then the oracle's own question, used verbatim. */
   isQuestion?: boolean;
+  /** Set when the feed is one we publish (the demo feed, or a mirror), not a
+   *  Chainlink aggregator, so the settlement line doesn't claim Chainlink
+   *  (GHO-124). */
+  isDemo?: boolean;
   /** The aggregator this market settles against, for the explorer link on
    *  the settlement line (GHO-64). */
   feedAddress?: `0x${string}`;
@@ -201,6 +206,7 @@ export function RoundCard({
         feed={feed}
         feedAddress={feedAddress}
         isQuestion={isQuestion}
+        isDemo={isDemo}
       />
 
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -553,11 +559,13 @@ function SettlementNote({
   feed,
   feedAddress,
   isQuestion,
+  isDemo,
 }: {
   round: Round;
   feed?: string;
   feedAddress?: `0x${string}`;
   isQuestion?: boolean;
+  isDemo?: boolean;
 }) {
   // A question is settled by a named arbiter against written criteria, not by
   // a feed. Saying "settles on the price" there would be plainly false, and
@@ -585,6 +593,7 @@ function SettlementNote({
     <p className="mt-3 border-t border-border pt-3 text-[11px] text-ink-faint">
       {t.rich("settlement", {
         state: done ? "done" : "pending",
+        source: isDemo ? "demo" : "chainlink",
         name,
         at,
         feed: (chunks) =>
