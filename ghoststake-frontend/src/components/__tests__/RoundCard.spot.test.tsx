@@ -112,14 +112,14 @@ describe("a round whose strike is not set yet", () => {
   it("says the start price is set when entry closes", () => {
     const html = render({ round: round(), phase: Phase.Open });
 
-    expect(html).toContain("Start price is set when entry closes");
+    expect(html).toContain("start price is set when entry closes");
   });
 
   it("does not still promise a future deadline once entry has closed", () => {
     const html = render({ round: round(), phase: Phase.Cutoff });
 
     expect(html).not.toContain("when entry closes");
-    expect(html).toContain("Start price is being set now");
+    expect(html).toContain("start price is being set now");
   });
 
   /** A round that has a strike has nothing to wait for. */
@@ -129,8 +129,8 @@ describe("a round whose strike is not set yet", () => {
       phase: Phase.Open,
     });
 
-    expect(html).not.toContain("Start price is set when entry closes");
-    expect(html).not.toContain("Start price is being set now");
+    expect(html).not.toContain("start price is set when entry closes");
+    expect(html).not.toContain("start price is being set now");
   });
 
   /** A question has no strike and is not waiting for one. */

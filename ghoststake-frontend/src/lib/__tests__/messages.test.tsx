@@ -54,6 +54,26 @@ describe("messages/en.json", () => {
   });
 
   /**
+   * The voice rules that are mechanical enough to hold with a test (GHO-122).
+   * An em dash reads as machine-written ("a dead giveaway"), and these words
+   * are the stock phrases that make copy sound generated. Both came back
+   * every time copy was written quickly, so they're checked, not remembered.
+   */
+  it("has no em dashes and none of the banned stock phrases", () => {
+    const banned = [
+      "delve", "testament", "tapestry", "revolutioni", "game-changer", "game changer",
+      "buckle up", "elevate", "look no further", "in a world where", "more than just",
+      "unlock your potential", "foster", "seamless",
+    ];
+    const found: string[] = [];
+    for (const [key, text] of all) {
+      if (/[\u2014\u2013]/.test(text)) found.push(`${key}: dash`);
+      for (const word of banned) if (text.toLowerCase().includes(word)) found.push(`${key}: ${word}`);
+    }
+    expect(found).toEqual([]);
+  });
+
+  /**
    * In ICU the ASCII apostrophe is the escape character (GHO-118). Placed
    * before a `{` or `#` it quotes what follows, and the text renders without
    * the apostrophe and with the braces as literal characters. Nothing errors.
