@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { ConnectButton } from "./ConnectButton";
 import { AlertBell } from "./AlertBell";
+import { ChainBadge } from "./ChainBadge";
 import { activeChain } from "@/lib/wagmi";
 
 /**
@@ -48,16 +49,32 @@ export function Page({
         GhostStake
       </span>
 
+      {/*
+       * The network badge (GHO-127) sits beside the wallet from `md` up. On a
+       * phone the wordmark, bell and wallet already fill the first line, and
+       * adding it there wrapped the header to three rows, so it moves to the
+       * title's line, which has room on the right. Two copies, one hidden
+       * per layout, like the wordmark here and in the sidebar: a link, so
+       * unlike the title a hidden copy costs a screen reader nothing.
+       */}
       <div className="ml-auto flex items-center gap-1 md:order-3">
+        <span className="mr-1 hidden md:inline-flex">
+          <ChainBadge />
+        </span>
         <AlertBell />
         <ConnectButton />
       </div>
 
-      <div className="w-full md:order-2 md:mr-auto md:w-auto">
-        <h1 className="display text-2xl md:text-xl">{title}</h1>
-        <p className="mt-0.5 text-xs leading-relaxed text-ink-faint">
-          {subtitle ?? activeChain.name}
-        </p>
+      <div className="flex w-full items-start justify-between gap-3 md:order-2 md:mr-auto md:w-auto">
+        <div className="min-w-0">
+          <h1 className="display text-2xl md:text-xl">{title}</h1>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-faint">
+            {subtitle ?? activeChain.name}
+          </p>
+        </div>
+        <span className="mt-1 md:hidden">
+          <ChainBadge />
+        </span>
       </div>
     </header>
 

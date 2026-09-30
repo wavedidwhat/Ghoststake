@@ -37,7 +37,6 @@
   "nav": {
     "mainLabel": "Main",
     "primaryLabel": "Primary",
-    "testnet": "Testnet",
     "more": "More",
     "moreTitle": "Everything else",
     "sections": {
@@ -87,6 +86,10 @@
     "addChainFirst": "Add {chain} to your wallet first.",
     "couldNotSwitch": "Your wallet could not switch networks.",
     "noAnswer": "Your wallet hasn’t answered."
+  },
+  "chain": {
+    "testnet": "Testnet",
+    "runsOn": "GhostStake runs on {chain}"
   },
   "explorer": {
     "newTab": "(opens the explorer in a new tab)"

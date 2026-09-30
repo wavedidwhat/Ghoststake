@@ -147,7 +147,7 @@ describe("screens use the primitives in components/ui (GHO-96)", () => {
     // Every hand-built explorer link was one more place to forget
     // `rel="noopener"`, the fallback for a chain with no explorer, or the
     // arrow that says the link leaves the app.
-    expect(offending(/explorer(Tx|Address)Url\(|["'`]\/(tx|address)\/["'`$]/)).toEqual([]);
+    expect(offending(/explorer(Tx|Address|Home)Url\(|["'`]\/(tx|address)\/["'`$]/)).toEqual([]);
   });
 
   it("keeps raw <button>s to the ones that are meant to be different", () => {
