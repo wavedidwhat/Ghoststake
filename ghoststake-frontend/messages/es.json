@@ -942,6 +942,8 @@
     },
     "open": {
       "heading": "Abrir una ronda",
+      "questionMarket": "Este mercado resuelve una pregunta, y una pregunta tiene una sola ronda. Otra ronda tomaría posiciones sobre una respuesta que quizá ya es pública, y se resolvería con ella. Abre una pregunta nueva.",
+      "checking": "Revisando si este mercado se resuelve con un precio o con una pregunta…",
       "lead": "Anticipación",
       "leadHint": "Tiempo antes de que abra la ronda. Tiene que alcanzar para firmar y minar.",
       "entry": "Ventana de entrada",

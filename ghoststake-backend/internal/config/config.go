@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"regexp"
@@ -37,6 +38,13 @@ type Config struct {
 	RPCURL  string
 
 	CORSOrigins []string
+
+	// TrustedProxyCIDRs are the proxies allowed to vouch for a client's
+	// address in X-Forwarded-For. Empty means exactly one trusted hop — the
+	// Traefik in front of this container — so the rightmost entry, the one
+	// Traefik appended, is the client. Every rate limit keys on that address;
+	// see clientIP in httpx.
+	TrustedProxyCIDRs []string
 
 	// AllowSchemaAhead permits booting against a database that has applied
 	// migrations this binary does not carry. Off by default: the binary would
@@ -126,9 +134,10 @@ func Load() (Config, error) {
 		// fallback because the deployed .env files already use it. The chain
 		// is no longer necessarily Arbitrum — chain.Dial's id check is what
 		// actually guarantees we are where we think we are.
-		RPCURL:           env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
-		CORSOrigins:      envList("CORS_ORIGINS", "http://localhost:3000"),
-		AllowSchemaAhead: envBool("ALLOW_SCHEMA_AHEAD", false),
+		RPCURL:            env("RPC_URL", env("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc")),
+		CORSOrigins:       envList("CORS_ORIGINS", "http://localhost:3000"),
+		TrustedProxyCIDRs: envList("TRUSTED_PROXY_CIDRS", ""),
+		AllowSchemaAhead:  envBool("ALLOW_SCHEMA_AHEAD", false),
 		Indexer: IndexerConfig{
 			Enabled:           envBool("INDEXER_ENABLED", false),
 			VaultAddress:      env("VAULT_ADDRESS", ""),
@@ -159,6 +168,14 @@ func Load() (Config, error) {
 
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	// chi panics on a bad prefix when the router is built; saying which one
+	// here is kinder than a stack trace.
+	for _, cidr := range c.TrustedProxyCIDRs {
+		if _, err := netip.ParsePrefix(cidr); err != nil {
+			return Config{}, fmt.Errorf("TRUSTED_PROXY_CIDRS: %q is not a CIDR prefix: %w", cidr, err)
+		}
 	}
 
 	// Outside development these must be set explicitly. The defaults point at

@@ -30,6 +30,7 @@ import {
   findCloseRound,
   isOwnerOnly,
   legacyOpenRoundAbi,
+  openRoundGate,
   scheduleFrom,
   scheduleProblem,
   warningsFor,
@@ -288,6 +289,19 @@ function OpenRoundForm({
     schedule && now !== undefined ? scheduleProblem(schedule, params.entryCutoff, now) : null;
 
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
+
+  // No second round on a question; see `openRoundGate`.
+  const gate = openRoundGate(shape.isQuestion);
+  if (gate !== "open") {
+    return (
+      <Card>
+        <h3 className="text-sm font-medium text-ink">{t("heading")}</h3>
+        <p className="mt-2 text-sm text-ink-muted">
+          {gate === "question" ? t("questionMarket") : t("checking")}
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card>

@@ -18,6 +18,7 @@ import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { borrowToPositionRouterAbi, collateralVaultAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env } from "@/lib/env";
 import { healthBand } from "@/lib/format";
+import { borrowHeadroom } from "@/lib/accrual";
 import { useFormat } from "@/i18n/useFormat";
 import { SideArrow } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
@@ -369,8 +370,12 @@ function PositionForm({
   const total = ownAmount + borrowAmount;
 
   const overWallet = wallet.data !== undefined && ownAmount > wallet.data;
-  const overCapacity =
-    position.maxBorrowable !== undefined && borrowAmount > position.maxBorrowable;
+  // Less the interest the vault accrues before it checks; see lib/accrual.
+  const capacity =
+    position.maxBorrowable === undefined
+      ? undefined
+      : borrowHeadroom(position.maxBorrowable, position.lien ?? 0n);
+  const overCapacity = capacity !== undefined && borrowAmount > capacity;
 
   const needsTokenApproval =
     ownAmount > 0n && (routerAllowance.data ?? 0n) < ownAmount;
@@ -463,7 +468,7 @@ function PositionForm({
           label={t("borrowed")}
           value={borrow}
           onChange={setBorrow}
-          max={position.maxBorrowable}
+          max={capacity}
           decimals={decimals}
           symbol={position.symbol}
           maxLabel={t("capacityMax")}

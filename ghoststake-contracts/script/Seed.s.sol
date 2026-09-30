@@ -9,6 +9,7 @@ import { BorrowLiquidityPool } from "../src/BorrowLiquidityPool.sol";
 import { CollateralVault } from "../src/CollateralVault.sol";
 import { ParimutuelRound } from "../src/ParimutuelRound.sol";
 import { MockUSDC } from "./mocks/MockUSDC.sol";
+import { DeployerKey } from "./DeployerKey.sol";
 
 /// @notice Puts real activity on a freshly deployed local chain.
 ///
@@ -19,7 +20,7 @@ import { MockUSDC } from "./mocks/MockUSDC.sol";
 ///
 /// Reads addresses from the environment — `make seed-local` passes them
 /// through from the deploy output.
-contract Seed is Script {
+contract Seed is Script, DeployerKey {
     // anvil's prefunded accounts 0, 1, 2.
     uint256 internal constant DEPLOYER_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
     uint256 internal constant ALICE_KEY = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
@@ -46,7 +47,7 @@ contract Seed is Script {
         // the seed can build a many-sided market. On any real network only
         // the deployer has gas, and the anvil keys hold nothing — so
         // everything is done from one account instead.
-        uint256 deployerKey = vm.envOr("PRIVATE_KEY", DEPLOYER_KEY);
+        uint256 deployerKey = _deployerKey(vm.envOr("PRIVATE_KEY", uint256(0)));
         bool local = block.chainid == 31337;
 
         if (local) {

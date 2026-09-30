@@ -5,6 +5,7 @@ import {
   actionFor,
   findCloseRound,
   isOwnerOnly,
+  openRoundGate,
   scheduleFrom,
   scheduleProblem as problemOf,
   warningsFor,
@@ -187,5 +188,22 @@ describe("finding the feed round that closes a round", () => {
     // Phase-shifted ids: nothing below 90_000 exists.
     const f = feed(1000n, 20n, 1000n, 90_000n);
     expect(await findCloseRound(f.read, f.latest, 5000n)).toBe(90_200n);
+  });
+});
+
+// Audit 2026-09-30: the console offered "Open round" on a question market,
+// prefilled with the 1.00 sentinel strike. After the event, that round would
+// take positions on a known answer and settle on it.
+describe("openRoundGate", () => {
+  it("never offers a second round on a question", () => {
+    expect(openRoundGate(true)).toBe("question");
+  });
+
+  it("withholds the form until the oracle has said which it is", () => {
+    expect(openRoundGate(undefined)).toBe("checking");
+  });
+
+  it("offers it on a price market", () => {
+    expect(openRoundGate(false)).toBe("open");
   });
 });

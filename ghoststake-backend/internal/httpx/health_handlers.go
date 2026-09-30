@@ -242,7 +242,7 @@ func (s *Server) handleAtRisk(w http.ResponseWriter, r *http.Request) {
 		if !health.HasDebt {
 			continue
 		}
-		quote := finance.LiquidationQuote(health.Collateral, health.Debt, health.HealthFactor, params)
+		quote := finance.QuoteFor(health, params)
 
 		positions = append(positions, atRiskPosition{
 			Address:      borrowers[i],

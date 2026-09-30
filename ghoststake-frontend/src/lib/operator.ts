@@ -28,6 +28,24 @@ export function isOwnerOnly(action: ActionValue): boolean {
   return action === Action.VoidUnsettled;
 }
 
+/**
+ * Whether the console may offer to open a round on this market.
+ *
+ * Not on a question (GHO-80). A question has one answer, so its market has
+ * one round, and the event oracle answers any round that asks, whenever it
+ * asks: a second round opened after the event would take positions on an
+ * answer already public, or already proposed on chain, and settle on it. The
+ * keeper refuses these (`keeper.go`, `!m.Event`); this is the same rule for
+ * the console, the one other place that can open a round.
+ *
+ * Unknown is not "yes". Until the oracle has answered either way the form is
+ * withheld, since the case it could be wrong about is the one that matters.
+ */
+export function openRoundGate(isQuestion: boolean | undefined): "open" | "question" | "checking" {
+  if (isQuestion === undefined) return "checking";
+  return isQuestion ? "question" : "open";
+}
+
 export type Timing = {
   entryCutoff: bigint;
   lockWindow: bigint;

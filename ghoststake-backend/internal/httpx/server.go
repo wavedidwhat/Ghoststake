@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/go-chi/httprate"
 	"github.com/gorilla/websocket"
 
 	"forge.wavedidwhat.com/wave/ghoststake/internal/auth"
@@ -126,7 +125,7 @@ func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	r.Use(middleware.ClientIPFromXFF(s.cfg.TrustedProxyCIDRs...))
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger)
 	r.Use(middleware.Timeout(20 * time.Second))
@@ -152,7 +151,7 @@ func (s *Server) routes() http.Handler {
 		r.Route("/auth", func(r chi.Router) {
 			// Auth endpoints are rate limited per IP: they are unauthenticated
 			// and do elliptic-curve recovery, which is comparatively expensive.
-			r.Use(httprate.LimitByIP(20, time.Minute))
+			r.Use(limitByClient(20, time.Minute))
 			r.Post("/nonce", s.handleNonce)
 			r.Post("/verify", s.handleVerify)
 		})
@@ -167,7 +166,7 @@ func (s *Server) routes() http.Handler {
 		// read a public blockchain would be theatre. They are rate limited
 		// because each one costs a database read or an RPC call.
 		r.Group(func(r chi.Router) {
-			r.Use(httprate.LimitByIP(120, time.Minute))
+			r.Use(limitByClient(120, time.Minute))
 			r.Get("/rounds", s.handleRounds)
 			r.Get("/positions/{address}", s.handlePositions)
 			r.Get("/activity/{address}", s.handleActivity)

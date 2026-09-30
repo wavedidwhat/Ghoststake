@@ -49,15 +49,21 @@ export function formatFor(locale: string): Format {
    *
    * Going via `Number` loses precision past ~17 significant digits, and it
    * loses it silently: a balance would print trailing zeros that look exact
-   * and are fabricated. Rounding is half-up, matching `toFixed`.
+   * and are fabricated. Rounding is half-up, matching `toFixed`, unless the
+   * caller asks for `"down"` — see `formatHealthFactor` for when that matters.
    */
-  function formatFixed(value: bigint, decimals: number, fractionDigits: number): string {
+  function formatFixed(
+    value: bigint,
+    decimals: number,
+    fractionDigits: number,
+    rounding: "half-up" | "down" = "half-up",
+  ): string {
     const negative = value < 0n;
     const magnitude = negative ? -value : value;
 
     const unit = 10n ** BigInt(decimals);
     const precision = 10n ** BigInt(fractionDigits);
-    const scaled = (magnitude * precision + unit / 2n) / unit;
+    const scaled = (magnitude * precision + (rounding === "down" ? 0n : unit / 2n)) / unit;
 
     const whole = (scaled / precision).toString().replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
     const fraction =
@@ -91,11 +97,18 @@ export function formatFor(locale: string): Format {
    * callers to handle that case instead of printing it. Values above the
    * display ceiling are capped — a dust lien can push the ratio past 1e20,
    * which is both meaningless and unreadable at display size.
+   *
+   * Rounded down, towards the line, never half-up. Half-up printed 0.995 as
+   * "1.00": a position anyone could already liquidate, shown as sitting exactly
+   * on the line, beside copy saying liquidation starts *below* 1.00. Every
+   * figure within a hundredth of the line was off in the direction that
+   * reassures. Rounding down can only ever show a position as slightly less
+   * healthy than it is.
    */
   function formatHealthFactor(wad: bigint, fractionDigits = 2): string | null {
     if (!hasDebt(wad)) return null;
     if (wad > HEALTH_DISPLAY_CEILING) return "999+";
-    return formatFixed(wad, 18, fractionDigits);
+    return formatFixed(wad, 18, fractionDigits, "down");
   }
 
   /**

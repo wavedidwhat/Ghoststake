@@ -942,6 +942,8 @@
     },
     "open": {
       "heading": "Abrir uma rodada",
+      "questionMarket": "Este mercado resolve uma pergunta, e uma pergunta tem uma rodada só. Outra rodada aceitaria posições sobre uma resposta que talvez já seja pública, e seria resolvida por ela. Abra uma pergunta nova.",
+      "checking": "Verificando se este mercado se resolve por um preço ou por uma pergunta…",
       "lead": "Antecedência",
       "leadHint": "Tempo até a rodada abrir. Precisa dar tempo de assinar e minerar.",
       "entry": "Janela de entrada",

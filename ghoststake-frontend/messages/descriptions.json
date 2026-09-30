@@ -942,6 +942,8 @@
     },
     "open": {
       "heading": "Form heading.",
+      "questionMarket": "Shown instead of the open-round form on a market that settles a question: why no second round can be opened.",
+      "checking": "Shown instead of the open-round form while the market's oracle is being read.",
       "lead": "Field label: seconds until the round opens.",
       "leadHint": "Hint under 'Lead'.",
       "entry": "Field label: seconds from open to lock.",

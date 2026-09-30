@@ -16,6 +16,7 @@ import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
 import { formatOptional, healthBand } from "@/lib/format";
+import { borrowHeadroom, payOffAmount } from "@/lib/accrual";
 import { useFormat } from "@/i18n/useFormat";
 import { activeChain } from "@/lib/wagmi";
 import { Button } from "@/components/ui/Button";
@@ -91,12 +92,25 @@ function BorrowScreen({
 
   // Repaying is capped at the debt by the contract, so offering more than the
   // lien as a maximum would propose an amount that silently does less than it
-  // says. Borrowing is capped at the LTV headroom.
-  const max = mode === "borrow" ? position.maxBorrowable : position.lien;
+  // says. Borrowing is capped at the LTV headroom, less the interest the vault
+  // accrues before it checks (lib/accrual).
+  const lien = position.lien ?? 0n;
+  const max =
+    mode === "borrow"
+      ? position.maxBorrowable === undefined
+        ? undefined
+        : borrowHeadroom(position.maxBorrowable, lien)
+      : position.lien;
   const overMax = parsed !== null && max !== undefined && parsed > max;
   const overWallet =
     mode === "repay" && parsed !== null && wallet.data !== undefined && parsed > wallet.data;
-  const needsApproval = mode === "repay" && parsed !== null && (allowance.data ?? 0n) < parsed;
+
+  // Repaying the whole lien sends a little more than was read, or the
+  // interest since the read is left owing — and on this vault any lien at all
+  // blocks share transfers. The vault takes only what is owed.
+  const repayingAll = mode === "repay" && parsed !== null && lien > 0n && parsed >= lien;
+  const toSend = repayingAll ? payOffAmount(lien, wallet.data ?? parsed) : parsed;
+  const needsApproval = mode === "repay" && toSend !== null && (allowance.data ?? 0n) < toSend;
 
   const preview = previewHealth(position, mode === "borrow" ? (parsed ?? 0n) : -(parsed ?? 0n));
 
@@ -104,14 +118,14 @@ function BorrowScreen({
   const disabled = busy || parsed === null || parsed === 0n || overMax || overWallet;
 
   async function submit() {
-    if (parsed === null) return;
+    if (parsed === null || toSend === null) return;
 
     if (needsApproval) {
       const ok = await tx.send({
         address: position.assetAddress!,
         abi: erc20Abi,
         functionName: "approve",
-        args: [env.vaultAddress!, parsed],
+        args: [env.vaultAddress!, toSend],
       });
       if (!ok) return;
       await allowance.refetch();
@@ -129,7 +143,7 @@ function BorrowScreen({
             address: env.vaultAddress!,
             abi: collateralVaultAbi,
             functionName: "repay",
-            args: [parsed, address],
+            args: [toSend, address],
           },
     );
 

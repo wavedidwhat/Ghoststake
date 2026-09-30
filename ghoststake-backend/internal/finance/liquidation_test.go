@@ -165,3 +165,39 @@ func TestFuzzQuoteStaysInsideThePosition(t *testing.T) {
 		}
 	}
 }
+
+// Audit 2026-09-30: the contract caps a seizure at what the shares redeem for,
+// not at `collateralValue`, which is the smaller of that and the ledger. The
+// at-risk endpoint passed the smaller figure, so a position whose ledger read
+// below its shares was quoted short — here, as a loss, when the chain pays a
+// profit.
+//
+//	ledger 6,000, shares redeem for 7,000, debt 6,800
+//	  health   = min(6,000, 7,000) x 0.65 / 6,800 = 0.5735…  -> full liquidation
+//	  repay    = 6,800
+//	  wanted   = 6,800 x 1.05 = 7,140
+//	  chain    = min(7,140, 7,000) = 7,000  -> bonus 200, profitable
+//	  old API  = min(7,140, 6,000) = 6,000  -> "unprofitable"
+func TestQuoteCapsTheSeizureAtTheSharesNotTheLedger(t *testing.T) {
+	p := riskParams()
+	ledger, shares, debt := usdc(6_000), usdc(7_000), usdc(6_800)
+	h := finance.Health{
+		Collateral:   ledger, // min(ledger, shares)
+		SharesValue:  shares,
+		Debt:         debt,
+		HealthFactor: hf(ledger, debt, p),
+		HasDebt:      true,
+	}
+
+	q := finance.QuoteFor(h, p)
+
+	if !q.FullLiquidation {
+		t.Fatal("expected the close factor to lift at a health of 0.57")
+	}
+	eq(t, q.MaxRepay, usdc(6_800), "max repay")
+	eq(t, q.Seized, usdc(7_000), "seized: the contract's cap is the shares value")
+	eq(t, q.Bonus, usdc(200), "bonus")
+	if !q.Profitable {
+		t.Fatal("quoted a loss on a liquidation the chain pays 200 for")
+	}
+}
