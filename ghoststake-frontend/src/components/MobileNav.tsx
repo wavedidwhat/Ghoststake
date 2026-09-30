@@ -8,6 +8,7 @@ import { useState } from "react";
 import { TAB_LINKS, isCurrent, moreSections } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
 import { Sheet } from "@/components/ui/Sheet";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { NavIcon } from "./NavIcon";
 
 /**
@@ -129,6 +130,7 @@ export function MobileNav() {
               </div>
             </div>
           ))}
+          <LanguageSwitcher className="border-t border-border px-1 pt-4" />
         </div>
       </Sheet>
     </>

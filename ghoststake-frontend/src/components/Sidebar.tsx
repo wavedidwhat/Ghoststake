@@ -8,6 +8,7 @@ import { isCurrent, sidebarLinks, type NavLink } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
 import { ChainBadge } from "./ChainBadge";
 import { NavIcon } from "./NavIcon";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 /**
  * Primary navigation from `md` up. Below that it is hidden and `MobileNav`
@@ -66,9 +67,10 @@ export function Sidebar() {
         {pinned.map((item) => (
           <NavItem key={item.href} item={item} pathname={pathname} />
         ))}
-        <p className="px-1 pt-2">
+        <div className="flex flex-col items-start gap-2 px-1 pt-2">
           <ChainBadge compact />
-        </p>
+          <LanguageSwitcher className="w-full px-2" />
+        </div>
       </div>
     </aside>
   );
