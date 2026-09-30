@@ -21,7 +21,7 @@ import {
   parimutuelRoundAbi,
 } from "@/lib/abis";
 import { parseAmount } from "@/lib/amount";
-import { formatAmount, formatTime } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { strikeFor } from "@/lib/strike";
 import { anyMarketConfigured, type Market } from "@/lib/markets";
 import {
@@ -242,6 +242,7 @@ function OpenRoundForm({
   now: bigint | undefined;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("operator.open");
   const root = useTranslations();
   const [lead, setLead] = useState("60");
@@ -405,6 +406,7 @@ function RoundRow({
   symbol: string;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("operator.round");
   const warn = useTranslations("operator.warnings");
   const phases = useTranslations("round.phases");
@@ -548,6 +550,7 @@ function ResolveControl({
   lockOracleRoundId: bigint;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("operator.resolve");
   const client = usePublicClient({ chainId: activeChain.id });
   const tx = useTransaction();
@@ -840,6 +843,7 @@ function SecondsField({
 }
 
 function Preview({ label, at, now }: { label: string; at: bigint; now: bigint | undefined }) {
+  const { formatTime } = useFormat();
   const t = useTranslations("operator.open");
   return (
     <div>

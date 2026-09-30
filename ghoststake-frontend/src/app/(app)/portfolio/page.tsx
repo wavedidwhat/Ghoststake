@@ -19,7 +19,7 @@ import { useMarkets } from "@/hooks/useMarkets";
 import { useRounds } from "@/hooks/useRounds";
 import { Phase } from "@/lib/rounds";
 import { contractsConfigured } from "@/lib/env";
-import { formatAmount, formatApr, formatPercent } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { stakeStanding } from "@/lib/stake";
 import { activeChain } from "@/lib/wagmi";
 import { Eyebrow } from "@/components/ui/Eyebrow";
@@ -60,6 +60,7 @@ export default function PortfolioPage() {
 }
 
 function Position({ position }: { position: ReturnType<typeof useVaultPosition> }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("portfolio");
   const vault = useTranslations("vault");
   const { decimals, symbol } = position;
@@ -236,6 +237,7 @@ function TermsSection({ decimals, symbol }: { decimals: number | undefined; symb
 }
 
 function PoolStats({ decimals, symbol }: { decimals: number | undefined; symbol: string }) {
+  const { formatAmount, formatApr, formatPercent } = useFormat();
   const t = useTranslations("portfolio.pool");
   const pool = usePoolStats();
 

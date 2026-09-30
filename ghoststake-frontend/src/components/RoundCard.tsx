@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
-import { formatAmount, formatUtcTime } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { questionFor, sideKey } from "@/lib/question";
 import { MarketMark } from "@/components/MarketMark";
 import type { Spot } from "@/hooks/useSpot";
@@ -90,6 +90,8 @@ export function RoundCard({
   href?: string;
   children?: ReactNode;
 }) {
+  const format = useFormat();
+  const { formatAmount } = format;
   const t = useTranslations("roundCard");
   const root = useTranslations();
   const canEnter = now !== undefined && entryOpen(round, entryCutoff, now);
@@ -112,6 +114,7 @@ export function RoundCard({
     strike: round.lockPrice,
     closeTime: round.closeTime,
     isQuestion,
+    format,
   });
   const question = root(asked.key, asked.values);
 
@@ -284,6 +287,7 @@ function PhaseChip({ phase }: { phase: PhaseValue }) {
  * half-and-half bar would invent a crowd.
  */
 function OddsBar({ round, decimals, symbol }: { round: Round; decimals: number; symbol: string }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("roundCard");
   const markets = useTranslations("markets");
   const share = upShare(round);
@@ -353,6 +357,7 @@ function SideButton({
   disabled: boolean;
   onStake?: (side: SideValue) => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("roundCard");
   const sides = useTranslations("round.sides");
   const isUp = side === Side.Up;
@@ -443,6 +448,8 @@ function SpotLine({
   now?: bigint;
   isQuestion?: boolean;
 }) {
+  const format = useFormat();
+  const { formatAmount } = format;
   const t = useTranslations("roundCard");
   const root = useTranslations();
   const printed = (m: ReturnType<typeof formatAge>) => root(m.key, m.values);
@@ -494,7 +501,7 @@ function SpotLine({
 
       {bps !== null && leading !== null && (
         <>
-          <span className="tabular">{formatMove(bps)}</span>
+          <span className="tabular">{formatMove(bps, format)}</span>
           {/*
            * Hedged deliberately when the lead is thin. "Yes is ahead" at
            * +0.01% and at +4% are not the same claim, and an ETH/USD feed
@@ -567,6 +574,7 @@ function SettlementNote({
   isQuestion?: boolean;
   isDemo?: boolean;
 }) {
+  const { formatUtcTime } = useFormat();
   // A question is settled by a named arbiter against written criteria, not by
   // a feed. Saying "settles on the price" there would be plainly false, and
   // the resolution panel already explains the real path (GHO-91).

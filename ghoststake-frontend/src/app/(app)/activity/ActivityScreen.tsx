@@ -14,7 +14,8 @@ import {
   wasLeveraged,
   type ActivityEvent,
 } from "@/lib/activity";
-import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
+import { type Format } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
@@ -118,6 +119,7 @@ function Header({
   viewingSomeoneElse: boolean;
   indexedBlock?: number;
 }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("activity");
   return (
     <Card>
@@ -154,13 +156,15 @@ function ActivityTable({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
+  const format = useFormat();
+  const { formatDateTime, formatInteger } = format;
   const t = useTranslations("activity");
   const root = useTranslations();
   const rows = events.map((event) => ({
     event,
     // Formatted once and shared by both layouts, so the phone and the desktop
     // can never disagree about a figure.
-    formatted: formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares") }),
+    formatted: formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares"), format }),
   }));
 
   return (
@@ -253,6 +257,7 @@ function formatEvent(
     shareDecimals,
     assetSymbol,
     sharesUnit,
+    format,
   }: {
     address: string;
     assetDecimals?: number;
@@ -260,13 +265,14 @@ function formatEvent(
     assetSymbol: string;
     /** What a share amount is called, from the catalog. */
     sharesUnit: string;
+    format: Format;
   },
 ) {
   const direction = activityDirection(event);
   const decimals = event.asset === "shares" ? shareDecimals : assetDecimals;
 
   return {
-    amount: decimals === undefined ? "…" : formatAmount(BigInt(event.amount), decimals, 4),
+    amount: decimals === undefined ? "…" : format.formatAmount(BigInt(event.amount), decimals, 4),
     unit: event.asset === "shares" ? sharesUnit : assetSymbol,
     sign: direction === "in" ? "+" : direction === "out" ? "−" : "",
     tone:
@@ -293,9 +299,11 @@ function Row({
   shareDecimals?: number;
   assetSymbol: string;
 }) {
+  const format = useFormat();
+  const { formatDateTime, formatInteger } = format;
   const t = useTranslations("activity");
   const root = useTranslations();
-  const formatted = formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares") });
+  const formatted = formatEvent(event, { address, assetDecimals, shareDecimals, assetSymbol, sharesUnit: t("shares"), format });
 
   return (
     <tr className="border-b border-border/60 last:border-0">
@@ -359,6 +367,7 @@ function Detail({ event }: { event: ActivityEvent }) {
 }
 
 function Empty({ indexedBlock }: { indexedBlock?: number }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("activity");
   return (
     <Card>

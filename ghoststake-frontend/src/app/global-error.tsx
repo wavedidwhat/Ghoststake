@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import messages from "../../messages/en.json";
-import { locale } from "@/i18n/locale";
+import { defaultLocale as locale } from "@/i18n/locale";
 
 /**
  * A throw in the root layout itself, which `error.tsx` cannot catch because

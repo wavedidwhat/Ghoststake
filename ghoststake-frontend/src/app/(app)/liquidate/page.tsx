@@ -13,7 +13,8 @@ import { collateralVaultAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
 import { actionFor, netToLiquidator, type Action, type AtRiskPosition } from "@/lib/atRisk";
 import { env } from "@/lib/env";
-import { formatAmount, formatHealthFactor, formatInteger, healthBand } from "@/lib/format";
+import { healthBand } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { Button } from "@/components/ui/Button";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
@@ -102,6 +103,7 @@ function Header({
   scanned: number;
   truncated: boolean;
 }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("liquidate");
   return (
     <Card>
@@ -139,6 +141,7 @@ function Table({
   symbol: string;
   onDone: () => void;
 }) {
+  const { formatAmount, formatHealthFactor } = useFormat();
   const t = useTranslations("liquidate");
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
 
@@ -263,6 +266,7 @@ function Row({
   symbol: string;
   onDone: () => void;
 }) {
+  const { formatAmount, formatHealthFactor } = useFormat();
   const action = actionFor(position);
   const net = netToLiquidator(position);
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
@@ -353,6 +357,7 @@ function ActionCell({
   symbol: string;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("liquidate");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";

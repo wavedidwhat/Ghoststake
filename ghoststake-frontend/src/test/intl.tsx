@@ -2,7 +2,7 @@ import { NextIntlClientProvider, createTranslator } from "next-intl";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import messages from "../../messages/en.json";
-import { locale } from "@/i18n/locale";
+import { defaultLocale as locale } from "@/i18n/locale";
 import type { Message } from "@/i18n/message";
 
 /**

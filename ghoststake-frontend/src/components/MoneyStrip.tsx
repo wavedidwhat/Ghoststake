@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Phase } from "@/lib/rounds";
-import { formatAmount, formatPercent } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { useMarkets } from "@/hooks/useMarkets";
 import { useRounds } from "@/hooks/useRounds";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
@@ -26,6 +26,7 @@ import { useWallet } from "@/hooks/useWallet";
  * read or absent (GHO-86).
  */
 export function MoneyStrip() {
+  const { formatAmount, formatPercent } = useFormat();
   const t = useTranslations("moneyStrip");
   const wallet = useWallet();
   const position = useVaultPosition();

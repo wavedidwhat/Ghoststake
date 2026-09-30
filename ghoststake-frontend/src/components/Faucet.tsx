@@ -5,7 +5,7 @@ import { useSimulateContract } from "wagmi";
 import { TxStatus } from "./AmountField";
 import { useTransaction } from "@/hooks/useTransaction";
 import { mockUSDCAbi } from "@/lib/abis";
-import { formatAmount } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { isRevert } from "@/lib/probe";
 import { activeChain } from "@/lib/wagmi";
 import { Button } from "@/components/ui/Button";
@@ -34,6 +34,7 @@ export function Faucet({
   address: `0x${string}`;
   onMinted: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("faucet");
   const tx = useTransaction();
 

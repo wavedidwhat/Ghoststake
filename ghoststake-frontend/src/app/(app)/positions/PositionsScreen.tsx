@@ -17,7 +17,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { parimutuelRoundAbi } from "@/lib/abis";
 import { shortHash } from "@/lib/activity";
 import { takenKey } from "@/lib/question";
-import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import {
   byRecency,
   netOf,
@@ -173,6 +173,7 @@ function Header({
   viewingSomeoneElse: boolean;
   indexedBlock?: number;
 }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("positions");
   const activity = useTranslations("activity");
   return (
@@ -225,6 +226,7 @@ function Unclaimed({
   symbol: string;
   onClaimed: () => void;
 }) {
+  const { formatAmount } = useFormat();
   // A missing key means the chain has not answered yet, which is not zero —
   // rendering it as zero would hide a real claim behind a loading state that
   // never announced itself.
@@ -293,6 +295,7 @@ function ClaimRow({
   symbol: string;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("positions");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";
@@ -349,6 +352,7 @@ function Record({
   decimals?: number;
   symbol: string;
 }) {
+  const { formatAmount, formatInteger } = useFormat();
   const t = useTranslations("positions");
   if (history.length === 0) return null;
 
@@ -452,6 +456,7 @@ function PositionsTable({
   decimals?: number;
   symbol: string;
 }) {
+  const { formatAmount, formatDateTime } = useFormat();
   const t = useTranslations("positions");
   const taken = useTranslations("round.taken");
   const fmt = (v: bigint) => (decimals === undefined ? "…" : formatAmount(v, decimals, 2));
@@ -560,6 +565,7 @@ function Row({
   decimals?: number;
   symbol: string;
 }) {
+  const { formatAmount, formatDateTime } = useFormat();
   const t = useTranslations("positions");
   const taken = useTranslations("round.taken");
   const outcome = outcomeOf(position);
@@ -663,6 +669,7 @@ function OutcomeTag({ outcome, voidReason }: { outcome: Outcome; voidReason?: st
 }
 
 function Empty({ indexedBlock }: { indexedBlock?: number }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("positions");
   const activity = useTranslations("activity");
   return (

@@ -2,12 +2,11 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { NextIntlClientProvider } from "next-intl";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import "./globals.css";
 import { Misconfigured } from "@/components/Misconfigured";
 import { Providers } from "@/components/providers";
 import { configProblems } from "@/lib/config";
-import { locale } from "@/i18n/locale";
 import { env } from "@/lib/env";
 import { THEME_COLOR } from "@/lib/theme";
 
@@ -84,6 +83,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // (src/proxy.ts). A prerendered page has no nonce, so under the CSP its own
   // scripts would be blocked and the app would render but never hydrate.
   await connection();
+  const locale = await getLocale();
 
   return (
     <html

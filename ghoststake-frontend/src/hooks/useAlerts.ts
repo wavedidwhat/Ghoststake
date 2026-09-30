@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 
 import type { Message } from "@/i18n/message";
 import { alertsFor, unseen, type Alert } from "@/lib/alerts";
@@ -22,6 +23,7 @@ import { useWallet } from "@/hooks/useWallet";
  * announces current alerts once more, which is the right way to be wrong.
  */
 export function useAlerts() {
+  const format = useFormat();
   const t = useTranslations();
   const { address } = useWallet();
   const position = useVaultPosition();
@@ -33,6 +35,7 @@ export function useAlerts() {
         healthFactor: position.healthFactor,
         decimals: position.decimals,
         symbol: position.symbol ?? "",
+        format,
       })
     : [];
 

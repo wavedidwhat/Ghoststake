@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import { Figure } from "@/components/ui/Figure";
-import { WAD, formatAmount, formatHealthFactor, healthBand, type HealthBand } from "@/lib/format";
+import { WAD, healthBand, type HealthBand } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
 
@@ -32,6 +33,7 @@ export function HealthFactorCard({
   value: bigint | undefined;
   liquidatable?: boolean;
 }) {
+  const { formatHealthFactor } = useFormat();
   const t = useTranslations("health");
   if (value === undefined) {
     return (
@@ -84,6 +86,7 @@ export function HealthFactorCard({
  * readable. A bar that only fills states a value without placing it.
  */
 function HealthScale({ value, band }: { value: bigint; band: HealthBand }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("health");
   const asNumber = Number(value) / 1e18;
   // Clamped at 3.0. Beyond it the exact figure stops mattering, and letting

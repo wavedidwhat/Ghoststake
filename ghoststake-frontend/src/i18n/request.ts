@@ -1,27 +1,52 @@
+import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
-import messages from "../../messages/en.json";
-import { locale } from "./locale";
+import en from "../../messages/en.json";
+import { LOCALE_COOKIE, defaultLocale, isLocale, negotiate, type Locale } from "./locale";
 import { pseudoCatalog } from "./pseudo";
 
+type Catalog = typeof en;
+
 /**
- * Where UI copy comes from (GHO-116).
+ * Where UI copy comes from (GHO-116), in the visitor's language (GHO-128).
  *
- * One locale, and no locale in the URL. The catalog exists so copy has one
- * place to live and be reviewed against `messages/GLOSSARY.md`, not because a
- * second language is planned. Adding one later means a second messages file
- * and choosing how the locale is picked (a cookie, or `[locale]` routing) —
- * nothing that calls `t()` changes.
- *
- * Imported statically rather than by `import(\`…/${locale}.json\`)`: with one
- * file there is nothing to choose between, and a static import is what lets
- * `global.d.ts` type every key against it.
+ * The locale is the switcher's cookie, else the browser's Accept-Language,
+ * else English; see `locale.ts`. English is the source catalog: it types
+ * every key (`global.d.ts`), and every other catalog is laid over it, so a
+ * string not yet translated shows in English rather than as its raw key.
+ * The catalog tests keep that list at zero, but a missing key must fail as
+ * English, never as `roundCard.settlement`.
  */
-export default getRequestConfig(async () => ({
-  locale,
+export default getRequestConfig(async () => {
+  const chosen = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const locale: Locale = isLocale(chosen) ? chosen : (negotiate((await headers()).get("accept-language")) ?? defaultLocale);
+
   // `GHOSTSTAKE_PSEUDO=1` swaps in the pseudo-locale (GHO-120), read per
   // request like `GHOSTSTAKE_E2E`, so one build can be checked both ways.
-  // Built once and kept: the catalog is static, so the transform is too.
-  messages: process.env.GHOSTSTAKE_PSEUDO === "1" ? (pseudo ??= pseudoCatalog(messages)) : messages,
-}));
+  if (process.env.GHOSTSTAKE_PSEUDO === "1") return { locale: defaultLocale, messages: (pseudo ??= pseudoCatalog(en)) };
 
-let pseudo: typeof messages | undefined;
+  return { locale, messages: await catalogFor(locale) };
+});
+
+let pseudo: Catalog | undefined;
+const merged = new Map<Locale, Catalog>();
+
+async function catalogFor(locale: Locale): Promise<Catalog> {
+  if (locale === "en") return en;
+  const hit = merged.get(locale);
+  if (hit) return hit;
+  const own = (await import(`../../messages/${locale}.json`)).default as Partial<Catalog>;
+  const catalog = overlay(en, own);
+  merged.set(locale, catalog);
+  return catalog;
+}
+
+/** `base` with every string `over` has replaced, recursively. */
+export function overlay<T>(base: T, over: unknown): T {
+  if (typeof base !== "object" || base === null) return (typeof over === typeof base ? over : base) as T;
+  const out: Record<string, unknown> = {};
+  const layer = (over ?? {}) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(base as Record<string, unknown>)) {
+    out[key] = overlay(value, layer[key]);
+  }
+  return out as T;
+}

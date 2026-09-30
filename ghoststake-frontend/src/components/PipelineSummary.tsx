@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Figure } from "@/components/ui/Figure";
-import { formatAmount, formatApr, formatHealthFactor, healthBand } from "@/lib/format";
+import { healthBand, type Format } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import type { StakeStanding } from "@/lib/stake";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -47,6 +48,8 @@ export function PipelineSummary({
   decimals: number;
   symbol: string;
 }) {
+  const format = useFormat();
+  const { formatAmount, formatApr, formatHealthFactor } = format;
   const t = useTranslations("pipeline");
   const hasDebt = (borrowed ?? 0n) > 0n;
   const band = healthFactor === undefined ? "safe" : healthBand(healthFactor);
@@ -84,7 +87,7 @@ export function PipelineSummary({
           // two wrong things at once: that the yield was money, and that it
           // was money on top of the figure above — when the figure above is
           // the whole of what can be withdrawn. See GHO-55.
-          caption={captionText(t, stakeCaption(standing, accrued, decimals))}
+          caption={captionText(t, stakeCaption(standing, accrued, decimals, format))}
           captionTone={standing && !standing.backed ? "warning" : undefined}
           href="/stake"
         />
@@ -168,17 +171,18 @@ function stakeCaption(
   standing: StakeStanding | undefined,
   accrued: bigint | undefined,
   decimals: number,
+  format: Format,
 ): Caption {
   if (standing === undefined) return { key: "captionEarning" };
   if (!standing.backed) {
-    return { key: "captionCredited", amount: formatAmount(standing.unbacked, decimals, 4) };
+    return { key: "captionCredited", amount: format.formatAmount(standing.unbacked, decimals, 4) };
   }
   // Only reached once the ledger is covered, which is the one situation where
   // "earned" is the right word — the shares can redeem all of it. That is not
   // true of any deployment so far, and this branch is written for the vault
   // being funded rather than pretending it already is.
   return accrued !== undefined && accrued > 0n
-    ? { key: "captionEarned", amount: formatAmount(accrued, decimals, 4) }
+    ? { key: "captionEarned", amount: format.formatAmount(accrued, decimals, 4) }
     : { key: "captionEarning" };
 }
 
@@ -207,6 +211,7 @@ function Step({
   href: string;
   muted?: boolean;
 }) {
+  const { formatAmount } = useFormat();
   return (
     <Link
       href={href}

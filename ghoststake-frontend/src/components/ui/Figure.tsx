@@ -1,4 +1,4 @@
-import { splitFigure } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { AssetLogo, hasLogo } from "./AssetLogo";
 
 /**
@@ -19,6 +19,7 @@ export function Figure({
   size?: "figure" | "display" | "stat";
   tone?: "default" | "positive" | "negative" | "warning" | "muted";
 }) {
+  const { splitFigure } = useFormat();
   const { lead, tail } = splitFigure(value);
 
   const sizeClass = {

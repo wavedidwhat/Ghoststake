@@ -3,8 +3,11 @@ import messages from "../../../messages/en.json";
 import { translate } from "@/test/intl";
 import { questionFor as ask, sideKey, winnerKey } from "../question";
 import { Side } from "../rounds";
+import { formatFor } from "@/lib/format";
 
-const questionFor = (input: Parameters<typeof ask>[0]) => translate(ask(input));
+const en = formatFor("en");
+
+const questionFor = (input: Omit<Parameters<typeof ask>[0], "format">) => translate(ask({ ...input, format: en }));
 
 const wad = (n: string) => BigInt(n) * 10n ** 18n;
 // 2026-09-24 14:30 local, so the rendered time matches wherever this runs.

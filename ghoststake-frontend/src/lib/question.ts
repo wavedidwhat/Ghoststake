@@ -1,5 +1,5 @@
 import { message, type Message } from "@/i18n/message";
-import { formatAmount, formatClock } from "./format";
+import type { Format } from "./format";
 import { subjectOf } from "./marketCategory";
 import { Side, type SideValue } from "./rounds";
 
@@ -55,6 +55,8 @@ export function questionFor(input: {
    * "Brazil win the World Cup" as "Brazil above $1.00 at 14:30".
    */
   isQuestion?: boolean;
+  /** The strike and the close time in the reader's language (GHO-128). */
+  format: Format;
 }): Message {
   if (input.isQuestion) {
     // The contract's own words, or nothing. An event market with no readable
@@ -67,14 +69,14 @@ export function questionFor(input: {
 
   // No feed yet: the sentence names "the price" in place of an asset.
   const asset = assetOf(input.feed);
-  const at = input.closeTime === undefined ? null : timeOf(input.closeTime);
+  const at = input.closeTime === undefined ? null : timeOf(input.closeTime, input.format);
 
   if (input.strike === null || input.strike === undefined || input.strike === 0n) {
     if (!asset) return at ? message("question.priceHigherAt", { at }) : message("question.priceHigherAtClose");
     return at ? message("question.higherAt", { asset, at }) : message("question.higherAtClose", { asset });
   }
 
-  const level = `$${formatAmount(input.strike, 18, strikeDigits(input.strike))}`;
+  const level = `$${input.format.formatAmount(input.strike, 18, strikeDigits(input.strike))}`;
   if (!asset) return at ? message("question.priceAboveAt", { level, at }) : message("question.priceAbove", { level });
   return at ? message("question.aboveAt", { asset, level, at }) : message("question.above", { asset, level });
 }
@@ -89,10 +91,10 @@ function assetOf(feed: string | undefined): string | null {
 }
 
 /** Local time, because the person reading it is deciding whether to wait. */
-function timeOf(closeTime: bigint | number): string {
+function timeOf(closeTime: bigint | number, format: Format): string {
   const seconds = typeof closeTime === "bigint" ? Number(closeTime) : closeTime;
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  return formatClock(seconds * 1000);
+  return format.formatClock(seconds * 1000);
 }
 
 /**

@@ -17,6 +17,19 @@ import nextTs from "eslint-config-next/typescript";
  */
 const COPY_PROPS = "aria-label|alt|title|subtitle|placeholder|eyebrow|label|hint|description";
 
+/**
+ * Figures in the reader's language (GHO-128). The per-locale formatters come
+ * from `useFormat()` in a component, or `formatFor(await getLocale())` on the
+ * server; a literal locale is how a Spanish page ends up printing 1,500 for
+ * one and a half thousand. Part of the same `no-restricted-syntax` list as the
+ * copy rules, because a second config entry for that rule would replace the
+ * first on the same files rather than add to it.
+ */
+const noFixedLocale = {
+  selector: "CallExpression[callee.name='formatFor'] > Literal",
+  message: "Don't hard-code a locale. Use useFormat() in a component, or formatFor(await getLocale()) on the server.",
+};
+
 const noInlineCopy = (level) => ({
   "react/jsx-no-literals": [
     level,
@@ -38,6 +51,7 @@ const noInlineCopy = (level) => ({
       selector: `JSXAttribute[name.name!=/^(className|${COPY_PROPS})$/] > Literal[value=/^[A-Z][a-z'’]*\\s+\\S/]`,
       message: "This prop reads like a sentence. User-facing text belongs in messages/en.json.",
     },
+    noFixedLocale,
   ],
 });
 
@@ -51,6 +65,11 @@ const eslintConfig = defineConfig([
     // warning with an error list of migrated files while the move was under
     // way, so a migrated screen could not slip back.
     rules: noInlineCopy("error"),
+  },
+  {
+    files: ["src/**/*.ts"],
+    ignores: ["src/**/__tests__/**", "src/test/**"],
+    rules: { "no-restricted-syntax": ["error", noFixedLocale] },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
