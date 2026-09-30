@@ -184,6 +184,17 @@ export function explorerAddressUrl(address: string): string | undefined {
   return `${base.replace(/\/$/, "")}/address/${address}`;
 }
 
+/**
+ * The chain explorer's front page, for the network badge (GHO-127): "this
+ * runs on Robinhood Chain" is a claim too, and the explorer is where anyone
+ * can see the chain for themselves. Undefined where there is no explorer.
+ */
+export function explorerHomeUrl(): string | undefined {
+  const base = activeChain.blockExplorers?.default.url;
+  if (!base) return undefined;
+  return base.replace(/\/$/, "");
+}
+
 /** Short form of an address or hash, for a dense table. */
 export function shortHash(value: string, lead = 6, tail = 4): string {
   if (value.length <= lead + tail + 2) return value;

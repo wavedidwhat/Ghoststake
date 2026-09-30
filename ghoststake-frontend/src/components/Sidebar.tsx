@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { isCurrent, sidebarLinks, type NavLink } from "@/lib/nav";
 import { useIsOperator } from "@/hooks/useIsOperator";
+import { ChainBadge } from "./ChainBadge";
 import { NavIcon } from "./NavIcon";
-import { Badge } from "./ui/Badge";
 
 /**
  * Primary navigation from `md` up. Below that it is hidden and `MobileNav`
@@ -66,8 +66,8 @@ export function Sidebar() {
         {pinned.map((item) => (
           <NavItem key={item.href} item={item} pathname={pathname} />
         ))}
-        <p className="px-3 pt-2">
-          <Badge size="sm">{t("testnet")}</Badge>
+        <p className="px-1 pt-2">
+          <ChainBadge compact />
         </p>
       </div>
     </aside>

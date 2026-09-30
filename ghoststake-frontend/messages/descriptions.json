@@ -37,7 +37,6 @@
   "nav": {
     "mainLabel": "Screen-reader name of the desktop sidebar navigation.",
     "primaryLabel": "Screen-reader name of the phone tab bar.",
-    "testnet": "Badge at the bottom of the desktop sidebar: this deployment is on a test network.",
     "more": "Fifth tab in the phone tab bar; opens a sheet with every other destination. Max 8 characters.",
     "moreTitle": "Heading of the phone's More sheet.",
     "sections": {
@@ -87,6 +86,10 @@
     "addChainFirst": "Hint under the switch button when the wallet does not know this network. {chain} is a network name.",
     "couldNotSwitch": "Hint under the switch button when the switch failed for another reason.",
     "noAnswer": "Hint under the switch button when the wallet went silent."
+  },
+  "chain": {
+    "testnet": "Chip in the network badge (page header and sidebar foot) when the app's chain is a test network. Shown at every size.",
+    "runsOn": "Tooltip on the network badge. {chain} is the chain's full name, e.g. Robinhood Chain Testnet."
   },
   "explorer": {
     "newTab": "Screen-reader text after every block-explorer link: it leaves the app."

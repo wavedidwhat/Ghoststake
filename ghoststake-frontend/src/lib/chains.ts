@@ -64,3 +64,15 @@ export const activeChain = resolveChain();
 
 /** The RPC every chain read goes to: the configured one, else the chain's public default. */
 export const activeRpcUrl: string = env.rpcUrl || activeChain.rpcUrls.default.http[0];
+
+/**
+ * A chain's name without a trailing "Testnet", for the network badge
+ * (GHO-127), which says "testnet" in its own chip. viem calls 46630 "Robinhood
+ * Chain Testnet"; with the chip beside it that read "Robinhood Chain Testnet
+ * TESTNET". Only a name that says it outright is trimmed: "Sepolia" is a
+ * testnet whose name does not say so, and it is left alone.
+ */
+export function chainShortName(chain: { name: string; testnet?: boolean }): string {
+  if (!chain.testnet) return chain.name;
+  return chain.name.replace(/\s+testnet$/i, "") || chain.name;
+}
