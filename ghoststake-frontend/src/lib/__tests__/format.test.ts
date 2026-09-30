@@ -99,6 +99,16 @@ describe("audit regressions", () => {
     expect(rendered).toBe("999+");
   });
 
+  it("never shows a liquidatable health factor as 1.00 (audit 2026-09-30)", () => {
+    // Half-up printed 0.995 as "1.00", next to "liquidated below 1.00": a
+    // position anyone could liquidate, shown as not yet there.
+    expect(formatHealthFactor((WAD * 995n) / 1000n)).toBe("0.99");
+    expect(formatHealthFactor(WAD - 1n)).toBe("0.99");
+    // Rounding down is towards the line, so it only ever reads less healthy.
+    expect(formatHealthFactor((WAD * 1_2399n) / 1_0000n)).toBe("1.23");
+    expect(formatHealthFactor(WAD)).toBe("1.00");
+  });
+
   it("caps only above the ceiling, not at ordinary values", () => {
     expect(formatHealthFactor(999n * WAD)).toBe("999.00");
     expect(formatHealthFactor(999n * WAD + 1n)).toBe("999+");

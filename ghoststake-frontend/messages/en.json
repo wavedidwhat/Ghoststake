@@ -942,6 +942,8 @@
     },
     "open": {
       "heading": "Open a round",
+      "questionMarket": "This market settles a question, and a question has one round. Another round would take positions on an answer that may already be public, and would settle on it. Open a new question instead.",
+      "checking": "Checking whether this market settles a price or a question…",
       "lead": "Lead",
       "leadHint": "Time before the round opens. Has to outlive signing and mining.",
       "entry": "Entry window",

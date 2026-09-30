@@ -13,6 +13,7 @@ import { MockUSDC } from "./mocks/MockUSDC.sol";
 import { DemoPriceFeed } from "../src/demo/DemoPriceFeed.sol";
 import { MarketRegistry } from "../src/MarketRegistry.sol";
 import { MarketDeployer } from "./MarketDeployer.sol";
+import { DeployerKey } from "./DeployerKey.sol";
 
 /// @notice Deploys the whole stack to a local chain.
 ///
@@ -38,7 +39,7 @@ import { MarketDeployer } from "./MarketDeployer.sol";
 /// runs on a `DemoPriceFeed` of its own and the second one is off by default.
 /// `scripts/local-stack.sh` turns it on anyway with `DEMO_MARKET=true`, so
 /// what is developed against has the same two markets the demo does.
-contract Deploy is MarketDeployer {
+contract Deploy is MarketDeployer, DeployerKey {
     // A year in seconds, for turning APRs into the per-second WAD rates these
     // contracts take. Writing `5% APR` in the config and converting here
     // beats committing a bare 1585489599 that nobody can sanity-check.
@@ -52,13 +53,10 @@ contract Deploy is MarketDeployer {
     // deploys eleven contracts and the stack will not hold them all.
 
     function run() external {
-        uint256 deployerKey = vm.envOr("PRIVATE_KEY", uint256(0));
-        if (deployerKey == 0) {
-            // anvil's first prefunded account. Only ever correct locally, and
-            // stated out loud rather than hidden in a default.
-            deployerKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-            console2.log("PRIVATE_KEY unset: using anvil account 0");
-        }
+        uint256 envKey = vm.envOr("PRIVATE_KEY", uint256(0));
+        // anvil's first prefunded account when unset, and only on anvil.
+        uint256 deployerKey = _deployerKey(envKey);
+        if (envKey == 0) console2.log("PRIVATE_KEY unset: using anvil account 0");
         address deployer = vm.addr(deployerKey);
 
         // Each of these may be supplied for a real network. Unset means

@@ -23,6 +23,7 @@ import { borrowLiquidityPoolAbi, stockLoanVaultAbi } from "@/lib/abis";
 import { parseAmount } from "@/lib/amount";
 import { env } from "@/lib/env";
 import { healthBand } from "@/lib/format";
+import { accrualMargin, payOffAmount } from "@/lib/accrual";
 import { useFormat } from "@/i18n/useFormat";
 import {
   healthAfter,
@@ -383,7 +384,8 @@ function LoanPanel({
 
   const debt = loan.debt ?? 0n;
   const parsed = parseAmount(amount, decimals);
-  const borrowMax = maxBorrow(loan.summary.borrowLimit, debt, fee);
+  // Interest accrues before the vault checks the limit; see lib/accrual.
+  const borrowMax = maxBorrow(loan.summary.borrowLimit, debt + accrualMargin(debt), fee);
   const liquidity = loan.liquidity ?? 0n;
   const max = mode === "borrow" ? (borrowMax < liquidity ? borrowMax : liquidity) : debt;
   const overMax = parsed !== null && parsed > max;
@@ -396,14 +398,10 @@ function LoanPanel({
   const debtAfter = mode === "borrow" ? debt + (parsed ?? 0n) + feeDue : debt - (parsed ?? 0n);
   const preview = healthAfter(loan.summary, debtAfter);
 
-  // Interest accrues between reading the debt and the repay being mined, so a
-  // repay of exactly the debt read leaves dust behind (it did, on chain, by
-  // 8 millionths of a dollar). Paying the whole debt sends a little more; the
-  // vault caps a repayment at what is owed and takes only that.
+  // Paying the whole debt sends a little more than was read, or the interest
+  // since the read is left owing; see lib/accrual.
   const repayingAll = mode === "repay" && parsed !== null && parsed >= debt && debt > 0n;
-  const wallet = loan.stableWallet ?? 0n;
-  const buffered = debt + debt / 1000n + 1n;
-  const toSend = repayingAll ? (buffered < wallet ? buffered : wallet) : (parsed ?? 0n);
+  const toSend = repayingAll ? payOffAmount(debt, loan.stableWallet ?? 0n) : (parsed ?? 0n);
   const needsApproval = mode === "repay" && (loan.stableAllowanceVault ?? 0n) < toSend;
 
   async function submit() {

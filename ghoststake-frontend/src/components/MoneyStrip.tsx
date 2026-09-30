@@ -26,7 +26,7 @@ import { useWallet } from "@/hooks/useWallet";
  * read or absent (GHO-86).
  */
 export function MoneyStrip() {
-  const { formatAmount, formatPercent } = useFormat();
+  const { formatAmount, formatHealthFactor, formatPercent } = useFormat();
   const t = useTranslations("moneyStrip");
   const wallet = useWallet();
   const position = useVaultPosition();
@@ -102,7 +102,7 @@ export function MoneyStrip() {
         <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
           <span className="text-xs text-ink-muted">{t("safety")}</span>
           <span className={`tabular text-sm ${position.isLiquidatable ? "text-negative" : "text-up"}`}>
-            {formatAmount(position.healthFactor, 18, 2)}
+            {formatHealthFactor(position.healthFactor) ?? "—"}
           </span>
           <span className="text-xs text-ink-faint">{t("liquidatedBelow")}</span>
         </div>

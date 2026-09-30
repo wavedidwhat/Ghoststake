@@ -338,6 +338,16 @@ type Quote struct {
 	FullLiquidation bool
 }
 
+// QuoteFor is LiquidationQuote for a described position, with the seizure
+// capped by the figure the contract caps it by.
+//
+// Prefer this to calling LiquidationQuote by hand. Health carries two
+// collateral figures and only one of them is right here; the at-risk endpoint
+// passed the other (see LiquidationQuote's `seizable`).
+func QuoteFor(h Health, p VaultParams) Quote {
+	return LiquidationQuote(h.SharesValue, h.Debt, h.HealthFactor, p)
+}
+
 // LiquidationQuote derives what closing this position pays.
 //
 // Mirrors the contract step for step, including the order of the min: the
@@ -345,7 +355,15 @@ type Quote struct {
 // amount regardless, which is exactly how a liquidator ends up out of pocket.
 // Computing the bonus first and capping afterwards would quietly report a
 // profit the chain would not pay.
-func LiquidationQuote(collateral, debt, healthFactor *big.Int, p VaultParams) Quote {
+//
+// `seizable` is what the shares redeem for — `convertToAssets(balanceOf(user))`,
+// Health.SharesValue — and NOT Health.Collateral. The contract's cap
+// (`CollateralVault.liquidate`) is the shares value alone; Collateral is the
+// smaller of that and the ledger value, so passing it under-reports the
+// seizure whenever the ledger reads below the shares, and can call a
+// profitable liquidation unprofitable. The health factor is the one figure
+// that does use Collateral, and it arrives here already computed.
+func LiquidationQuote(seizable, debt, healthFactor *big.Int, p VaultParams) Quote {
 	empty := Quote{MaxRepay: new(big.Int), Seized: new(big.Int), Bonus: new(big.Int)}
 	if healthFactor == nil || p.CloseFactor == nil || p.LiquidationBonus == nil {
 		return empty
@@ -367,8 +385,8 @@ func LiquidationQuote(collateral, debt, healthFactor *big.Int, p VaultParams) Qu
 	repay := MulDiv(or0(debt), closeFactor, WAD)
 	wanted := new(big.Int).Add(repay, MulDiv(repay, p.LiquidationBonus, WAD))
 	seized := wanted
-	if or0(collateral).Cmp(wanted) < 0 {
-		seized = or0(collateral)
+	if or0(seizable).Cmp(wanted) < 0 {
+		seized = or0(seizable)
 	}
 
 	bonus := new(big.Int)

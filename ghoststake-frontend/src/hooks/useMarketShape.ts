@@ -2,7 +2,7 @@
 
 import { useReadContract } from "wagmi";
 import { toFunctionSelector } from "viem";
-import { chainlinkRoundOracleAbi, parimutuelRoundAbi } from "@/lib/abis";
+import { chainlinkRoundOracleAbi, eventRoundOracleAbi, parimutuelRoundAbi } from "@/lib/abis";
 import type { Market } from "@/lib/markets";
 import { activeChain } from "@/lib/wagmi";
 import { useCode } from "./useCode";
@@ -41,11 +41,27 @@ export function useMarketShape(market: Market) {
     query: { enabled: Boolean(oracle.data), refetchInterval: 12_000 },
   });
 
+  // Whether the oracle settles a question (GHO-80): only an event oracle
+  // answers `question()`, the same probe the keeper and the market list use.
+  // A price adapter reverts, and that revert is the answer, not a failure.
+  const question = useReadContract({
+    address: oracle.data,
+    abi: eventRoundOracleAbi,
+    functionName: "question",
+    chainId: activeChain.id,
+    query: { enabled: Boolean(oracle.data), staleTime: Infinity, retry: false },
+  });
+
   const [usable, price] = spot.data ?? [];
 
   return {
     /** Undefined until the code is known: neither shape should be assumed. */
     strikeAtOpen: code.data === undefined ? undefined : code.data.includes(STRIKE_AT_OPEN.slice(2)),
+    /**
+     * Whether this market settles a question rather than a price. Undefined
+     * until the oracle has answered either way.
+     */
+    isQuestion: question.isSuccess ? Boolean(question.data) : question.isError ? false : undefined,
     /** The adapter's price, 18 decimals, or undefined when it has none. */
     spot: usable ? price : undefined,
     isLoading: code.isLoading || oracle.isLoading || spot.isLoading,
