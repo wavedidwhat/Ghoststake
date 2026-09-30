@@ -22,7 +22,8 @@ import { useWallet } from "@/hooks/useWallet";
 import { borrowLiquidityPoolAbi, stockLoanVaultAbi } from "@/lib/abis";
 import { parseAmount } from "@/lib/amount";
 import { env } from "@/lib/env";
-import { formatAmount, formatApr, formatDuration, formatHealthFactor, formatPercent, healthBand } from "@/lib/format";
+import { healthBand } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import {
   healthAfter,
   maxBorrow,
@@ -80,6 +81,7 @@ function StockScreen({
   fee: bigint;
   address: `0x${string}`;
 }) {
+  const { formatAmount, formatDuration } = useFormat();
   const t = useTranslations("stocks");
   const now = useNow();
   const [selected, setSelected] = useState(loan.collaterals[0]?.token);
@@ -201,6 +203,7 @@ function CollateralRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { formatAmount, formatDuration, formatPercent } = useFormat();
   const t = useTranslations("stocks");
   const age = priceAge(c, now);
   const deposited = c.deposited ?? 0n;
@@ -258,6 +261,7 @@ function CollateralRow({
 }
 
 function CollateralPanel({ loan, c, blocked }: { loan: Loan; c: StockCollateral; blocked: boolean }) {
+  const { formatPercent } = useFormat();
   const t = useTranslations("stocks");
   const actions = useTranslations("actions");
   const amounts = useTranslations("amount");
@@ -368,6 +372,7 @@ function LoanPanel({
   address: `0x${string}`;
   blocked: boolean;
 }) {
+  const { formatAmount, formatApr, formatHealthFactor, formatPercent } = useFormat();
   const t = useTranslations("stocks");
   const vault = useTranslations("vault");
   const actions = useTranslations("actions");
@@ -505,6 +510,7 @@ function LoanPanel({
 }
 
 function LendPanel({ loan, decimals, address }: { loan: Loan; decimals: number; address: `0x${string}` }) {
+  const { formatAmount, formatApr } = useFormat();
   const t = useTranslations("stocks");
   const actions = useTranslations("actions");
   const amounts = useTranslations("amount");

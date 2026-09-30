@@ -37,6 +37,7 @@
   "nav": {
     "mainLabel": "Main",
     "primaryLabel": "Primary",
+    "language": "Language",
     "more": "More",
     "moreTitle": "Everything else",
     "sections": {

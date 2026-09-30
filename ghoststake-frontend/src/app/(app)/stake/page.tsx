@@ -16,7 +16,8 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
-import { formatAmount, formatOptional } from "@/lib/format";
+import { formatOptional } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { activeChain } from "@/lib/wagmi";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -47,6 +48,7 @@ function VaultScreen({
   position: ReturnType<typeof useVaultPosition>;
   address: `0x${string}`;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("stake");
   const { decimals, symbol } = position;
 
@@ -138,6 +140,7 @@ function DepositWithdraw({
   lien: bigint | undefined;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("stake");
   const actions = useTranslations("actions");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
@@ -302,6 +305,7 @@ function Line({
   decimals: number;
   symbol: string;
 }) {
+  const { formatAmount } = useFormat();
   return (
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-xs text-ink-muted">{label}</span>

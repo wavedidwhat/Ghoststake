@@ -1,24 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  NO_DEBT,
-  WAD,
-  formatAmount,
-  formatApr,
-  formatClock,
-  formatDateTime,
-  formatDuration,
-  formatInteger,
-  formatSignedPercent,
-  formatTime,
-  formatUtcTime,
-  formatOptional,
-  formatHealthFactor,
-  formatPercent,
-  hasDebt,
-  healthBand,
-  shortenAddress,
-  splitFigure,
-} from "../format";
+import { NO_DEBT, WAD, formatOptional, hasDebt, healthBand, shortenAddress, formatFor } from "../format";
+
+const { formatAmount, formatApr, formatClock, formatDateTime, formatDuration, formatInteger, formatSignedPercent, formatTime, formatUtcTime, formatHealthFactor, formatPercent, splitFigure } = formatFor("en");
 
 /**
  * These sit between a uint256 and a number a user acts on, so the cases

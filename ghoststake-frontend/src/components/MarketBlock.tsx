@@ -17,7 +17,8 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { borrowToPositionRouterAbi, collateralVaultAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env } from "@/lib/env";
-import { formatAmount, formatHealthFactor, healthBand } from "@/lib/format";
+import { healthBand } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { SideArrow } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
 import type { Market } from "@/lib/markets";
@@ -322,6 +323,7 @@ function PositionForm({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("marketBlock");
   const amounts = useTranslations("amount");
   const [own, setOwn] = useState("");
@@ -546,6 +548,7 @@ function HealthPreview({
   borrowAmount: bigint;
   symbol: string;
 }) {
+  const { formatAmount, formatHealthFactor } = useFormat();
   const t = useTranslations("marketBlock");
   const band = healthBand(after);
   const tone =
@@ -623,6 +626,7 @@ function ClaimRow({
   address: `0x${string}`;
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("marketBlock");
   const tx = useTransaction();
   const busy = tx.state.status === "signing" || tx.state.status === "pending";

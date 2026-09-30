@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { ConnectButton } from "@/components/ConnectButton";
 import { useLendingTerms } from "@/hooks/useTerms";
-import { formatApr, formatOptional, formatPercent } from "@/lib/format";
+import { formatOptional } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { buttonClass } from "@/components/ui/Button";
 
@@ -28,6 +29,7 @@ import { buttonClass } from "@/components/ui/Button";
  * possible place for that particular bug.
  */
 export function Landing() {
+  const { formatApr, formatPercent } = useFormat();
   const t = useTranslations("landing");
   const terms = useLendingTerms();
 

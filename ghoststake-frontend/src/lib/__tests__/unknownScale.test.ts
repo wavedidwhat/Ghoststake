@@ -2,8 +2,10 @@ import { ContractFunctionExecutionError, ContractFunctionRevertedError, HttpRequ
 import { describe, expect, it } from "vitest";
 import { translate } from "@/test/intl";
 import { amountProblem, parseAmount } from "../amount";
-import { formatAmount } from "../format";
+import { formatFor } from "../format";
 import { isRevert } from "../probe";
+
+const { formatAmount } = formatFor("en");
 import { mockUSDCAbi } from "../abis";
 
 /**

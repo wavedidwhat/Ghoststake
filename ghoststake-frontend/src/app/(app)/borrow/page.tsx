@@ -15,7 +15,8 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { useVaultPosition } from "@/hooks/useVaultPosition";
 import { collateralVaultAbi } from "@/lib/abis";
 import { contractsConfigured, env } from "@/lib/env";
-import { formatAmount, formatHealthFactor, formatOptional, healthBand } from "@/lib/format";
+import { formatOptional, healthBand } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { activeChain } from "@/lib/wagmi";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -59,6 +60,7 @@ function BorrowScreen({
   decimals: number;
   address: `0x${string}`;
 }) {
+  const { formatAmount, formatHealthFactor } = useFormat();
   const t = useTranslations("borrow");
   const vault = useTranslations("vault");
   const actions = useTranslations("actions");

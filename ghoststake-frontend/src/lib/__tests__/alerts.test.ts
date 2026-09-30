@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { translate } from "@/test/intl";
 import { maxUint256 } from "viem";
 import { alertsFor, unseen } from "../alerts";
+import { formatFor } from "@/lib/format";
+
+const en = formatFor("en");
 
 const WAD = 10n ** 18n;
 const hf = (x: number) => (BigInt(Math.round(x * 1000)) * WAD) / 1000n;
 const M = "0x00000000000000000000000000000000000e2e03" as const;
-const base = { claims: [], healthFactor: maxUint256, decimals: 6, symbol: "mUSDC" };
+const base = { claims: [], healthFactor: maxUint256, decimals: 6, symbol: "mUSDC", format: en };
 
 describe("alertsFor (GHO-104)", () => {
   it("is silent when there is nothing to do", () => {

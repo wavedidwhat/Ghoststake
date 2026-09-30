@@ -4,14 +4,8 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { useMarketFeeds } from "@/hooks/useMarketFeeds";
 import { useLendingTerms, useRoundTerms } from "@/hooks/useTerms";
-import {
-  formatAmount,
-  formatApr,
-  formatDuration,
-  formatOptional,
-  formatPercent,
-  shortenAddress,
-} from "@/lib/format";
+import { formatOptional, shortenAddress, type Format } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import type { Market } from "@/lib/markets";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -45,6 +39,8 @@ export function Terms({
   decimals: number | undefined;
   symbol: string;
 }) {
+  const format = useFormat();
+  const { formatApr, formatPercent } = format;
   const t = useTranslations("terms");
   const lending = useLendingTerms();
 
@@ -114,7 +110,7 @@ export function Terms({
             </Term>
             <Term
               name={t("liquidated.full")}
-              value={formatOptional(lending.fullLiquidationThreshold, formatHealthLine)}
+              value={formatOptional(lending.fullLiquidationThreshold, (v) => formatHealthLine(format, v))}
             >
               {t("liquidated.fullNote")}
             </Term>
@@ -145,6 +141,7 @@ function RoundTermsTable({
   decimals: number | undefined;
   symbol: string;
 }) {
+  const { formatAmount, formatDuration, formatPercent } = useFormat();
   const t = useTranslations("terms.rounds");
   const { terms } = useRoundTerms(markets);
   const feeds = useMarketFeeds(markets);
@@ -221,8 +218,8 @@ function RoundTermsTable({
  * number and showing them in different units is how a user concludes their
  * position is safe at 0.9.
  */
-function formatHealthLine(wad: bigint): string {
-  return formatAmount(wad, 18, 4);
+function formatHealthLine(format: Format, wad: bigint): string {
+  return format.formatAmount(wad, 18, 4);
 }
 
 function Group({ title, children }: { title: string; children: ReactNode }) {

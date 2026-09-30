@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { ResolutionPanel } from "@/components/ResolutionPanel";
 import { useActivityDecimals } from "@/hooks/useActivity";
 import { shortHash } from "@/lib/activity";
-import { formatAmount, formatDateTime, formatInteger } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import { winnerKey } from "@/lib/question";
 import type { PositionRound } from "@/lib/positions";
 import { fetchRounds, type RoundsResponse } from "@/lib/roundsApi";
@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * delisted. A receipt that expires is not a receipt.
  */
 export function RoundScreen({ market, id }: { market: string; id: string }) {
+  const { formatInteger } = useFormat();
   const t = useTranslations("roundPage");
   const decimals = useActivityDecimals();
 
@@ -96,6 +97,7 @@ function Detail({
   symbol: string;
   indexedBlock?: number;
 }) {
+  const { formatAmount, formatDateTime, formatInteger } = useFormat();
   const t = useTranslations("roundPage");
   const sides = useTranslations("round.sides");
   const fmt = (v: string) => (decimals === undefined ? "…" : formatAmount(BigInt(v), decimals, 2));

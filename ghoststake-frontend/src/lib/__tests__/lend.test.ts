@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import messages from "../../../messages/en.json";
-import { WAD, formatPercent } from "../format";
+import { WAD, formatFor } from "../format";
 import {
   lendWarnings,
   maxWithdraw,
@@ -8,6 +8,8 @@ import {
   utilizationAfter,
   withdrawProblem,
 } from "../lend";
+
+const { formatPercent } = formatFor("en");
 
 const USDC = (n: number) => BigInt(n) * 10n ** 6n;
 const pct = (n: number) => (WAD * BigInt(Math.round(n * 100))) / 10_000n;

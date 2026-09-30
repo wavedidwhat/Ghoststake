@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { isAddress } from "viem";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { formatFor } from "@/lib/format";
 import { feedLabel, pool, price, shortAddress } from "@/lib/marketMeta";
 import { fetchRounds } from "@/lib/roundsApi";
 import { RoundScreen } from "./RoundScreen";
@@ -24,6 +25,7 @@ type Props = { params: Promise<{ market: string; id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { market, id } = await params;
   const t = await getTranslations("roundMeta");
+  const format = formatFor(await getLocale());
   if (!isAddress(market)) return { title: t("fallbackTitle") };
 
   const [label, rounds] = await Promise.all([
@@ -51,12 +53,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     round.status === "resolved" && round.question
       ? t("wonOnClaim", { winner })
       : round.status === "resolved"
-        ? t("won", { winner, strike: price(round.lockPrice), close: price(round.closePrice) })
+        ? t("won", { winner, strike: price(round.lockPrice, format), close: price(round.closePrice, format) })
         : round.status === "void"
           ? round.voidReason
             ? t("voidedBecause", { reason: round.voidReason })
             : t("voided")
-          : t("live", { phase: round.phase, up: pool(round.upPool), down: pool(round.downPool) });
+          : t("live", { phase: round.phase, up: pool(round.upPool, format), down: pool(round.downPool, format) });
 
   const title = t("title", { name, id: round.id });
   return { title, description, openGraph: { title, description } };

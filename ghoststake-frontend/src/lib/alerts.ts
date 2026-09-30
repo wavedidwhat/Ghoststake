@@ -1,6 +1,6 @@
 import { message, type Message } from "@/i18n/message";
 import { claimKey, totalClaimable, type Claimable } from "./claims";
-import { formatAmount, formatHealthFactor, healthBand } from "./format";
+import { healthBand, type Format } from "./format";
 
 /**
  * What needs someone's attention right now (GHO-104, the in-app half of
@@ -36,14 +36,16 @@ export function alertsFor(input: {
   healthFactor: bigint | undefined;
   decimals: number | undefined;
   symbol: string;
+  /** Figures in the reader's language (GHO-128). */
+  format: Format;
 }): Alert[] {
   const alerts: Alert[] = [];
-  const { claims, healthFactor, decimals, symbol } = input;
+  const { claims, healthFactor, decimals, symbol, format } = input;
 
   // Safety first: it is the one that costs money if it waits.
   if (healthFactor !== undefined) {
     const band = healthBand(healthFactor);
-    const shown = formatHealthFactor(healthFactor);
+    const shown = format.formatHealthFactor(healthFactor);
     if ((band === "danger" || band === "caution") && shown) {
       alerts.push({
         id: `health:${band}`,
@@ -61,7 +63,7 @@ export function alertsFor(input: {
     alerts.push({
       id: `claim:${keys.join(",")}`,
       tone: "positive",
-      title: message("alerts.claim.title", { amount: formatAmount(totalClaimable(claims), decimals, 2), symbol }),
+      title: message("alerts.claim.title", { amount: format.formatAmount(totalClaimable(claims), decimals, 2), symbol }),
       body: message("alerts.claim.body", { count: claims.length }),
       href: "/portfolio",
       action: message("alerts.claim.action"),

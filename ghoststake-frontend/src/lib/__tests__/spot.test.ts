@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { Side } from "../rounds";
 import { translate } from "@/test/intl";
 import { formatAge as ageOf, formatMove, isNarrow, isStalePrint, priceAge, standingOf } from "../spot";
+import { formatFor } from "@/lib/format";
+
+const en = formatFor("en");
 
 const formatAge = (seconds: number) => translate(ageOf(seconds));
 
@@ -51,11 +54,11 @@ describe("standingOf", () => {
 
 describe("formatMove", () => {
   it("always carries a sign", () => {
-    expect(formatMove(42)).toBe("+0.42%");
+    expect(formatMove(42, en)).toBe("+0.42%");
     // A minus sign, not a hyphen: the figures are tabular and a hyphen is
     // narrower than a digit.
-    expect(formatMove(-42)).toBe("−0.42%");
-    expect(formatMove(0)).toBe("±0.00%");
+    expect(formatMove(-42, en)).toBe("−0.42%");
+    expect(formatMove(0, en)).toBe("±0.00%");
   });
 });
 

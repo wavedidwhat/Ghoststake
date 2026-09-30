@@ -37,6 +37,7 @@
   "nav": {
     "mainLabel": "Screen-reader name of the desktop sidebar navigation.",
     "primaryLabel": "Screen-reader name of the phone tab bar.",
+    "language": "Screen-reader label for the language picker in the sidebar and the mobile menu. The options are each language's own name.",
     "more": "Fifth tab in the phone tab bar; opens a sheet with every other destination. Max 8 characters.",
     "moreTitle": "Heading of the phone's More sheet.",
     "sections": {

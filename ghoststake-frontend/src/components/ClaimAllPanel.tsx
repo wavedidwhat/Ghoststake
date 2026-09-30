@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/Card";
 import { useClaimAll } from "@/hooks/useClaimAll";
-import { formatAmount } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import {
   claimKey,
   collected,
@@ -38,6 +38,7 @@ export function ClaimAllPanel({
   symbol: string;
   onClaimed: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("claimAll");
   const root = useTranslations();
   const claimer = useClaimAll(address);

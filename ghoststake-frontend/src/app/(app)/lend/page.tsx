@@ -16,7 +16,7 @@ import { useLendPosition } from "@/hooks/useLendPosition";
 import { useTransaction } from "@/hooks/useTransaction";
 import { borrowLiquidityPoolAbi } from "@/lib/abis";
 import { env, poolConfigured } from "@/lib/env";
-import { formatAmount, formatApr, formatPercent } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import {
   lendWarnings,
   maxWithdraw,
@@ -77,6 +77,7 @@ function LendScreen({
   pool: ReturnType<typeof useLendPosition>;
   decimals: number;
 }) {
+  const { formatAmount, formatPercent } = useFormat();
   const t = useTranslations("lend");
   const wallet = useWallet();
   const { symbol } = pool;
@@ -185,6 +186,7 @@ function PoolStrip({
   decimals: number;
   symbol: string;
 }) {
+  const { formatAmount, formatApr, formatPercent } = useFormat();
   const t = useTranslations("lend.pool");
   const utilization = pool.utilization;
   const kink = pool.kink;
@@ -256,6 +258,7 @@ function SupplyWithdraw({
   decimals: number;
   address: `0x${string}`;
 }) {
+  const { formatAmount, formatPercent } = useFormat();
   const t = useTranslations("lend");
   const actions = useTranslations("actions");
   const amounts = useTranslations("amount");

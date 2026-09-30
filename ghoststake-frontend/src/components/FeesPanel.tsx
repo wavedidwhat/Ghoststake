@@ -9,7 +9,8 @@ import { Card } from "@/components/ui/Card";
 import { useTransaction } from "@/hooks/useTransaction";
 import { borrowLiquidityPoolAbi, parimutuelRoundAbi } from "@/lib/abis";
 import { env, poolConfigured } from "@/lib/env";
-import { formatAmount, shortenAddress } from "@/lib/format";
+import { shortenAddress } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import type { Market } from "@/lib/markets";
 import { activeChain } from "@/lib/wagmi";
 import { Button, TextButton } from "@/components/ui/Button";
@@ -199,6 +200,7 @@ function Balance({
   withdrawFn: "withdrawFees" | "withdrawReserves";
   onDone: () => void;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("fees");
   const withdraw = useTransaction();
   const repoint = useTransaction();

@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { formatAmount, formatDuration, shortenAddress } from "@/lib/format";
+import { shortenAddress } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import type { RoundQuestion } from "@/lib/positions";
 import {
   challengeWindow,
@@ -36,6 +37,7 @@ export function ResolutionPanel({
   /** Passed in so the countdown ticks where the caller ticks. */
   now?: Date;
 }) {
+  const { formatAmount, formatDuration } = useFormat();
   const t = useTranslations("resolution");
   const sides = useTranslations("round.sides");
   const root = useTranslations();

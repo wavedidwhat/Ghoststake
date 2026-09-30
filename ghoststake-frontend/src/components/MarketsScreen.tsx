@@ -17,7 +17,7 @@ import { questionFor, sideKey } from "@/lib/question";
 import { useVaultAsset } from "@/hooks/useVaultPosition";
 import { anyMarketConfigured } from "@/lib/markets";
 import { byActivity, formatHorizon, summarise, type Summary } from "@/lib/marketList";
-import { formatAmount } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import {
   Phase,
   Side,
@@ -213,6 +213,7 @@ function MarketRow({
   symbol: string;
   now: bigint | undefined;
 }) {
+  const format = useFormat();
   const t = useTranslations("markets");
   const feedT = useTranslations("feed");
   const root = useTranslations();
@@ -237,6 +238,7 @@ function MarketRow({
         strike: live.round.lockPrice,
         closeTime: live.round.closeTime,
         isQuestion: feed?.isQuestion,
+        format,
       })
     : undefined;
   // No live round: the market's name, not its raw feed label (GHO-114).
@@ -278,7 +280,7 @@ function MarketRow({
           )}
           {market.horizon !== undefined && (
             <span className="text-[11px] text-ink-faint">
-              {t("horizon", { horizon: formatHorizon(market.horizon) })}
+              {t("horizon", { horizon: formatHorizon(market.horizon, format) })}
             </span>
           )}
         </div>
@@ -379,6 +381,7 @@ function SideSummary({
   decimals: number;
   symbol: string;
 }) {
+  const { formatAmount } = useFormat();
   return (
     <div className="rounded-control border border-border bg-raised/40 px-3 py-2">
       <div className={`display flex items-center gap-1.5 text-sm uppercase ${up ? "text-up" : "text-down"}`}>
@@ -429,6 +432,8 @@ function SpotSummary({
   spot: Spot | undefined;
   now: bigint | undefined;
 }) {
+  const format = useFormat();
+  const { formatAmount } = format;
   const t = useTranslations("markets.spot");
   const root = useTranslations();
   if (!spot) return null;
@@ -452,7 +457,7 @@ function SpotSummary({
       )}
       {bps !== null && leading !== null && (
         <span className="tabular">
-          {formatMove(bps)}{" "}
+          {formatMove(bps, format)}{" "}
           <span className="tabular-none">
             {isNarrow(bps) ? t("tooClose") : t("ahead", { side: sideKey(leading) })}
           </span>

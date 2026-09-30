@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { amountProblem } from "@/lib/amount";
-import { formatAmount } from "@/lib/format";
+import { useFormat } from "@/i18n/useFormat";
 import type { useTransaction } from "@/hooks/useTransaction";
 import { useStalled } from "@/hooks/useStalled";
 import { TextButton } from "@/components/ui/Button";
@@ -40,6 +40,7 @@ export function AmountField({
   hint?: string;
   disabled?: boolean;
 }) {
+  const { formatAmount } = useFormat();
   const t = useTranslations("amount");
   const root = useTranslations();
   const id = useId();

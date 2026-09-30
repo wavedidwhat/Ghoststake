@@ -1,5 +1,5 @@
 import { message, type Message } from "@/i18n/message";
-import { formatSignedPercent } from "./format";
+import type { Format } from "./format";
 import { Side, type SideValue } from "./rounds";
 
 /**
@@ -51,8 +51,8 @@ export function standingOf(spot: bigint | undefined, strike: bigint | undefined)
 }
 
 /** The move as a percentage string, e.g. "+0.42%". */
-export function formatMove(bps: number): string {
-  return formatSignedPercent(bps / 100);
+export function formatMove(bps: number, format: Format): string {
+  return format.formatSignedPercent(bps / 100);
 }
 
 /**

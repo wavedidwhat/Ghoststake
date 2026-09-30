@@ -134,3 +134,58 @@ and function names, environment variable names, Linear IDs.
 - Void bets, [Covers](https://www.covers.com/industry/why-are-bets-voided)
 - Aave, [health factor and liquidations](https://aave.com/help/borrowing/liquidations)
 - GOV.UK, [A to Z style guide](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/a-to-z-style-guide/)
+
+## Other languages (GHO-128)
+
+The same decisions, in each language. A translation uses these words and no
+others for these ideas. Tone matches the English: casual, confident, and
+addressed to one person (**tú** in Spanish, **você** in Brazilian Portuguese,
+**你** in Chinese). No em or en dashes in any language.
+
+| English | Español | Português (Brasil) | 简体中文 |
+|---|---|---|---|
+| deposit (n./v.) | depósito / depositar | depósito / depositar | 存款 / 存入 |
+| position | posición | posição | 仓位 |
+| back (a side) | apostar por ("Apostar por Sí") | apostar em ("Apostar no Sim") | 押 ("押「是」") |
+| Yes / No | Sí / No | Sim / Não | 是 / 否 |
+| loan health | salud del préstamo | saúde do empréstimo | 贷款健康度 |
+| borrow limit | límite de préstamo | limite de empréstimo | 借款上限 |
+| loan | préstamo | empréstimo | 贷款 |
+| liquidation line | línea de liquidación | linha de liquidação | 清算线 |
+| liquidate | liquidar | liquidar | 清算 |
+| collateral | garantía | garantia | 抵押品 |
+| void / refund | anulada / reembolso | anulada / reembolso | 作废 / 退款 |
+| withdraw | retirar | sacar | 提取 |
+| yield | rendimiento | rendimento | 收益 |
+| lend / supply | prestar / aportar | emprestar / fornecer | 出借 / 供应 |
+| lending pool | fondo de préstamos | pool de empréstimos | 借贷池 |
+| supply rate / borrow rate | tasa de aporte / tasa de préstamo | taxa de fornecimento / taxa de empréstimo | 出借利率 / 借款利率 |
+| utilization | utilización | utilização | 使用率 |
+| reserves | reservas | reservas | 储备金 |
+| round | ronda | rodada | 轮次 (一轮) |
+| market | mercado | mercado | 市场 |
+| start price (strike) | precio inicial | preço inicial | 起始价 |
+| claim (winnings) | cobrar | resgatar | 领取 |
+| fee (rake) | comisión | taxa | 手续费 |
+| wallet | billetera | carteira | 钱包 |
+| testnet | red de pruebas | rede de testes | 测试网 |
+| stock loans | préstamos con acciones | empréstimos com ações | 股票借款 |
+
+**"Back" is "bet" here, on purpose.** English avoids "bet" because "Buy Yes"
+and "stake" were competing with it. In Spanish and Portuguese, *apostar* is
+the everyday word, and the betting exchanges' own translations of "Back"
+(Betfair: *a favor*) read as jargon out of context. Chinese *押* ("put money
+on") is what people say at a table. Worth a native speaker's second look.
+
+**Figures follow the language.** Spanish and Portuguese write 1.234,56, and
+Chinese writes 1,234.56. Amounts are formatted by `useFormat()`, never
+written into a message, so a translation never has to reformat a number.
+
+**Tab labels can be shorter than the words above.** The phone's five tabs
+share 390px in a wide display face, so Portuguese labels the Lend tab
+**Credor** ("lender") rather than "Emprestar", which truncated. Spanish uses
+**Acciones** for the Stock loans link in the sidebar, and Portuguese uses **Ações**; the
+pages themselves keep the full names.
+
+**Unchanged in every language:** GhostStake, mUSDC, ticker symbols, and the
+names of other products (Chainlink, Robinhood, Coinbase Wallet).

@@ -3,6 +3,9 @@ import type { MarketRound } from "@/hooks/useRounds";
 import { byActivity, formatHorizon, summarise } from "../marketList";
 import type { Market } from "../markets";
 import { Phase, Status, type Round } from "../rounds";
+import { formatFor } from "@/lib/format";
+
+const en = formatFor("en");
 
 function market(key: string, over: Partial<Market> = {}): Market {
   return {
@@ -97,9 +100,9 @@ describe("ordering the list by activity", () => {
 
 describe("horizons", () => {
   it("reads as an operator would say it", () => {
-    expect(formatHorizon(300n)).toBe("5m");
-    expect(formatHorizon(3600n)).toBe("1h");
-    expect(formatHorizon(86_400n)).toBe("24h");
-    expect(formatHorizon(90n)).toBe("90s");
+    expect(formatHorizon(300n, en)).toBe("5m");
+    expect(formatHorizon(3600n, en)).toBe("1h");
+    expect(formatHorizon(86_400n, en)).toBe("24h");
+    expect(formatHorizon(90n, en)).toBe("90s");
   });
 });

@@ -30,6 +30,7 @@
     "wagmi": "^3.7.6"
   },
   "devDependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.20",
     "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

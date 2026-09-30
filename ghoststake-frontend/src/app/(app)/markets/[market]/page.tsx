@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { isAddress } from "viem";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { formatFor } from "@/lib/format";
 import { fetchRounds } from "@/lib/roundsApi";
 import { feedLabel, pool, shortAddress } from "@/lib/marketMeta";
 import { MarketScreen } from "./MarketScreen";
@@ -35,6 +36,7 @@ type Props = { params: Promise<{ market: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { market } = await params;
   const t = await getTranslations("marketMeta");
+  const format = formatFor(await getLocale());
   if (!isAddress(market)) return { title: t("fallbackTitle") };
 
   const [label, rounds] = await Promise.all([
@@ -47,7 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = label ?? shortAddress(market);
   const latest = rounds?.rounds[0];
   const description = latest
-    ? t("live", { id: latest.id, phase: latest.phase, up: pool(latest.upPool), down: pool(latest.downPool) })
+    ? t("live", { id: latest.id, phase: latest.phase, up: pool(latest.upPool, format), down: pool(latest.downPool, format) })
     : t("idle", { name });
   const title = t("title", { name });
 

@@ -1,6 +1,6 @@
 import { createPublicClient, http } from "viem";
 import { parimutuelRoundAbi } from "./abis";
-import { formatAmount } from "./format";
+import type { Format } from "./format";
 import { configured } from "./config";
 import { env } from "./env";
 import { activeChain } from "./wagmi";
@@ -95,12 +95,12 @@ export function shortAddress(value: string): string {
  * end as something nobody can read. A description is one line somebody glances
  * at in a chat window.
  */
-export function price(value: string | null): string {
+export function price(value: string | null, format: Format): string {
   if (value === null) return "an unknown price";
-  return formatAmount(BigInt(value), 18, 2);
+  return format.formatAmount(BigInt(value), 18, 2);
 }
 
 /** A pool, in the stake asset — six decimals on every deployment. */
-export function pool(value: string): string {
-  return formatAmount(BigInt(value), 6, 0);
+export function pool(value: string, format: Format): string {
+  return format.formatAmount(BigInt(value), 6, 0);
 }
