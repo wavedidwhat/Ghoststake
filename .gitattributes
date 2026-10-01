@@ -1,0 +1,8 @@
+# LF in every checkout, whatever the machine's core.autocrlf says.
+# Git for Windows defaults to autocrlf=true, which turns the commit hook
+# and scripts/*.sh into CRLF files that bash refuses to run.
+* text=auto eol=lf
+
+*.png   binary
+*.woff  binary
+*.woff2 binary
