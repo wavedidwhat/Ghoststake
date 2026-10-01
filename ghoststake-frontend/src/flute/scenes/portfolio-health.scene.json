@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "id": "portfolio-health",
+  "title": "Portfolio and loan health",
+  "description": "A connected portfolio with an open loan; the camera drifts in on loan health.",
+  "definition": {
+    "scene": {
+      "version": 3,
+      "camera": { "x": 0, "y": 0, "z": 0, "perspective": 1400, "rotateX": 12, "rotateY": 22, "rotateZ": 0 },
+      "focus": { "distance": 1400, "fStop": 5.6, "focalLength": 100, "maxBlur": 6 },
+      "nodes": [{ "id": "app", "transform": { "x": 0, "y": 0, "z": 0, "rotateX": 0, "rotateY": 0, "rotateZ": 0, "scale": 1 } }]
+    },
+    "motion": {
+      "durationMs": 6000,
+      "speed": 0.5,
+      "tracks": [
+        { "target": { "kind": "camera" }, "property": "y", "keyframes": [
+          { "timeMs": 0, "value": -80, "easing": "cinematic" },
+          { "timeMs": 6000, "value": 140, "easing": "cinematic" }
+        ] }
+      ]
+    },
+    "width": 1440,
+    "height": 900
+  }
+}

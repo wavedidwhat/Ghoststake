@@ -30,6 +30,24 @@ const nextConfig: NextConfig = {
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 /**
+ * Lets a local `next dev` read a remote API without that API listing
+ * localhost in its CORS origins: set DEV_API_PROXY to the API's origin and
+ * NEXT_PUBLIC_API_URL to http://localhost:3000/_api, and the browser only
+ * ever talks to its own origin. Used to film Flute scenes against the dev
+ * API's real indexer data. Never part of a production build.
+ */
+function withDevApiProxy(config: NextConfig): NextConfig {
+  const target = process.env.DEV_API_PROXY;
+  if (!target) return config;
+  return {
+    ...config,
+    async rewrites() {
+      return [{ source: "/_api/:path*", destination: `${target.replace(/\/$/, "")}/:path*` }];
+    },
+  };
+}
+
+/**
  * A production build refuses to finish with a variable it cannot use (GHO-85).
  *
  * `NEXT_PUBLIC_*` values are inlined at build time, so the build is the
@@ -43,7 +61,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
  * Every problem at once, rather than the first a module happened to evaluate.
  */
 export default function config(phase: string): NextConfig {
-  if (phase !== PHASE_PRODUCTION_BUILD) return withNextIntl(nextConfig);
+  if (phase !== PHASE_PRODUCTION_BUILD) return withNextIntl(withDevApiProxy(nextConfig));
 
   if (configProblems.length > 0) {
     const list = configProblems.map((p) => `  ${p.variable}=${JSON.stringify(p.value)} ${p.reason}`);

@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "id": "pitch-hero",
+  "title": "Pitch hero",
+  "description": "The landing pitch: headline close, then the camera travels down to deposit, borrow, back.",
+  "definition": {
+    "scene": {
+      "version": 3,
+      "camera": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "perspective": 1300,
+        "rotateX": 16,
+        "rotateY": -12,
+        "rotateZ": 0
+      },
+      "focus": {
+        "distance": 1050,
+        "fStop": 5.6,
+        "focalLength": 100,
+        "maxBlur": 6
+      },
+      "nodes": [
+        {
+          "id": "landing",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "rotateX": 0,
+            "rotateY": 0,
+            "rotateZ": 0,
+            "scale": 1
+          }
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 6000,
+      "speed": 0.5,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -330,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 6000,
+              "value": 80,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -420,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 6000,
+              "value": -60,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "focus"
+          },
+          "property": "distance",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 900,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 6000,
+              "value": 1250,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    },
+    "width": 1440,
+    "height": 900
+  }
+}

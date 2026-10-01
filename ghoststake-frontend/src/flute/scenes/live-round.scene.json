@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "id": "live-round",
+  "title": "Live round",
+  "description": "One demo-market round: the question, the pool split and the odds, with a slow lateral pass.",
+  "definition": {
+    "scene": {
+      "version": 3,
+      "camera": {
+        "x": 0,
+        "y": -170,
+        "z": 0,
+        "perspective": 1400,
+        "rotateX": 8,
+        "rotateY": 20,
+        "rotateZ": 0
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 6.3,
+        "focalLength": 100,
+        "maxBlur": 6
+      },
+      "nodes": [
+        {
+          "id": "app",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "rotateX": 0,
+            "rotateY": 0,
+            "rotateZ": 0,
+            "scale": 1
+          }
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 6000,
+      "speed": 0.5,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -140,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 6000,
+              "value": 140,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -170,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 6000,
+              "value": -60,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    },
+    "width": 1440,
+    "height": 900
+  }
+}
