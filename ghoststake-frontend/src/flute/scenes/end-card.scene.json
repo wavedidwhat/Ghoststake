@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "id": "end-card",
+  "title": "End card",
+  "description": "The mark and the wordmark settling forward out of depth, then the address.",
+  "definition": {
+    "scene": {
+      "version": 3,
+      "camera": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "perspective": 1400,
+        "rotateX": 0,
+        "rotateY": 0,
+        "rotateZ": 0
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 8,
+        "focalLength": 50,
+        "maxBlur": 6
+      },
+      "nodes": [
+        {
+          "id": "mark",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "rotateX": 0,
+            "rotateY": 0,
+            "rotateZ": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "wordmark",
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "rotateX": 0,
+            "rotateY": 0,
+            "rotateZ": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "address",
+          "transform": {
+            "x": 0,
+            "y": 60,
+            "z": 0,
+            "rotateX": 0,
+            "rotateY": 0,
+            "rotateZ": 0,
+            "scale": 1
+          }
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 4000,
+      "speed": 0.5,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "mark"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -500,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2200,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "mark"
+          },
+          "property": "rotateY",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -35,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2200,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "mark"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1200,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "wordmark"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -300,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 400,
+              "value": -300,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2600,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "wordmark"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 400,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1800,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "address"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1800,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3000,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "address"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 80,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1800,
+              "value": 80,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3000,
+              "value": 60,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    },
+    "width": 1440,
+    "height": 900
+  }
+}

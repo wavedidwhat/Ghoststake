@@ -6,7 +6,7 @@ import PortfolioPage from "@/app/(app)/portfolio/page";
 import { Sidebar } from "@/components/Sidebar";
 import { WatchWallet } from "../WatchWallet";
 
-/** The real portfolio screen, connected watch-only to the wallet with the open testnet loan. */
+/** The real portfolio screen, connected watch-only to the filming wallet. */
 export default function PortfolioHealth() {
   return (
     <FreezeForCapture>

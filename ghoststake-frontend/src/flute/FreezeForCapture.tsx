@@ -1,6 +1,6 @@
 "use client";
 
-import { onlineManager, useQueryClient } from "@tanstack/react-query";
+import { onlineManager, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 
 /**
@@ -13,14 +13,52 @@ import { useEffect, type ReactNode } from "react";
  * a list reorders halfway through a shot that is meant to be one moment.
  *
  * Export waits on whatever `window.__FLUTE_CAPTURE__.seek` returns, so the
- * bridge's first seek is made to wait until nothing is fetching and no
- * skeleton is on screen (held for a beat, capped at a minute). Then React
- * Query is told it is offline, which pauses every refetch and keeps the data
- * it already has. Interactive preview is untouched: the hold only applies to
- * seeks, and only once.
+ * bridge's first seek waits for `whenFilmable`, then React Query is told it is
+ * offline, which pauses every refetch and keeps the data it already has.
+ * Interactive preview is untouched: the hold only applies to seeks.
  */
-const SETTLE_MS = 1500;
-const CAP_MS = 60_000;
+export const SETTLE_MS = 1500;
+export const CAP_MS = 60_000;
+
+/** Skeletons, and anything a scene marks as not ready yet (see WatchWallet). */
+const PENDING = ".animate-pulse, [data-film-pending]";
+
+/**
+ * Resolves once nothing is fetching and nothing is pending on screen, held
+ * for SETTLE_MS. Rejects, so export aborts instead of writing a plausible
+ * wrong video, when a query something on screen depends on has failed (an
+ * error card would be filmed as if it were the product) or when nothing
+ * settles within CAP_MS (the frames would be loading skeletons).
+ */
+export function whenFilmable(
+  queryClient: QueryClient,
+  pendingOnScreen: () => boolean,
+  now: () => number = Date.now,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const started = now();
+    let quietSince = 0;
+    const tick = () => {
+      const t = now();
+      if (queryClient.isFetching() > 0 || pendingOnScreen()) quietSince = 0;
+      else if (!quietSince) quietSince = t;
+
+      if (quietSince && t - quietSince >= SETTLE_MS) {
+        const errors = queryClient
+          .getQueryCache()
+          .getAll()
+          .filter((q) => q.state.status === "error" && q.getObserversCount() > 0)
+          .map((q) => JSON.stringify(q.queryKey).slice(0, 120));
+        if (errors.length > 0) {
+          reject(new Error(`Not filming: ${errors.length} on-screen queries failed: ${errors.join(", ")}`));
+        } else resolve();
+      } else if (t - started >= CAP_MS) {
+        reject(new Error(`Not filming: the scene's data did not settle within ${CAP_MS / 1000}s.`));
+      } else setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
 
 type Bridge = { seek(ms: number): unknown; __frozen?: boolean };
 
@@ -30,21 +68,8 @@ export function FreezeForCapture({ children }: { children: ReactNode }) {
   useEffect(() => {
     let ready: Promise<void> | undefined;
     const settled = () =>
-      (ready ??= new Promise<void>((resolve) => {
-        const started = Date.now();
-        let quietSince = 0;
-        const tick = () => {
-          const busy =
-            queryClient.isFetching() > 0 || document.querySelector(".animate-pulse") !== null;
-          const now = Date.now();
-          if (busy) quietSince = 0;
-          else if (!quietSince) quietSince = now;
-          if ((quietSince && now - quietSince >= SETTLE_MS) || now - started >= CAP_MS) {
-            onlineManager.setOnline(false);
-            resolve();
-          } else setTimeout(tick, 100);
-        };
-        tick();
+      (ready ??= whenFilmable(queryClient, () => document.querySelector(PENDING) !== null).then(() => {
+        onlineManager.setOnline(false);
       }));
 
     // The bridge is registered by ScenePreview, possibly after this effect.

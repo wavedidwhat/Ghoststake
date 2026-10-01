@@ -13,9 +13,12 @@ import { activeChain } from "@/lib/wagmi";
  * account?", and refuses everything that could sign or send. There is no key
  * anywhere: it can show a position, it cannot touch one.
  *
- * The default is the deployer, which holds the one open loan on testnet.
+ * The default is the tester wallet (TESTER_KEY in .env.demo), which holds a
+ * position built for filming: 5,000 deposited, 1,000 borrowed, and 60
+ * borrowed to back Yes on demo round 393. Not the deployer: as the operator
+ * it adds the Operator link to the sidebar.
  */
-export const FILM_ADDRESS = "0xE64b1081681c475A0Ec61b3B3f90e82734049275";
+export const FILM_ADDRESS = "0x3fC461752ACBcE0a9034d71821489E6008F21Cb1";
 
 type Eip1193 = { request(args: { method: string }): Promise<unknown>; on(): void; removeListener(): void };
 
@@ -66,5 +69,14 @@ export function WatchWallet({ address: given, children }: { address?: string; ch
     if (injected) connect({ connector: injected, chainId: activeChain.id });
   }, [address, connect, connectors, connection.address]);
 
-  return <>{children}</>;
+  // FreezeForCapture holds export while this marker is present, so a scene
+  // never films "Connect a wallet" because the connection was still settling
+  // (or never came).
+  const connected = connection.address?.toLowerCase() === address.toLowerCase();
+  return (
+    <>
+      {!connected && <span data-film-pending hidden />}
+      {children}
+    </>
+  );
 }

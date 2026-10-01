@@ -8,18 +8,18 @@
       "version": 3,
       "camera": {
         "x": 0,
-        "y": -170,
+        "y": -100,
         "z": 0,
-        "perspective": 1400,
-        "rotateX": 8,
-        "rotateY": 20,
+        "perspective": 1600,
+        "rotateX": 0,
+        "rotateY": 14,
         "rotateZ": 0
       },
       "focus": {
-        "distance": 1400,
-        "fStop": 6.3,
+        "distance": 1600,
+        "fStop": 8,
         "focalLength": 100,
-        "maxBlur": 6
+        "maxBlur": 5
       },
       "nodes": [
         {
@@ -48,12 +48,12 @@
           "keyframes": [
             {
               "timeMs": 0,
-              "value": -140,
+              "value": -120,
               "easing": "cinematic"
             },
             {
               "timeMs": 6000,
-              "value": 140,
+              "value": 120,
               "easing": "cinematic"
             }
           ]
@@ -66,12 +66,12 @@
           "keyframes": [
             {
               "timeMs": 0,
-              "value": -170,
+              "value": -100,
               "easing": "cinematic"
             },
             {
               "timeMs": 6000,
-              "value": -60,
+              "value": -80,
               "easing": "cinematic"
             }
           ]
