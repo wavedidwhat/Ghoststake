@@ -8,7 +8,12 @@ import { STATIC_SECURITY_HEADERS } from "./src/lib/csp";
 const nextConfig: NextConfig = {
   // Emits .next/standalone with a minimal server.js and only the traced
   // node_modules, so the runtime image doesn't need an install step.
-  output: "standalone",
+  //
+  // Not on Vercel (GHO-129). Vercel builds through Next's adapter, and
+  // standalone still takes a non-adapter path: the build compiles, then the
+  // adapter's onBuildComplete dies on a missing `.next/next-server.js.nft.json`.
+  // Vercel sets VERCEL=1 during its builds; the Docker build never does.
+  output: process.env.VERCEL ? undefined : "standalone",
 
   // Advertising the framework and version helps nobody but a scanner.
   poweredByHeader: false,
